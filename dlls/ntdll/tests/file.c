@@ -5887,14 +5887,14 @@ static void test_reparse_points(void)
     static const WCHAR reparseW[] = {'\\','r','e','p','a','r','s','e',0};
     static const WCHAR targetW[] = {'\\','t','a','r','g','e','t',0};
     static const WCHAR parentW[] = {'\\','.','.','\\',0};
+    INT buffer_len, string_len, path_len, total_len;
     static const WCHAR fooW[] = {'f','o','o',0};
     static WCHAR volW[] = {'c',':','\\',0};
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags;
+    WCHAR *dest, *long_path;
     UNICODE_STRING nameW;
-    WCHAR *long_path;
-    INT buffer_len;
     HANDLE handle;
     BOOL bret;
 
@@ -5991,6 +5991,23 @@ static void test_reparse_points(void)
     buffer_len = build_reparse_buffer(long_path, &buffer);
     bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
     ok(bret, "Failed to create junction point! (0x%lx)\n", GetLastError());
+
+    /* Read back the junction point */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    buffer_len = sizeof(*buffer) + 2*32767;
+    buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffer_len);
+    bret = DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, NULL, 0, (LPVOID)buffer, buffer_len, &dwret, 0);
+    ok(bret, "Failed to read junction point! (last error=0x%lx)\n", GetLastError());
+    string_len = buffer->MountPointReparseBuffer.SubstituteNameLength;
+    dest = &buffer->MountPointReparseBuffer.PathBuffer[buffer->MountPointReparseBuffer.SubstituteNameOffset/sizeof(WCHAR)];
+    ok((memcmp(dest, long_path, string_len) == 0), "Junction point destination does not match ('%s' != '%s')!\n",
+                                                   wine_dbgstr_w(dest), wine_dbgstr_w(long_path));
+    path_len = buffer->MountPointReparseBuffer.PrintNameOffset/sizeof(WCHAR);
+    path_len += buffer->MountPointReparseBuffer.PrintNameLength/sizeof(WCHAR);
+    total_len = FIELD_OFFSET(typeof(*buffer), MountPointReparseBuffer.PathBuffer[path_len+1])
+                - FIELD_OFFSET(typeof(*buffer), GenericReparseBuffer);
+    ok(buffer->ReparseDataLength == total_len, "ReparseDataLength has unexpected value (%d != %d)\n",
+                                               buffer->ReparseDataLength, total_len);
     CloseHandle(handle);
 
 cleanup:

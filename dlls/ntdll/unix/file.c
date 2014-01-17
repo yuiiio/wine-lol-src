@@ -1780,6 +1780,16 @@ static int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULON
     *attr = 0;
     ret = fstat( fd, st );
     if (ret == -1) return ret;
+    if (S_ISLNK( st->st_mode ))
+    {
+        BOOL is_dir;
+
+        /* symbolic links (either junction points or NT symlinks) are "reparse points" */
+        *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+        /* whether a reparse point is a file or a directory is stored inside the link target */
+        if (is_reparse_dir( fd, "", &is_dir ) == 0)
+            st->st_mode = (st->st_mode & ~S_IFMT) | (is_dir ? S_IFDIR : S_IFREG);
+    }
     *attr |= get_file_attributes( st );
     /* consider mount points to be reparse points (IO_REPARSE_TAG_MOUNT_POINT) */
     if ((options & FILE_OPEN_REPARSE_POINT) && fd_is_mount_point( fd, st ))
@@ -1862,10 +1872,15 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
     if (ret == -1) return ret;
     if (S_ISLNK( st->st_mode ))
     {
-        ret = stat( path, st );
-        if (ret == -1) return ret;
-        /* is a symbolic link and a directory, consider these "reparse points" */
-        if (S_ISDIR( st->st_mode )) *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+        BOOL is_dir;
+
+        /* return information about the destination (unless this is a dangling symlink) */
+        stat( path, st );
+        /* symbolic links (either junction points or NT symlinks) are "reparse points" */
+        *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
+        /* whether a reparse point is a file or a directory is stored inside the link target */
+        if (is_reparse_dir( AT_FDCWD, path, &is_dir ) == 0)
+            st->st_mode = (st->st_mode & ~S_IFMT) | (is_dir ? S_IFDIR : S_IFREG);
     }
     else if (S_ISDIR( st->st_mode ) && (parent_path = malloc( strlen(path) + 4 )))
     {

@@ -3834,6 +3834,99 @@ cleanup:
 }
 
 
+/*
+ * Retrieve the unix name corresponding to a file handle, remove that symlink, and then recreate
+ * a directory at the location of the old filename.
+ */
+NTSTATUS remove_reparse_point(HANDLE handle, REPARSE_GUID_DATA_BUFFER *buffer)
+{
+    char tmpdir[PATH_MAX], tmplink[PATH_MAX], *d;
+    BOOL tempdir_created = FALSE;
+    int dest_fd, needs_close;
+    BOOL is_dir = TRUE;
+    NTSTATUS status;
+    char *unix_name;
+    struct stat st;
+
+    if ((status = server_get_unix_fd( handle, FILE_SPECIAL_ACCESS, &dest_fd, &needs_close, NULL, NULL )))
+        return status;
+
+    if ((status = server_get_unix_name( handle, &unix_name )))
+        goto cleanup;
+
+    TRACE( "Deleting symlink %s\n", unix_name );
+
+    /* Produce the file/directory in a temporary location in the same folder */
+    if (fstat( dest_fd, &st ) == -1)
+    {
+        status = errno_to_status( errno );
+        goto cleanup;
+    }
+    is_dir = S_ISDIR(st.st_mode);
+    strcpy( tmpdir, unix_name );
+    d = dirname( tmpdir);
+    if (d != tmpdir) strcpy( tmpdir, d );
+    strcat( tmpdir, "/.winelink.XXXXXX" );
+    if (mkdtemp( tmpdir ) == NULL)
+    {
+        status = errno_to_status( errno );
+        goto cleanup;
+    }
+    tempdir_created = TRUE;
+    strcpy( tmplink, tmpdir );
+    strcat( tmplink, "/tmplink" );
+    if (is_dir && mkdir( tmplink, st.st_mode ))
+    {
+        status = errno_to_status( errno );
+        goto cleanup;
+    }
+    else if (!is_dir)
+    {
+        int fd = open( tmplink, O_CREAT|O_WRONLY|O_TRUNC, st.st_mode );
+        if (fd < 0)
+        {
+            status = errno_to_status( errno );
+            goto cleanup;
+        }
+        close( fd );
+    }
+    /* attemp to retain the ownership (if possible) */
+    lchown( tmplink, st.st_uid, st.st_gid );
+    /* Atomically move the directory into position */
+    if (!renameat2( -1, tmplink, -1, unix_name, RENAME_EXCHANGE ))
+    {
+        /* success: link and folder/file have switched locations */
+        unlink( tmplink ); /* remove the file (at link location) */
+    }
+    else if (errno == ENOSYS)
+    {
+        FIXME( "Atomic exchange of directory with symbolic link unsupported on this system, "
+               "using unsafe exchange instead.\n" );
+        if (unlink( unix_name ))
+        {
+            status = errno_to_status( errno );
+            goto cleanup;
+        }
+        if (rename( tmplink, unix_name ))
+        {
+            status = errno_to_status( errno );
+            goto cleanup; /* not moved, orignal file/folder at destination is orphaned */
+        }
+    }
+    else
+    {
+        status = errno_to_status( errno );
+        goto cleanup;
+    }
+    status = STATUS_SUCCESS;
+
+cleanup:
+    if (tempdir_created) rmdir( tmpdir );
+    if (needs_close) close( dest_fd );
+    return status;
+}
+
+
 /******************************************************************************
  *           lookup_unix_name
  *
@@ -6670,6 +6763,12 @@ NTSTATUS WINAPI NtFsControlFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE ap
         break;
     }
 
+    case FSCTL_DELETE_REPARSE_POINT:
+    {
+        REPARSE_GUID_DATA_BUFFER *buffer = (REPARSE_GUID_DATA_BUFFER *)in_buffer;
+        status = remove_reparse_point( handle, buffer );
+        break;
+    }
     case FSCTL_GET_REPARSE_POINT:
     {
         REPARSE_DATA_BUFFER *buffer = (REPARSE_DATA_BUFFER *)out_buffer;

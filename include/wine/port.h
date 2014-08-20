@@ -368,6 +368,8 @@ extern int mkstemps(char *template, int suffix_len);
 #endif
 
 extern int xattr_fget( int filedes, const char *name, void *value, size_t size );
+extern int xattr_fremove( int filedes, const char *name );
+extern int xattr_fset( int filedes, const char *name, void *value, size_t size );
 extern int xattr_get( const char *path, const char *name, void *value, size_t size );
 
 #else /* NO_LIBWINE_PORT */

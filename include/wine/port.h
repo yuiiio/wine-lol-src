@@ -361,6 +361,14 @@ int usleep (unsigned int useconds);
 
 extern int mkstemps(char *template, int suffix_len);
 
+/* Extended attribute functions */
+
+#ifndef XATTR_USER_PREFIX
+# define XATTR_USER_PREFIX "user."
+#endif
+
+extern int xattr_fget( int filedes, const char *name, void *value, size_t size );
+
 #else /* NO_LIBWINE_PORT */
 
 #define __WINE_NOT_PORTABLE(func) func##_is_not_portable func##_is_not_portable

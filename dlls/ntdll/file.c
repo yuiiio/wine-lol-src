@@ -126,6 +126,22 @@ mode_t FILE_umask = 0;
 NTSTATUS FILE_DecodeSymlink(const char *unix_src, char *unix_dest, USHORT *unix_dest_len,
                             DWORD *tag, ULONG *flags, BOOL *is_dir);
 
+/* Match the Samba conventions for storing DOS file attributes */
+#define SAMBA_XATTR_DOS_ATTRIB XATTR_USER_PREFIX "DOSATTRIB"
+/* We are only interested in some attributes, the others have corresponding Unix attributes */
+#define XATTR_ATTRIBS_MASK     (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM)
+
+/* decode the xattr-stored DOS attributes */
+static inline int get_file_xattr( char *hexattr, int attrlen )
+{
+    if (attrlen > 2 && hexattr[0] == '0' && hexattr[1] == 'x')
+    {
+        hexattr[attrlen] = 0;
+        return strtol( hexattr+2, NULL, 16 ) & XATTR_ATTRIBS_MASK;
+    }
+    return 0;
+}
+
 /* fetch the attributes of a file */
 static inline ULONG get_file_attributes( const struct stat *st )
 {

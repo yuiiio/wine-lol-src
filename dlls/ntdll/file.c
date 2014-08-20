@@ -182,7 +182,8 @@ int fd_get_file_info( int fd, unsigned int options, struct stat *st, ULONG *attr
 int get_file_info( const char *path, struct stat *st, ULONG *attr )
 {
     char *parent_path;
-    int ret;
+    char hexattr[11];
+    int len, ret;
 
     *attr = 0;
     ret = lstat( path, st );
@@ -215,6 +216,9 @@ int get_file_info( const char *path, struct stat *st, ULONG *attr )
         RtlFreeHeap( GetProcessHeap(), 0, parent_path );
     }
     *attr |= get_file_attributes( st );
+    len = xattr_get( path, SAMBA_XATTR_DOS_ATTRIB, hexattr, sizeof(hexattr)-1 );
+    if (len == -1) return ret;
+    *attr |= get_file_xattr( hexattr, len );
     return ret;
 }
 

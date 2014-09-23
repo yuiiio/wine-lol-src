@@ -958,6 +958,11 @@ static struct opengl_funcs *nulldrv_wine_get_wgl_driver( UINT version )
     return (void *)-1;
 }
 
+static void nulldrv_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect )
+{
+
+}
+
 static void nulldrv_ThreadDetach( void )
 {
 }
@@ -1339,6 +1344,7 @@ static const struct user_driver_funcs lazy_load_driver =
     loaderdrv_wine_get_vulkan_driver,
     /* opengl support */
     nulldrv_wine_get_wgl_driver,
+    nulldrv_UpdateCandidatePos,
     /* thread management */
     nulldrv_ThreadDetach,
 };
@@ -1423,6 +1429,7 @@ void __wine_set_user_driver( const struct user_driver_funcs *funcs, UINT version
     SET_USER_FUNC(SystemParametersInfo);
     SET_USER_FUNC(wine_get_vulkan_driver);
     SET_USER_FUNC(wine_get_wgl_driver);
+    SET_USER_FUNC(UpdateCandidatePos);
     SET_USER_FUNC(ThreadDetach);
 #undef SET_USER_FUNC
 

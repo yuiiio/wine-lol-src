@@ -259,6 +259,7 @@ extern void X11DRV_WindowPosChanged( HWND hwnd, HWND insert_after, UINT swp_flag
                                      struct window_surface *surface );
 extern BOOL X11DRV_SystemParametersInfo( UINT action, UINT int_param, void *ptr_param,
                                          UINT flags );
+extern void X11DRV_UpdateCandidatePos( HWND hwnd, const RECT *caret_rect );
 extern void X11DRV_ThreadDetach(void);
 
 /* X11 driver internal functions */

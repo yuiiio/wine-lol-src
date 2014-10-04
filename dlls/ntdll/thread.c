@@ -364,6 +364,7 @@ TEB *thread_init(void)
     struct ntdll_thread_data *thread_data;
 
     virtual_init();
+    signal_init_early();
 
     /* reserve space for shared user data */
 

@@ -3286,6 +3286,12 @@ void signal_init_process(void)
     exit(1);
 }
 
+/**********************************************************************
+ *    signal_init_early
+ */
+void signal_init_early(void)
+{
+}
 
 static ULONG64 get_int_reg( CONTEXT *context, int reg )
 {

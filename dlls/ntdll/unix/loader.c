@@ -2156,6 +2156,8 @@ DECLSPEC_EXPORT void __wine_main( int argc, char *argv[], char *envp[] )
 #endif
 
     virtual_init();
+    signal_init_early();
+
     init_environment();
 
 #ifdef __APPLE__

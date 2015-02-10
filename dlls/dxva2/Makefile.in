@@ -1,6 +1,8 @@
 MODULE = dxva2.dll
+IMPORTS = ole32
 
 EXTRADLLFLAGS = -mno-cygwin
 
 C_SRCS = \
+	devicemanager.c \
 	main.c

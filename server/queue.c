@@ -1274,9 +1274,9 @@ static void set_input_key_state( unsigned char *keystate, unsigned char key, int
     else keystate[key] &= ~0x80;
 }
 
-/* update the input key state for a keyboard message */
-static void update_input_key_state( struct desktop *desktop, unsigned char *keystate,
-                                    const struct message *msg )
+/* update the key state for a keyboard message */
+static void update_key_state( struct desktop *desktop, unsigned char *keystate,
+                              const struct message *msg )
 {
     unsigned char key;
     int down = 0;
@@ -1338,6 +1338,12 @@ static void update_input_key_state( struct desktop *desktop, unsigned char *keys
     }
 }
 
+/* update the thread input key state for a keyboard message */
+static void update_input_key_state( struct thread_input *input, const struct message *msg )
+{
+    update_key_state( input->desktop, input->keystate, msg );
+}
+
 /* release the hardware message currently being processed by the given thread */
 static void release_hardware_message( struct msg_queue *queue, unsigned int hw_id,
                                       int remove )
@@ -1368,7 +1374,7 @@ static void release_hardware_message( struct msg_queue *queue, unsigned int hw_i
         }
         if (clr_bit) clear_queue_bits( queue, clr_bit );
 
-        update_input_key_state( input->desktop, input->keystate, msg );
+        update_input_key_state( input, msg );
         list_remove( &msg->entry );
         free_message( msg );
     }
@@ -1487,7 +1493,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     struct thread_input *input;
     unsigned int msg_code;
 
-    update_input_key_state( desktop, desktop->keystate, msg );
+    update_key_state( desktop, desktop->keystate, msg );
     last_input_time = get_tick_count();
     if (msg->msg != WM_MOUSEMOVE) always_queue = 1;
 
@@ -1530,7 +1536,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     win = find_hardware_message_window( desktop, input, msg, &msg_code, &thread );
     if (!win || !thread)
     {
-        if (input) update_input_key_state( input->desktop, input->keystate, msg );
+        if (input) update_input_key_state( input, msg );
         free_message( msg );
         return;
     }
@@ -1920,7 +1926,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
         if (!win || !win_thread)
         {
             /* no window at all, remove it */
-            update_input_key_state( input->desktop, input->keystate, msg );
+            update_input_key_state( input, msg );
             list_remove( &msg->entry );
             free_message( msg );
             continue;
@@ -1936,7 +1942,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
             else
             {
                 /* for another thread input, drop it */
-                update_input_key_state( input->desktop, input->keystate, msg );
+                update_input_key_state( input, msg );
                 list_remove( &msg->entry );
                 free_message( msg );
             }

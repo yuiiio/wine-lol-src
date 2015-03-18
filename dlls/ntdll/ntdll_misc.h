@@ -207,6 +207,7 @@ extern NTSTATUS virtual_alloc_teb( TEB **teb ) DECLSPEC_HIDDEN;
 extern void virtual_free_teb( TEB *teb ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_alloc_thread_stack( INITIAL_TEB *stack, SIZE_T reserve_size,
                                             SIZE_T commit_size, SIZE_T *pthread_size ) DECLSPEC_HIDDEN;
+extern NTSTATUS virtual_map_shared_memory( int fd, PVOID *addr_ptr, ULONG zero_bits, SIZE_T *size_ptr, ULONG protect ) DECLSPEC_HIDDEN;
 extern void virtual_clear_thread_stack( void *stack_end ) DECLSPEC_HIDDEN;
 extern int virtual_handle_stack_fault( void *addr ) DECLSPEC_HIDDEN;
 extern BOOL virtual_is_valid_code_address( const void *addr, SIZE_T size ) DECLSPEC_HIDDEN;

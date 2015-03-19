@@ -496,6 +496,7 @@ void exit_thread( int status )
 void WINAPI RtlExitUserThread( ULONG status )
 {
     static void *prev_teb;
+    shmlocal_t *shmlocal;
     sigset_t sigset;
     TEB *teb;
 
@@ -519,6 +520,9 @@ void WINAPI RtlExitUserThread( ULONG status )
 
     LdrShutdownThread();
     RtlFreeThreadActivationContextStack();
+
+    shmlocal = InterlockedExchangePointer( &NtCurrentTeb()->Reserved5[2], NULL );
+    if (shmlocal) NtUnmapViewOfSection( NtCurrentProcess(), shmlocal );
 
     pthread_sigmask( SIG_BLOCK, &server_block_set, NULL );
 

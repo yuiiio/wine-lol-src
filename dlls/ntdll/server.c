@@ -100,6 +100,7 @@
 #include "ddk/wdm.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(server);
+WINE_DECLARE_DEBUG_CHANNEL(winediag);
 
 /* just in case... */
 #undef EXT2_IOC_GETFLAGS
@@ -1126,6 +1127,21 @@ static int server_get_shared_memory_fd( HANDLE thread, int *unix_fd )
     return ret;
 }
 
+/* The shared memory wineserver communication is still highly experimental
+ * and might cause unexpected results when the client/server status gets
+ * out of synchronization. The feature will be disabled by default until it
+ * is tested a bit more. */
+static inline BOOL experimental_SHARED_MEMORY( void )
+{
+    static int enabled = -1;
+    if (enabled == -1)
+    {
+        const char *str = getenv( "STAGING_SHARED_MEMORY" );
+        enabled = str && (atoi(str) != 0);
+    }
+    return enabled;
+}
+
 
 /***********************************************************************
  *           server_get_shared_memory
@@ -1137,6 +1153,9 @@ void *server_get_shared_memory( HANDLE thread )
     static shmglobal_t *shmglobal = (void *)-1;
     void *mem = NULL;
     int fd = -1;
+
+    if (!experimental_SHARED_MEMORY())
+        return NULL;
 
     /* The global memory block is only requested once. No locking is
      * required because this function is called very early during the
@@ -1152,7 +1171,10 @@ void *server_get_shared_memory( HANDLE thread )
     }
 
     if (!thread)
+    {
+        if (mem) WARN_(winediag)("Using shared memory wineserver communication\n");
         shmglobal = mem;
+    }
 
     return mem;
 }

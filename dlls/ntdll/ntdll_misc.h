@@ -347,6 +347,11 @@ void     WINAPI LdrInitializeThunk(CONTEXT*,void**,ULONG_PTR,ULONG_PTR);
 #define InterlockedCompareExchange64(dest,xchg,cmp) RtlInterlockedCompareExchange64(dest,xchg,cmp)
 #endif
 
+/* version */
+extern const char * CDECL NTDLL_wine_get_version(void);
+extern const char * CDECL NTDLL_wine_get_build_id(void);
+extern void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **release );
+
 /* process / thread time */
 extern BOOL read_process_time(int unix_pid, int unix_tid, unsigned long clk_tck,
                               LARGE_INTEGER *kernel, LARGE_INTEGER *user) DECLSPEC_HIDDEN;

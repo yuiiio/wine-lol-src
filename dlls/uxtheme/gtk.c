@@ -117,6 +117,27 @@ MAKE_FUNCPTR(gtk_window_new);
 #define MENU_HEIGHT         20
 #define CLASSLIST_MAXLEN    128
 
+static inline WORD reset_fpu_flags(void)
+{
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+    WORD default_cw = 0x37f, pre_cw;
+    __asm__ __volatile__( "fwait" );
+    __asm__ __volatile__( "fnstcw %0" : "=m" (pre_cw) );
+    __asm__ __volatile__( "fldcw %0" : : "m" (default_cw) );
+    return pre_cw;
+#else
+    return 0;
+#endif
+}
+
+static inline void set_fpu_flags(WORD flags)
+{
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+    __asm__ __volatile__( "fclex" );
+    __asm__ __volatile__( "fldcw %0" : : "m" (flags) );
+#endif
+}
+
 static void free_gtk3_libs(void)
 {
     if (libgtk3) dlclose(libgtk3);
@@ -319,11 +340,15 @@ BOOL uxtheme_gtk_enabled(void)
 HRESULT uxtheme_gtk_CloseThemeData(HTHEME htheme)
 {
     uxgtk_theme_t *theme = (uxgtk_theme_t *)htheme;
+    WORD fpu_flags;
 
     TRACE("(%p)\n", htheme);
 
     /* Destroy the toplevel widget */
+    fpu_flags = reset_fpu_flags();
     pgtk_widget_destroy(theme->window);
+    set_fpu_flags(fpu_flags);
+
     HeapFree(GetProcessHeap(), 0, theme);
     return S_OK;
 }
@@ -381,6 +406,8 @@ BOOL uxtheme_gtk_IsThemeDialogTextureEnabled(HWND hwnd)
 HTHEME uxtheme_gtk_OpenThemeDataEx(HWND hwnd, LPCWSTR classlist, DWORD flags)
 {
     WCHAR *start, *tok, buf[CLASSLIST_MAXLEN];
+    uxgtk_theme_t *theme;
+    WORD fpu_flags;
     int i;
 
     TRACE("(%p, %s, %#x)\n", hwnd, debugstr_w(classlist), flags);
@@ -414,7 +441,11 @@ found:
     TRACE("Using %s for %s.\n", debugstr_w(classes[i].classname),
           debugstr_w(classlist));
 
-    return classes[i].create();
+    fpu_flags = reset_fpu_flags();
+    theme = classes[i].create();
+    set_fpu_flags(fpu_flags);
+
+    return theme;
 }
 
 void uxtheme_gtk_SetThemeAppProperties(DWORD flags)
@@ -444,6 +475,7 @@ HRESULT uxtheme_gtk_GetThemeColor(HTHEME htheme, int part_id, int state_id,
     HRESULT hr;
     GdkRGBA rgba = {0, 0, 0, 0};
     uxgtk_theme_t *theme = (uxgtk_theme_t *)htheme;
+    WORD fpu_flags;
 
     TRACE("(%p, %d, %d, %d, %p)\n", htheme, part_id, state_id, prop_id, color);
 
@@ -456,7 +488,9 @@ HRESULT uxtheme_gtk_GetThemeColor(HTHEME htheme, int part_id, int state_id,
     if (color == NULL)
         return E_INVALIDARG;
 
+    fpu_flags = reset_fpu_flags();
     hr = theme->vtable->get_color(theme, part_id, state_id, prop_id, &rgba);
+    set_fpu_flags(fpu_flags);
 
     if (SUCCEEDED(hr) && rgba.alpha > 0)
     {
@@ -758,6 +792,7 @@ HRESULT uxtheme_gtk_DrawThemeBackgroundEx(HTHEME htheme, HDC hdc, int part_id, i
     uxgtk_theme_t *theme = (uxgtk_theme_t *)htheme;
     cairo_surface_t *surface;
     int width, height;
+    WORD fpu_flags;
     cairo_t *cr;
     HRESULT hr;
 
@@ -772,6 +807,8 @@ HRESULT uxtheme_gtk_DrawThemeBackgroundEx(HTHEME htheme, HDC hdc, int part_id, i
     width = rect->right - rect->left;
     height = rect->bottom - rect->top;
 
+    fpu_flags = reset_fpu_flags();
+
     surface = pcairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
     cr = pcairo_create(surface);
 
@@ -781,6 +818,9 @@ HRESULT uxtheme_gtk_DrawThemeBackgroundEx(HTHEME htheme, HDC hdc, int part_id, i
 
     pcairo_destroy(cr);
     pcairo_surface_destroy(surface);
+
+    set_fpu_flags(fpu_flags);
+
     return hr;
 }
 
@@ -826,6 +866,8 @@ HRESULT uxtheme_gtk_GetThemePartSize(HTHEME htheme, HDC hdc, int part_id, int st
                                      RECT *rect, THEMESIZE type, SIZE *size)
 {
     uxgtk_theme_t *theme = (uxgtk_theme_t *)htheme;
+    HRESULT result;
+    WORD fpu_flags;
 
     TRACE("(%p, %p, %d, %d, %p, %d, %p)\n", htheme, hdc, part_id, state_id, rect, type, size);
 
@@ -838,7 +880,11 @@ HRESULT uxtheme_gtk_GetThemePartSize(HTHEME htheme, HDC hdc, int part_id, int st
     if (rect == NULL || size == NULL)
         return E_INVALIDARG;
 
-    return theme->vtable->get_part_size(theme, part_id, state_id, rect, size);
+    fpu_flags = reset_fpu_flags();
+    result = theme->vtable->get_part_size(theme, part_id, state_id, rect, size);
+    set_fpu_flags(fpu_flags);
+
+    return result;
 }
 
 HRESULT uxtheme_gtk_GetThemeTextExtent(HTHEME htheme, HDC hdc, int part_id, int state_id,
@@ -872,6 +918,8 @@ BOOL uxtheme_gtk_IsThemeBackgroundPartiallyTransparent(HTHEME htheme, int part_i
 BOOL uxtheme_gtk_IsThemePartDefined(HTHEME htheme, int part_id, int state_id)
 {
     uxgtk_theme_t *theme = (uxgtk_theme_t *)htheme;
+    WORD fpu_flags;
+    BOOL result;
 
     TRACE("(%p, %d, %d)\n", htheme, part_id, state_id);
 
@@ -887,7 +935,11 @@ BOOL uxtheme_gtk_IsThemePartDefined(HTHEME htheme, int part_id, int state_id)
         return FALSE;
     }
 
-    return theme->vtable->is_part_defined(part_id, state_id);
+    fpu_flags = reset_fpu_flags();
+    result = theme->vtable->is_part_defined(part_id, state_id);
+    set_fpu_flags(fpu_flags);
+
+    return result;
 }
 
 #else

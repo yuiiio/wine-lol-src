@@ -1408,6 +1408,7 @@ LRESULT WINAPI DefMDIChildProcA( HWND hwnd, UINT message,
 	DefWindowProcA(hwnd, message, wParam, lParam);
 	if( ci->hwndChildMaximized == hwnd )
 	    MDI_UpdateFrameText( GetParent(client), client, TRUE, NULL );
+        MDI_RefreshMenu( ci );
         return 1; /* success. FIXME: check text length */
 
     case WM_GETMINMAXINFO:
@@ -1448,6 +1449,7 @@ LRESULT WINAPI DefMDIChildProcW( HWND hwnd, UINT message,
         DefWindowProcW(hwnd, message, wParam, lParam);
         if( ci->hwndChildMaximized == hwnd )
             MDI_UpdateFrameText( GetParent(client), client, TRUE, NULL );
+        MDI_RefreshMenu( ci );
         return 1; /* success. FIXME: check text length */
 
     case WM_GETMINMAXINFO:

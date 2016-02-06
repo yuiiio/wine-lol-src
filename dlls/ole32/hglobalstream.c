@@ -69,6 +69,7 @@ static void handle_release(struct handle_wrapper *handle)
             handle->hglobal = NULL;
         }
 
+        handle->lock.DebugInfo->Spare[0] = 0;
         DeleteCriticalSection(&handle->lock);
         HeapFree(GetProcessHeap(), 0, handle);
     }
@@ -128,6 +129,7 @@ static struct handle_wrapper *handle_create(HGLOBAL hglobal, BOOL delete_on_rele
         handle->size = GlobalSize(hglobal);
         handle->delete_on_release = delete_on_release;
         InitializeCriticalSection(&handle->lock);
+        handle->lock.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": handle_wrapper.lock");
     }
     return handle;
 }

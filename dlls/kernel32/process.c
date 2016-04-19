@@ -71,6 +71,8 @@ typedef struct
     DWORD dwReserved;
 } LOADPARMS32;
 
+static BOOL is_wow64;
+
 HMODULE kernel32_handle = 0;
 SYSTEM_BASIC_INFORMATION system_info = { 0 };
 
@@ -86,6 +88,7 @@ const WCHAR DIR_System[] = {'C',':','\\','w','i','n','d','o','w','s',
 #define PDB32_FILE_APIS_OEM 0x0040  /* File APIs are OEM */
 #define PDB32_WIN32S_PROC   0x8000  /* Win32s process */
 
+static DEP_SYSTEM_POLICY_TYPE system_DEP_policy = OptIn;
 
 #ifdef __i386__
 extern DWORD call_process_entry( PEB *peb, LPTHREAD_START_ROUTINE entry );
@@ -175,7 +178,6 @@ void CDECL __wine_start_process( LPTHREAD_START_ROUTINE entry, PEB *peb )
     __ENDTRY
     abort();  /* should not be reached */
 }
-
 
 /***********************************************************************
  *           wait_input_idle
@@ -633,9 +635,35 @@ DEP_SYSTEM_POLICY_TYPE WINAPI GetSystemDEPPolicy(void)
  */
 BOOL WINAPI SetProcessDEPPolicy(DWORD newDEP)
 {
-    FIXME("(%d): stub\n", newDEP);
-    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
-    return FALSE;
+    ULONG dep_flags = 0;
+    NTSTATUS status;
+
+    TRACE("(%d)\n", newDEP);
+
+    if (is_wow64 || (system_DEP_policy != OptIn && system_DEP_policy != OptOut) )
+    {
+        SetLastError(ERROR_ACCESS_DENIED);
+        return FALSE;
+    }
+
+    if (!newDEP)
+        dep_flags = MEM_EXECUTE_OPTION_ENABLE;
+    else if (newDEP & PROCESS_DEP_ENABLE)
+        dep_flags = MEM_EXECUTE_OPTION_DISABLE|MEM_EXECUTE_OPTION_PERMANENT;
+    else
+    {
+        SetLastError(ERROR_ACCESS_DENIED);
+        return FALSE;
+    }
+
+    if (newDEP & PROCESS_DEP_DISABLE_ATL_THUNK_EMULATION)
+        dep_flags |= MEM_EXECUTE_OPTION_DISABLE_THUNK_EMULATION;
+
+    status = NtSetInformationProcess( GetCurrentProcess(), ProcessExecuteFlags,
+                                        &dep_flags, sizeof(dep_flags) );
+
+    if (status) SetLastError( RtlNtStatusToDosError(status) );
+    return !status;
 }
 
 /**********************************************************************

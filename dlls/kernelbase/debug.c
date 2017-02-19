@@ -1449,7 +1449,6 @@ BOOL WINAPI DECLSPEC_HOTPATCH K32GetPerformanceInfo( PPERFORMANCE_INFORMATION in
 {
     SYSTEM_PERFORMANCE_INFORMATION perf;
     SYSTEM_BASIC_INFORMATION basic;
-    SYSTEM_PROCESS_INFORMATION *process, *spi;
     DWORD info_size;
     NTSTATUS status;
 
@@ -1462,9 +1461,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH K32GetPerformanceInfo( PPERFORMANCE_INFORMATION in
     }
 
     status = NtQuerySystemInformation( SystemPerformanceInformation, &perf, sizeof(perf), NULL );
-    if (!set_ntstatus( status )) return FALSE;
+    if (status) goto err;
     status = NtQuerySystemInformation( SystemBasicInformation, &basic, sizeof(basic), NULL );
-    if (!set_ntstatus( status )) return FALSE;
+    if (status) goto err;
 
     info->cb                 = sizeof(*info);
     info->CommitTotal        = perf.TotalCommittedPages;
@@ -1478,37 +1477,24 @@ BOOL WINAPI DECLSPEC_HOTPATCH K32GetPerformanceInfo( PPERFORMANCE_INFORMATION in
     info->KernelNonpaged     = perf.NonPagedPoolUsage;
     info->PageSize           = basic.PageSize;
 
-    /* fields from SYSTEM_PROCESS_INFORMATION */
-    NtQuerySystemInformation( SystemProcessInformation, NULL, 0, &info_size );
-    for (;;)
+    SERVER_START_REQ( get_system_info )
     {
-        process = HeapAlloc( GetProcessHeap(), 0, info_size );
-        if (!process)
+        status = wine_server_call( req );
+        if (!status)
         {
-            SetLastError( ERROR_OUTOFMEMORY );
-            return FALSE;
-        }
-        status = NtQuerySystemInformation( SystemProcessInformation, process, info_size, &info_size );
-        if (!status) break;
-        HeapFree( GetProcessHeap(), 0, process );
-        if (status != STATUS_INFO_LENGTH_MISMATCH)
-        {
-            SetLastError( RtlNtStatusToDosError( status ) );
-            return FALSE;
+            info->ProcessCount = reply->processes;
+            info->HandleCount = reply->handles;
+            info->ThreadCount = reply->threads;
         }
     }
-    info->HandleCount = info->ProcessCount = info->ThreadCount = 0;
-    spi = process;
-    for (;;)
-    {
-        info->ProcessCount++;
-        info->HandleCount += spi->HandleCount;
-        info->ThreadCount += spi->dwThreadCount;
-        if (spi->NextEntryOffset == 0) break;
-        spi = (SYSTEM_PROCESS_INFORMATION *)((char *)spi + spi->NextEntryOffset);
-    }
-    HeapFree( GetProcessHeap(), 0, process );
+    SERVER_END_REQ;
+
+    if (status) goto err;
     return TRUE;
+
+err:
+    SetLastError( RtlNtStatusToDosError( status ) );
+    return FALSE;
 }
 
 

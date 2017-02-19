@@ -1838,3 +1838,21 @@ DECL_HANDLER(resume_process)
         release_object( process );
     }
 }
+
+/* Retrieve process, thread and handle count */
+DECL_HANDLER(get_system_info)
+{
+    struct process *process;
+
+    reply->processes = 0;
+    reply->threads = 0;
+    reply->handles = 0;
+
+    LIST_FOR_EACH_ENTRY( process, &process_list, struct process, entry )
+    {
+        if (!process->running_threads) continue;
+        reply->processes++;
+        reply->threads += process->running_threads;
+        reply->handles += get_handle_table_count( process );
+    }
+}

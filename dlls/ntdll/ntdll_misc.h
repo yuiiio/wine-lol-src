@@ -302,6 +302,10 @@ void     WINAPI LdrInitializeThunk(CONTEXT*,void**,ULONG_PTR,ULONG_PTR);
 #define InterlockedCompareExchange64(dest,xchg,cmp) RtlInterlockedCompareExchange64(dest,xchg,cmp)
 #endif
 
+/* process / thread time */
+extern BOOL read_process_time(int unix_pid, int unix_tid, unsigned long clk_tck,
+                              LARGE_INTEGER *kernel, LARGE_INTEGER *user) DECLSPEC_HIDDEN;
+
 /* string functions */
 int    __cdecl NTDLL_tolower( int c );
 int    __cdecl _stricmp( LPCSTR str1, LPCSTR str2 );

@@ -73,6 +73,7 @@ static PEB_LDR_DATA ldr;
 static RTL_BITMAP tls_bitmap;
 static RTL_BITMAP tls_expansion_bitmap;
 static RTL_BITMAP fls_bitmap;
+static API_SET_NAMESPACE_ARRAY apiset_map;
 static int nb_threads = 1;
 
 static RTL_CRITICAL_SECTION peb_lock;
@@ -389,6 +390,7 @@ TEB *thread_init(void)
     teb = virtual_alloc_first_teb();
     peb = teb->Peb;
     peb->FastPebLock        = &peb_lock;
+    peb->ApiSetMap          = &apiset_map;
     peb->TlsBitmap          = &tls_bitmap;
     peb->TlsExpansionBitmap = &tls_expansion_bitmap;
     peb->FlsBitmap          = &fls_bitmap;

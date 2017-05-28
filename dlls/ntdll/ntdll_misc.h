@@ -201,6 +201,7 @@ extern NTSTATUS nt_to_unix_file_name_attr( const OBJECT_ATTRIBUTES *attr, ANSI_S
 /* virtual memory */
 extern NTSTATUS virtual_alloc( PVOID *ret, unsigned short zero_bits_64, SIZE_T *size_ptr,
                                ULONG type, ULONG protect ) DECLSPEC_HIDDEN;
+extern NTSTATUS read_nt_symlink( HANDLE root, UNICODE_STRING *name, WCHAR *target, size_t length ) DECLSPEC_HIDDEN;
 extern NTSTATUS virtual_map_section( HANDLE handle, PVOID *addr_ptr, unsigned short zero_bits_64, SIZE_T commit_size,
                                      const LARGE_INTEGER *offset_ptr, SIZE_T *size_ptr, ULONG alloc_type,
                                      ULONG protect, pe_image_info_t *image_info ) DECLSPEC_HIDDEN;

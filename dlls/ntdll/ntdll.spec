@@ -1592,6 +1592,9 @@
 # Virtual memory
 @ cdecl __wine_locked_recvmsg(long ptr long)
 
+# Token
+@ cdecl __wine_create_default_token(long)
+
 # Version
 @ cdecl wine_get_version() NTDLL_wine_get_version
 @ cdecl wine_get_build_id() NTDLL_wine_get_build_id

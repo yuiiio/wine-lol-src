@@ -106,6 +106,9 @@ extern int __wine_main_argc;
 extern char **__wine_main_argv;
 extern WCHAR **__wine_main_wargv;
 
+/* token */
+extern HANDLE CDECL __wine_create_default_token(BOOL admin);
+
 /* server support */
 extern const char *build_dir DECLSPEC_HIDDEN;
 extern const char *data_dir DECLSPEC_HIDDEN;

@@ -1596,7 +1596,7 @@ NTSTATUS WINAPI RtlCreateUserProcess( UNICODE_STRING *path, ULONG attributes,
                                       RTL_USER_PROCESS_PARAMETERS *params,
                                       SECURITY_DESCRIPTOR *process_descr,
                                       SECURITY_DESCRIPTOR *thread_descr,
-                                      HANDLE parent, BOOLEAN inherit, HANDLE debug, HANDLE exception,
+                                      HANDLE parent, BOOLEAN inherit, HANDLE debug, HANDLE token,
                                       RTL_USER_PROCESS_INFORMATION *info )
 {
     NTSTATUS status;
@@ -1664,6 +1664,7 @@ NTSTATUS WINAPI RtlCreateUserProcess( UNICODE_STRING *path, ULONG attributes,
         req->access         = PROCESS_ALL_ACCESS;
         req->cpu            = pe_info.cpu;
         req->info_size      = startup_info_size;
+        req->token          = wine_server_obj_handle( token );
         wine_server_add_data( req, objattr, attr_len );
         wine_server_add_data( req, startup_info, startup_info_size );
         wine_server_add_data( req, params->Environment, env_size );

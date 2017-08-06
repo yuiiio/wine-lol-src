@@ -496,7 +496,7 @@ static void start_sigkill_timer( struct process *process )
 /* create a new process */
 /* if the function fails the fd is closed */
 struct process *create_process( int fd, struct process *parent, int inherit_all,
-                                const struct security_descriptor *sd )
+                                const struct security_descriptor *sd, struct token *token )
 {
     struct process *process;
 
@@ -573,7 +573,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
                                        : alloc_handle_table( process, 0 );
         /* Note: for security reasons, starting a new process does not attempt
          * to use the current impersonation token for the new process */
-        process->token = token_duplicate( parent->token, TRUE, 0, NULL, NULL, 0, NULL, 0 );
+        process->token = token_duplicate( token ? token : parent->token, TRUE, 0, NULL, NULL, 0, NULL, 0 );
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
@@ -1129,6 +1129,7 @@ DECL_HANDLER(new_process)
     const struct security_descriptor *sd;
     const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, NULL );
     struct process *process = NULL;
+    struct token *token = NULL;
     struct process *parent;
     struct thread *parent_thread = current;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
@@ -1182,10 +1183,39 @@ DECL_HANDLER(new_process)
         return;
     }
 
+    if (req->token)
+    {
+        token = get_token_from_handle( req->token, TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY );
+        if (!token)
+        {
+            close( socket_fd );
+            return;
+        }
+        if (!token_is_primary( token ))
+        {
+            set_error( STATUS_BAD_TOKEN_TYPE );
+            release_object( token );
+            close( socket_fd );
+            return;
+        }
+    }
+
+    if (!req->info_size)  /* create an orphaned process */
+    {
+        if ((process = create_process( socket_fd, NULL, 0, sd, token )))
+        {
+            create_thread( -1, process, NULL );
+            release_object( process );
+        }
+        if (token) release_object( token );
+        return;
+    }
+
     /* build the startup info for a new process */
     if (!(info = alloc_object( &startup_info_ops )))
     {
         close( socket_fd );
+        if (token) release_object( token );
         release_object( parent );
         return;
     }
@@ -1233,7 +1263,7 @@ DECL_HANDLER(new_process)
 #undef FIXUP_LEN
     }
 
-    if (!(process = create_process( socket_fd, parent, req->inherit_all, sd ))) goto done;
+    if (!(process = create_process( socket_fd, parent, req->inherit_all, sd, token ))) goto done;
 
     process->startup_info = (struct startup_info *)grab_object( info );
 
@@ -1294,6 +1324,7 @@ DECL_HANDLER(new_process)
     reply->handle = alloc_handle_no_access_check( current->process, process, req->access, objattr->attributes );
 
  done:
+    if (token) release_object( token );
     if (process) release_object( process );
     release_object( parent );
     release_object( info );
@@ -1327,7 +1358,7 @@ DECL_HANDLER(exec_process)
         close( socket_fd );
         return;
     }
-    if (!(process = create_process( socket_fd, NULL, 0, NULL ))) return;
+    if (!(process = create_process( socket_fd, NULL, 0, NULL, NULL ))) return;
     create_thread( -1, process, NULL );
     release_object( process );
 }

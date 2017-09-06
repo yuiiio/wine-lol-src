@@ -54,6 +54,8 @@ WINE_DEFAULT_DEBUG_CHANNEL(thread);
 
 struct _KUSER_SHARED_DATA *user_shared_data = NULL;
 
+extern void DECLSPEC_NORETURN __wine_syscall_dispatcher( void );
+
 void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) = NULL;
 
 /* info passed to a starting thread */
@@ -206,6 +208,10 @@ static void fill_user_shared_data( struct _KUSER_SHARED_DATA *data )
     data->NumberOfPhysicalPages       = sbi.MmNumberOfPhysicalPages;
     wcscpy( data->NtSystemRoot, windows_dir );
 
+    /* Pretend we don't support the SYSCALL instruction on x86-64. Needed for
+     * Chromium; see output_syscall_thunks_x64() in winebuild. */
+    data->SystemCallPad[0] = 1;
+
     switch (sci.Architecture)
     {
     case PROCESSOR_ARCHITECTURE_INTEL:
@@ -314,15 +320,22 @@ TEB *thread_init(void)
     /* reserve space for shared user data */
 
     addr = (void *)0x7ffe0000;
-    size = 0x1000;
+    size = 0x2000;
     status = NtAllocateVirtualMemory( NtCurrentProcess(), &addr, 0, &size,
-                                      MEM_RESERVE|MEM_COMMIT, PAGE_READONLY );
+                                      MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE );
     if (status)
     {
         MESSAGE( "wine: failed to map the shared user data: %08x\n", status );
         exit(1);
     }
     user_shared_data = addr;
+
+#if defined(__APPLE__) && defined(__x86_64__)
+    *((DWORD*)((char*)user_shared_data + 0x1000)) = __wine_syscall_dispatcher;
+#endif
+
+    /* Init this field early for x86_64 syscall thunks. */
+    user_shared_data->SystemCallPad[0] = 1;
 
     /* allocate and initialize the PEB and initial TEB */
 

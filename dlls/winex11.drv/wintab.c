@@ -1156,6 +1156,17 @@ NTSTATUS x11drv_tablet_info( void *arg )
 
     if (!xinput_handle) return 0;
 
+    if(wCategory >= WTI_DSCTXS)
+    {
+        nIndex = wCategory - WTI_DSCTXS;
+        wCategory = WTI_DSCTXS;
+    }
+    else if(wCategory >= WTI_DDCTXS)
+    {
+        nIndex = wCategory - WTI_DDCTXS;
+        wCategory = WTI_DDCTXS;
+    }
+
     switch(wCategory)
     {
         case 0:

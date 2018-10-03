@@ -1311,6 +1311,35 @@ void wined3d_shader_resource_view_gl_bind(struct wined3d_shader_resource_view_gl
         context_gl->c.constant_update_mask |= WINED3D_SHADER_CONST_PS_NP2_FIXUP;
 }
 
+GLuint64 wined3d_shader_resource_view_gl_handle(struct wined3d_shader_resource_view_gl *view_gl,
+        struct wined3d_sampler *sampler, struct wined3d_context_gl *context_gl)
+{
+    const struct wined3d_gl_info *gl_info = context_gl->gl_info;
+    GLuint name;
+    GLuint64 handle;
+
+    if (view_gl->gl_view.name)
+    {
+        name = view_gl->gl_view.name;
+    }
+    else if (view_gl->v.resource->type == WINED3D_RTYPE_BUFFER)
+    {
+        FIXME("Buffer shader resources not supported.\n");
+        return 0;
+    }
+    else
+    {
+        struct wined3d_texture_gl *texture_gl = wined3d_texture_gl(wined3d_texture_from_resource(view_gl->v.resource));
+        name = wined3d_texture_gl_get_bindless_name(texture_gl, context_gl, FALSE);
+    }
+
+    handle = GL_EXTCALL(glGetTextureSamplerHandleARB(name, wined3d_sampler_gl(sampler)->name));
+    checkGLcall("glGetTextureSamplerHandleARB");
+    GL_EXTCALL(glMakeTextureHandleResidentARB(handle));
+    checkGLcall("glMakeTextureHandleResidentARB");
+    return handle;
+}
+
 /* Context activation is done by the caller. */
 static void shader_resource_view_gl_bind_and_dirtify(struct wined3d_shader_resource_view_gl *view_gl,
         struct wined3d_context_gl *context_gl)

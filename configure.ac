@@ -58,6 +58,7 @@ AC_ARG_WITH(gsm,       AS_HELP_STRING([--without-gsm],[do not use libgsm (GSM 06
             [if test "x$withval" = "xno"; then ac_cv_header_gsm_h=no; ac_cv_header_gsm_gsm_h=no; fi])
 AC_ARG_WITH(gssapi,    AS_HELP_STRING([--without-gssapi],[do not use GSSAPI (Kerberos SSP support)]))
 AC_ARG_WITH(gstreamer, AS_HELP_STRING([--without-gstreamer],[do not use GStreamer (codecs support)]))
+AC_ARG_WITH(gtk3,      AS_HELP_STRING([--without-gtk3],[do not use gtk3 (gtk3 theming support)]))
 AC_ARG_WITH(hal,       AS_HELP_STRING([--without-hal],[do not use HAL (dynamic device support)]))
 AC_ARG_WITH(inotify,   AS_HELP_STRING([--without-inotify],[do not use inotify (filesystem change notifications)]))
 AC_ARG_WITH(jpeg,      AS_HELP_STRING([--without-jpeg],[do not use JPEG]))
@@ -1650,6 +1651,21 @@ then
 fi
 WINE_NOTICE_WITH(cms,[test "$ac_cv_lib_lcms2_cmsOpenProfileFromFile" != "yes"],
                  [liblcms2 ${notice_platform}development files not found, Color Management won't be supported.])
+
+dnl **** Check for GTK3 ****
+if test "x$with_gtk3" != "xno";
+then
+    WINE_PACKAGE_FLAGS(GTK3, [gtk+-3.0],,,,
+        [AC_CHECK_HEADERS([gtk/gtk.h])
+        if test "$ac_cv_header_gtk_gtk_h" = "yes"
+        then
+            WINE_CHECK_SONAME(gobject-2.0,g_object_unref,
+                [WINE_CHECK_SONAME(cairo,cairo_destroy,
+                    [WINE_CHECK_SONAME(gtk-3,gtk_style_context_save)])],,[$GTK3_LIBS])
+        fi])
+fi
+WINE_NOTICE_WITH(gtk3,[test "x$ac_cv_lib_soname_gtk_3" = x],
+                 [GTK3 ${notice_platform}development files not found, GTK themes won't be supported.])
 
 dnl **** Check for FreeType 2 ****
 if test "x$with_freetype" != "xno"

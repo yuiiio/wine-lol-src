@@ -3174,6 +3174,11 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             }
         }
         break;
+    case SystemExtendedProcessInformation:
+        FIXME("SystemExtendedProcessInformation, len %u, buffer %p, stub!\n", Length, SystemInformation);
+        memset(SystemInformation, 0, Length);
+        ret = STATUS_SUCCESS;
+        break;
     default:
 	FIXME("(0x%08x,%p,0x%08x,%p) stub\n",
 	      SystemInformationClass,SystemInformation,Length,ResultLength);

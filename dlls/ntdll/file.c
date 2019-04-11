@@ -1680,6 +1680,7 @@ NTSTATUS FILE_CreateSymlink(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
     int relative_offset = 0;
     UNICODE_STRING nt_dest;
     int dest_len, offset;
+    BOOL is_dir = TRUE;
     NTSTATUS status;
     struct stat st;
     WCHAR *dest;
@@ -1772,7 +1773,8 @@ NTSTATUS FILE_CreateSymlink(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
             status = FILE_GetNtStatus();
             goto cleanup;
         }
-        if (S_ISDIR(st.st_mode))
+        is_dir = S_ISDIR(st.st_mode);
+        if (is_dir)
             strcat( magic_dest, "." );
         strcat( magic_dest, "/" );
     }
@@ -1799,8 +1801,11 @@ NTSTATUS FILE_CreateSymlink(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
     /* Atomically move the link into position */
     if (!renameat2( -1, tmplink, -1, unix_src.Buffer, RENAME_EXCHANGE ))
     {
-        /* success: link and folder have switched locations */
-        rmdir( tmplink ); /* remove the folder (at link location) */
+        /* success: link and folder/file have switched locations */
+        if (is_dir)
+            rmdir( tmplink ); /* remove the folder (at link location) */
+        else
+            unlink( tmplink ); /* remove the file (at link location) */
     }
     else if (errno == ENOSYS)
     {
@@ -2009,6 +2014,7 @@ NTSTATUS FILE_RemoveSymlink(HANDLE handle, REPARSE_GUID_DATA_BUFFER *buffer)
     BOOL tempdir_created = FALSE;
     int dest_fd, needs_close;
     ANSI_STRING unix_name;
+    BOOL is_dir = TRUE;
     NTSTATUS status;
     struct stat st;
 
@@ -2020,12 +2026,13 @@ NTSTATUS FILE_RemoveSymlink(HANDLE handle, REPARSE_GUID_DATA_BUFFER *buffer)
 
     TRACE("Deleting symlink %s\n", unix_name.Buffer);
 
-    /* Produce the directory in a temporary location in the same folder */
+    /* Produce the file/directory in a temporary location in the same folder */
     if (fstat( dest_fd, &st ) == -1)
     {
         status = FILE_GetNtStatus();
         goto cleanup;
     }
+    is_dir = S_ISDIR(st.st_mode);
     strcpy( tmpdir, unix_name.Buffer );
     d = dirname( tmpdir);
     if (d != tmpdir) strcpy( tmpdir, d );
@@ -2038,10 +2045,20 @@ NTSTATUS FILE_RemoveSymlink(HANDLE handle, REPARSE_GUID_DATA_BUFFER *buffer)
     tempdir_created = TRUE;
     strcpy( tmpfile, tmpdir );
     strcat( tmpfile, "/tmpfile" );
-    if (mkdir( tmpfile, st.st_mode ))
+    if (is_dir && mkdir( tmpfile, st.st_mode ))
     {
         status = FILE_GetNtStatus();
         goto cleanup;
+    }
+    else if (!is_dir)
+    {
+        int fd = open( tmpfile, O_CREAT|O_WRONLY|O_TRUNC, st.st_mode );
+        if (fd < 0)
+            {
+            status = FILE_GetNtStatus();
+            goto cleanup;
+        }
+        close( fd );
     }
     /* attemp to retain the ownership (if possible) */
     lchown( tmpfile, st.st_uid, st.st_gid );

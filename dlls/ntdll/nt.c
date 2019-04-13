@@ -2588,6 +2588,33 @@ BOOLEAN WINAPI RtlIsProcessorFeaturePresent( UINT feature )
     return feature < PROCESSOR_FEATURE_MAX && user_shared_data->ProcessorFeatures[feature];
 }
 
+static void get_ntdll_system_module(SYSTEM_MODULE *sm)
+{
+    char *ptr;
+    ANSI_STRING str;
+    PLIST_ENTRY entry;
+    LDR_DATA_TABLE_ENTRY *mod;
+
+    /* The first entry must be ntdll. */
+    entry = NtCurrentTeb()->Peb->LdrData->InLoadOrderModuleList.Flink;
+    mod = CONTAINING_RECORD(entry, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+
+    sm->Section = 0;
+    sm->MappedBaseAddress = 0;
+    sm->ImageBaseAddress = mod->DllBase;
+    sm->ImageSize = mod->SizeOfImage;
+    sm->Flags = mod->Flags;
+    sm->LoadOrderIndex = 0;
+    sm->InitOrderIndex = 0;
+    sm->LoadCount = 0;
+    str.Length = 0;
+    str.MaximumLength = MAXIMUM_FILENAME_LENGTH;
+    str.Buffer = (char*)sm->Name;
+    RtlUnicodeStringToAnsiString(&str, &mod->FullDllName, FALSE);
+    ptr = strrchr(str.Buffer, '\\');
+    sm->NameOffset = (ptr != NULL) ? (ptr - str.Buffer + 1) : 0;
+}
+
 /******************************************************************************
  * NtQuerySystemInformation [NTDLL.@]
  * ZwQuerySystemInformation [NTDLL.@]
@@ -2897,7 +2924,7 @@ NTSTATUS WINAPI NtQuerySystemInformation(
 
             FIXME("returning fake driver list\n");
             smi->ModulesCount = 1;
-            memset(&smi->Modules[0], 0, sizeof(smi->Modules[0]));
+            get_ntdll_system_module(&smi->Modules[0]);
             ret = STATUS_SUCCESS;
         }
         break;

@@ -2896,6 +2896,27 @@ NTSTATUS WINAPI NtQuerySystemInformation(
             ret = STATUS_SUCCESS;
         }
         break;
+    case SystemModuleInformationEx:
+        if (!SystemInformation)
+            ret = STATUS_ACCESS_VIOLATION;
+        else if (Length < sizeof(SYSTEM_MODULE_INFORMATION_EX))
+        {
+            len = sizeof(SYSTEM_MODULE_INFORMATION_EX);
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+        }
+        else
+        {
+            SYSTEM_MODULE_INFORMATION_EX *info = SystemInformation;
+
+            FIXME("info_class SystemModuleInformationEx stub!\n");
+            get_ntdll_system_module(&info->BaseInfo);
+            info->NextOffset = 0;
+            info->ImageCheckSum = 0;
+            info->TimeDateStamp = 0;
+            info->DefaultBase = info->BaseInfo.ImageBaseAddress;
+            ret = STATUS_SUCCESS;
+        }
+        break;
     case SystemHandleInformation:
         {
             struct handle_info *info;

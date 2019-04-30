@@ -2587,6 +2587,19 @@ static NTSTATUS lookup_unix_name( const WCHAR *name, int name_len, char **buffer
                 status = STATUS_OBJECT_NAME_COLLISION;
             }
         }
+        else if (disposition == FILE_WINE_PATH && status == STATUS_OBJECT_PATH_NOT_FOUND)
+        {
+            ret = ntdll_wcstoumbs( name, end - name, unix_name + pos + 1, MAX_DIR_ENTRY_LEN + 1, TRUE );
+            if (ret > 0 && ret <= MAX_DIR_ENTRY_LEN)
+            {
+                unix_name[pos] = '/';
+                unix_name[pos + 1 + ret] = 0;
+                status = STATUS_NO_SUCH_FILE;
+                pos += strlen( unix_name + pos );
+                name = next;
+                continue;
+            }
+        }
 
         if (status != STATUS_SUCCESS) break;
 

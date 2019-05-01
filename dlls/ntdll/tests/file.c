@@ -5924,6 +5924,7 @@ static void test_reparse_points(void)
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags, err;
+    WIN32_FILE_ATTRIBUTE_DATA fad;
     WCHAR buf[] = {0,0,0,0};
     HANDLE handle, token;
     IO_STATUS_BLOCK iosb;
@@ -6152,6 +6153,37 @@ static void test_reparse_points(void)
     buffer_len = build_reparse_buffer(nameW.Buffer, IO_REPARSE_TAG_SYMLINK, 0, &buffer);
     bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
     ok(bret, "Failed to create symlink! (0x%lx)\n", GetLastError());
+    CloseHandle(handle);
+
+    /* Check the size of the symlink */
+    bret = GetFileAttributesExW(reparse_path, GetFileExInfoStandard, &fad);
+    ok(bret, "Failed to read file attributes from the symlink target.\n");
+    ok(fad.nFileSizeLow == 0 && fad.nFileSizeHigh == 0, "Size of symlink is not zero.\n");
+    handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    ok(handle != INVALID_HANDLE_VALUE, "Failed to open symlink file.\n");
+    ok(GetFileSize(handle, NULL) == 0, "symlink size is not zero\n");
+    bret = ReadFile(handle, &buf, sizeof(buf), &dwLen, NULL);
+    todo_wine ok(bret, "Failed to read data from the symlink.\n");
+    ok(dwLen == 0, "Length of symlink data is not zero.\n");
+    CloseHandle(handle);
+
+    /* Check the size/data of the symlink target */
+    handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if (handle == INVALID_HANDLE_VALUE)
+    {
+        win_skip("Failed to open symlink file handle (0x%lx).\n", GetLastError());
+        goto cleanup;
+    }
+    ok(GetFileSize(handle, NULL) == sizeof(fooW), "symlink target size does not match (%ld != %d)\n",
+       GetFileSize(handle, NULL), (int)sizeof(fooW));
+    bret = ReadFile(handle, &buf, sizeof(buf), &dwLen, NULL);
+    ok(bret, "Failed to read data from the symlink.\n");
+    ok(dwLen == sizeof(fooW), "Length of symlink target data does not match (%ld != %d).\n",
+       dwLen, (int)sizeof(fooW));
+    ok(!memcmp(fooW, &buf, sizeof(fooW)), "Symlink target data does not match (%s != %s).\n",
+       wine_dbgstr_wn(buf, dwLen), wine_dbgstr_w(fooW));
     CloseHandle(handle);
 
     /* Check the size/data of the symlink target when opened with FILE_FLAG_OPEN_REPARSE_POINT */

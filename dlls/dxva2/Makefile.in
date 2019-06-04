@@ -4,8 +4,6 @@ IMPORTS = ole32 advapi32
 IDL_SRCS = \
 	backend.idl
 
-EXTRADLLFLAGS = -mno-cygwin
-
 C_SRCS = \
 	devicemanager.c \
 	genericdecoder.c \

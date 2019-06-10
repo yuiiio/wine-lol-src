@@ -570,6 +570,14 @@ static inline void small_pause(void)
  * problem at all.
  */
 
+/* Removing this spinlock is harder than it looks. esync_wait_objects() can
+ * deal with inconsistent state well enough, and a race between SetEvent() and
+ * ResetEvent() gives us license to yield either result as long as we act
+ * consistently, but that's not enough. Notably, esync_wait_objects() should
+ * probably act like a fence, so that the second half of esync_set_event() does
+ * not seep past a subsequent reset. That's one problem, but no guarantee there
+ * aren't others. */
+
 NTSTATUS esync_set_event( HANDLE handle, LONG *prev )
 {
     static const uint64_t value = 1;
@@ -583,21 +591,36 @@ NTSTATUS esync_set_event( HANDLE handle, LONG *prev )
     if ((ret = get_object( handle, &obj ))) return ret;
     event = obj->shm;
 
-    /* Acquire the spinlock. */
-    while (InterlockedCompareExchange( &event->locked, 1, 0 ))
-        small_pause();
+    if (obj->type == ESYNC_MANUAL_EVENT)
+    {
+        /* Acquire the spinlock. */
+        while (InterlockedCompareExchange( &event->locked, 1, 0 ))
+            small_pause();
+    }
+
+    /* For manual-reset events, as long as we're in a lock, we can take the
+     * optimization of only calling write() if the event wasn't already
+     * signaled.
+     *
+     * For auto-reset events, esync_wait_objects() must grab the kernel object.
+     * Thus if we got into a race so that the shm state is signaled but the
+     * eventfd is unsignaled (i.e. reset shm, set shm, set fd, reset fd), we
+     * *must* signal the fd now, or any waiting threads will never wake up. */
 
     /* Only bother signaling the fd if we weren't already signaled. */
-    if (!(current = InterlockedExchange( &event->signaled, 1 )))
+    if (!(current = InterlockedExchange( &event->signaled, 1 )) || obj->type == ESYNC_AUTO_EVENT)
     {
         if (write( obj->fd, &value, sizeof(value) ) == -1)
-            return FILE_GetNtStatus();
+            ERR("write: %s\n", strerror(errno));
     }
 
     if (prev) *prev = current;
 
-    /* Release the spinlock. */
-    event->locked = 0;
+    if (obj->type == ESYNC_MANUAL_EVENT)
+    {
+        /* Release the spinlock. */
+        event->locked = 0;
+    }
 
     return STATUS_SUCCESS;
 }
@@ -615,21 +638,34 @@ NTSTATUS esync_reset_event( HANDLE handle, LONG *prev )
     if ((ret = get_object( handle, &obj ))) return ret;
     event = obj->shm;
 
-    /* Acquire the spinlock. */
-    while (InterlockedCompareExchange( &event->locked, 1, 0 ))
-        small_pause();
-
-    /* Only bother signaling the fd if we weren't already signaled. */
-    if ((current = InterlockedExchange( &event->signaled, 0 )))
+    if (obj->type == ESYNC_MANUAL_EVENT)
     {
-        /* we don't care about the return value */
-        read( obj->fd, &value, sizeof(value) );
+        /* Acquire the spinlock. */
+        while (InterlockedCompareExchange( &event->locked, 1, 0 ))
+            small_pause();
+    }
+
+    /* For manual-reset events, as long as we're in a lock, we can take the
+     * optimization of only calling read() if the event was already signaled.
+     *
+     * For auto-reset events, we have no guarantee that the previous "signaled"
+     * state is actually correct. We need to leave both states unsignaled after
+     * leaving this function, so we always have to read(). */
+    if ((current = InterlockedExchange( &event->signaled, 0 )) || obj->type == ESYNC_AUTO_EVENT)
+    {
+        if (read( obj->fd, &value, sizeof(value) ) == -1 && errno != EWOULDBLOCK && errno != EAGAIN)
+        {
+            ERR("read: %s\n", strerror(errno));
+        }
     }
 
     if (prev) *prev = current;
 
-    /* Release the spinlock. */
-    event->locked = 0;
+    if (obj->type == ESYNC_MANUAL_EVENT)
+    {
+        /* Release the spinlock. */
+        event->locked = 0;
+    }
 
     return STATUS_SUCCESS;
 }
@@ -844,8 +880,9 @@ static void update_grabbed_object( struct esync *obj )
     else if (obj->type == ESYNC_AUTO_EVENT)
     {
         struct event *event = obj->shm;
-        /* We don't have to worry about a race between this and read(), for
-         * reasons described near esync_set_event(). */
+        /* We don't have to worry about a race between this and read(), since
+         * this is just a hint, and the real state is in the kernel object.
+         * This might already be 0, but that's okay! */
         event->signaled = 0;
     }
 }
@@ -1094,6 +1131,7 @@ static NTSTATUS __esync_wait_objects( DWORD count, const HANDLE *handles,
                         }
                         else
                         {
+                            /* FIXME: Could we check the poll or shm state first? Should we? */
                             if ((size = read( fds[i].fd, &value, sizeof(value) )) == sizeof(value))
                             {
                                 /* We found our object. */

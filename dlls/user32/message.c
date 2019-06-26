@@ -2318,7 +2318,12 @@ static BOOL process_rawinput_message( MSG *msg, const struct hardware_msg_data *
         rawinput->header.hDevice = WINE_MOUSE_HANDLE;
         rawinput->header.wParam  = 0;
 
-        rawinput->data.mouse.usFlags           = MOUSE_MOVE_RELATIVE;
+        if (msg_data->flags & MOUSEEVENTF_ABSOLUTE)
+            rawinput->data.mouse.usFlags = MOUSE_MOVE_ABSOLUTE;
+        else
+            rawinput->data.mouse.usFlags = MOUSE_MOVE_RELATIVE;
+        if (msg_data->flags & MOUSEEVENTF_VIRTUALDESK)
+            rawinput->data.mouse.usFlags |= MOUSE_VIRTUAL_DESKTOP;
         rawinput->data.mouse.u.s.usButtonFlags = 0;
         rawinput->data.mouse.u.s.usButtonData  = 0;
         for (i = 1; i < ARRAY_SIZE(button_flags); ++i)

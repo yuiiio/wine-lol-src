@@ -210,12 +210,9 @@ static void CDECL nulldrv_Beep(void)
 
 static UINT CDECL nulldrv_GetKeyboardLayoutList( INT size, HKL *layouts )
 {
-    HKEY hKeyKeyboard;
-    DWORD rc;
     INT count = 0;
     ULONG_PTR baselayout;
     LANGID langid;
-    static const WCHAR szKeyboardReg[] = {'S','y','s','t','e','m','\\','C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\','C','o','n','t','r','o','l','\\','K','e','y','b','o','a','r','d',' ','L','a','y','o','u','t','s',0};
 
     baselayout = GetUserDefaultLCID();
     langid = PRIMARYLANGID(LANGIDFROMLCID(baselayout));
@@ -223,30 +220,6 @@ static UINT CDECL nulldrv_GetKeyboardLayoutList( INT size, HKL *layouts )
         baselayout = MAKELONG( baselayout, 0xe001 ); /* IME */
     else
         baselayout |= baselayout << 16;
-
-    /* Enumerate the Registry */
-    rc = RegOpenKeyW(HKEY_LOCAL_MACHINE,szKeyboardReg,&hKeyKeyboard);
-    if (rc == ERROR_SUCCESS)
-    {
-        do {
-            WCHAR szKeyName[9];
-            HKL layout;
-            rc = RegEnumKeyW(hKeyKeyboard, count, szKeyName, 9);
-            if (rc == ERROR_SUCCESS)
-            {
-                layout = (HKL)(ULONG_PTR)strtoulW(szKeyName,NULL,16);
-                if (baselayout != 0 && layout == (HKL)baselayout)
-                    baselayout = 0; /* found in the registry do not add again */
-                if (size && layouts)
-                {
-                    if (count >= size ) break;
-                    layouts[count] = layout;
-                }
-                count ++;
-            }
-        } while (rc == ERROR_SUCCESS);
-        RegCloseKey(hKeyKeyboard);
-    }
 
     /* make sure our base layout is on the list */
     if (baselayout != 0)

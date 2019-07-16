@@ -1,0 +1,8 @@
+MODULE    = directmanipulation.dll
+
+EXTRADLLFLAGS = -mno-cygwin
+
+IDL_SRCS = directmanip.idl
+
+C_SRCS = \
+	directmanipulation.c

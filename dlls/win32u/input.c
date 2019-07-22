@@ -1807,7 +1807,7 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
 {
     HWND previous = get_active_window();
     BOOL ret;
-    DWORD old_thread, new_thread;
+    DWORD winflags, old_thread, new_thread;
     CBTACTIVATESTRUCT cbt;
 
     if (previous == hwnd)
@@ -1816,16 +1816,24 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
         goto done;
     }
 
-    /* call CBT hook chain */
-    cbt.fMouse     = mouse;
-    cbt.hWndActive = previous;
-    if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) )) return FALSE;
-
-    if (is_window( previous ))
+    /* Prevent a recursive activation loop with the activation messages */
+    winflags = win_set_flags(hwnd, WIN_IS_IN_ACTIVATION, 0);
+    if (!(winflags & WIN_IS_IN_ACTIVATION))
     {
-        send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
-        send_message( previous, WM_ACTIVATE,
-                      MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ), (LPARAM)hwnd );
+        ret = FALSE;
+
+        /* call CBT hook chain */
+        cbt.fMouse     = mouse;
+        cbt.hWndActive = previous;
+        if (call_hooks( WH_CBT, HCBT_ACTIVATE, (WPARAM)hwnd, (LPARAM)&cbt, sizeof(cbt) ))
+            goto clear_flags;
+
+        if (is_window(previous))
+        {
+            send_message( previous, WM_NCACTIVATE, FALSE, (LPARAM)hwnd );
+            send_message( previous, WM_ACTIVATE,
+                          MAKEWPARAM( WA_INACTIVE, is_iconic(previous) ), (LPARAM)hwnd );
+        }
     }
 
     SERVER_START_REQ( set_active_window )
@@ -1845,7 +1853,11 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
         if (send_message( hwnd, WM_QUERYNEWPALETTE, 0, 0 ))
             send_message_timeout( HWND_BROADCAST, WM_PALETTEISCHANGING, (WPARAM)hwnd, 0,
                                   SMTO_ABORTIFHUNG, 2000, FALSE );
-        if (!is_window(hwnd)) return FALSE;
+        if (!is_window(hwnd))
+        {
+            ret = FALSE;
+            goto clear_flags;
+        }
     }
 
     old_thread = previous ? get_window_thread( previous, NULL ) : 0;
@@ -1877,7 +1889,7 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
         }
     }
 
-    if (is_window(hwnd))
+    if (!(winflags & WIN_IS_IN_ACTIVATION) && is_window(hwnd))
     {
         send_message( hwnd, WM_NCACTIVATE, hwnd == NtUserGetForegroundWindow(), (LPARAM)previous );
         send_message( hwnd, WM_ACTIVATE,
@@ -1911,9 +1923,13 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
         }
     }
 
+clear_flags:
+    win_set_flags(hwnd, 0, WIN_IS_IN_ACTIVATION);
+
 done:
     if (hwnd) clip_fullscreen_window( hwnd, FALSE );
-    return TRUE;
+
+    return ret;
 }
 
 /**********************************************************************

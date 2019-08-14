@@ -1,6 +1,9 @@
 MODULE    = dsdmo.dll
-
+IMPORTS   = uuid
 EXTRADLLFLAGS = -mno-cygwin
 
 C_SRCS = \
+	echo.c \
 	main.c
+
+IDL_SRCS = dsdmo_classes.idl

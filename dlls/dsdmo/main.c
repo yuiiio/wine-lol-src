@@ -17,10 +17,12 @@
  */
 #define COBJMACROS
 
+#include "windows.h"
 #include "ole2.h"
 #include "rpcproxy.h"
 
-#include "wine/debug.h"
+#include "initguid.h"
+#include "dsdmo_private.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(dsdmo);
 
@@ -46,11 +48,64 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, void *reserved)
     return TRUE;
 }
 
+static HRESULT WINAPI ClassFactory_QueryInterface(IClassFactory *iface, REFIID riid, void **ppv)
+{
+    *ppv = NULL;
+
+    if(IsEqualGUID(&IID_IUnknown, riid) || IsEqualGUID(&IID_IClassFactory, riid)) {
+        *ppv = iface;
+    }
+
+    if(*ppv) {
+        IUnknown_AddRef((IUnknown*)*ppv);
+        return S_OK;
+    }
+
+    WARN("(%p)->(%s %p)\n", iface, debugstr_guid(riid), ppv);
+    return E_NOINTERFACE;
+}
+
+static ULONG WINAPI ClassFactory_AddRef(IClassFactory *iface)
+{
+    TRACE("(%p)\n", iface);
+    return 2;
+}
+
+static ULONG WINAPI ClassFactory_Release(IClassFactory *iface)
+{
+    TRACE("(%p)\n", iface);
+    return 1;
+}
+
+static HRESULT WINAPI ClassFactory_LockServer(IClassFactory *iface, BOOL fLock)
+{
+    TRACE("(%p)->(%x)\n", iface, fLock);
+    return S_OK;
+}
+
+static const IClassFactoryVtbl EchoFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    EchoFactory_CreateInstance,
+    ClassFactory_LockServer
+};
+
+static IClassFactory echofx_factory = { &EchoFactoryVtbl };
+
 /***********************************************************************
  *      DllGetClassObject
  */
 HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
 {
+    TRACE("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);
+
+    if(IsEqualGUID(&GUID_DSFX_STANDARD_ECHO, rclsid))
+    {
+        TRACE("GUID_DSFX_STANDARD_ECHO\n");
+        return IClassFactory_QueryInterface(&echofx_factory, riid, ppv);
+    }
+
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);
     return CLASS_E_CLASSNOTAVAILABLE;
 }

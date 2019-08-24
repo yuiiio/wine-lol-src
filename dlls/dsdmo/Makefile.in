@@ -3,6 +3,7 @@ IMPORTS   = uuid
 EXTRADLLFLAGS = -mno-cygwin
 
 C_SRCS = \
+	chorus.c \
 	echo.c \
 	main.c
 

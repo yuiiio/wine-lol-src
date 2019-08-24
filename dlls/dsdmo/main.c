@@ -99,8 +99,17 @@ static const IClassFactoryVtbl ChrousFactoryVtbl = {
     ClassFactory_LockServer
 };
 
+static const IClassFactoryVtbl CompressorFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    CompressorFactory_CreateInstance,
+    ClassFactory_LockServer
+};
+
 static IClassFactory echofx_factory = { &EchoFactoryVtbl };
 static IClassFactory chorusfx_factory = { &ChrousFactoryVtbl };
+static IClassFactory compressorfx_factory = { &CompressorFactoryVtbl };
 
 /***********************************************************************
  *      DllGetClassObject
@@ -118,6 +127,11 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
     {
         TRACE("GUID_DSFX_STANDARD_CHORUS\n");
         return IClassFactory_QueryInterface(&chorusfx_factory, riid, ppv);
+    }
+    else if(IsEqualGUID(&GUID_DSFX_STANDARD_COMPRESSOR, rclsid))
+    {
+        TRACE("GUID_DSFX_STANDARD_COMPRESSOR\n");
+        return IClassFactory_QueryInterface(&compressorfx_factory, riid, ppv);
     }
 
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);

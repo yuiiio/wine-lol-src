@@ -4,6 +4,7 @@ EXTRADLLFLAGS = -mno-cygwin
 
 C_SRCS = \
 	chorus.c \
+	compressor.c \
 	echo.c \
 	main.c
 

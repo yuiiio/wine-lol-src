@@ -8,6 +8,7 @@ C_SRCS = \
 	distortion.c \
 	echo.c \
 	flanger.c \
+	gargle.c \
 	main.c
 
 IDL_SRCS = dsdmo_classes.idl

@@ -10,6 +10,7 @@ C_SRCS = \
 	flanger.c \
 	gargle.c \
 	main.c \
-	parameq.c
+	parameq.c \
+	reverb.c
 
 IDL_SRCS = dsdmo_classes.idl

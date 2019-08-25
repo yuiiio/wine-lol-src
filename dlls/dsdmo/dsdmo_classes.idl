@@ -86,3 +86,13 @@ coclass DirectSoundGargleDMO
 coclass DirectSoundParamEqDMO
 {
 }
+
+[
+    uuid(87fc0268-9a55-4360-95aa-004a1d9de26c),
+    threading(both),
+    progid("Microsoft.DirectSoundWavesReverbDMO.1"),
+    vi_progid("Microsoft.DirectSoundWavesReverbDMO")
+]
+coclass DirectSoundWavesReverbDMO
+{
+}

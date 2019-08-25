@@ -139,6 +139,14 @@ static const IClassFactoryVtbl ParamEqFactoryVtbl = {
     ClassFactory_LockServer
 };
 
+static const IClassFactoryVtbl ReverbFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    ReverbFactory_CreateInstance,
+    ClassFactory_LockServer
+};
+
 static IClassFactory echofx_factory = { &EchoFactoryVtbl };
 static IClassFactory chorusfx_factory = { &ChrousFactoryVtbl };
 static IClassFactory compressorfx_factory = { &CompressorFactoryVtbl };
@@ -146,6 +154,7 @@ static IClassFactory distortionfx_factory = { &DistortionFactoryVtbl };
 static IClassFactory flangerfx_factory = { &FlangerFactoryVtbl };
 static IClassFactory garglefx_factory = { &GargleFactoryVtbl };
 static IClassFactory parameqfx_factory = { &ParamEqFactoryVtbl };
+static IClassFactory reverbfx_factory = { &ReverbFactoryVtbl };
 
 /***********************************************************************
  *      DllGetClassObject
@@ -188,6 +197,11 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
     {
         TRACE("GUID_DSFX_STANDARD_PARAMEQ\n");
         return IClassFactory_QueryInterface(&parameqfx_factory, riid, ppv);
+    }
+    else if(IsEqualGUID(&GUID_DSFX_WAVES_REVERB, rclsid))
+    {
+        TRACE("GUID_DSFX_WAVES_REVERB\n");
+        return IClassFactory_QueryInterface(&reverbfx_factory, riid, ppv);
     }
 
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);

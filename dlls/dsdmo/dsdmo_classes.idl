@@ -56,3 +56,13 @@ coclass DirectSoundCompressorDMO
 coclass DirectSoundDistortionDMO
 {
 }
+
+[
+    uuid(efca3d92-dfd8-4672-a603-7420894bad98),
+    threading(both),
+    progid("Microsoft.DirectSoundFlangerDMO.1"),
+    vi_progid("Microsoft.DirectSoundFlangerDMO")
+]
+coclass DirectSoundFlangerDMO
+{
+}

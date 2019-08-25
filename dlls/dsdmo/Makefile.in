@@ -7,6 +7,7 @@ C_SRCS = \
 	compressor.c \
 	distortion.c \
 	echo.c \
+	flanger.c \
 	main.c
 
 IDL_SRCS = dsdmo_classes.idl

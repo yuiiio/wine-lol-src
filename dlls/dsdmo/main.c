@@ -131,12 +131,21 @@ static const IClassFactoryVtbl GargleFactoryVtbl = {
     ClassFactory_LockServer
 };
 
+static const IClassFactoryVtbl ParamEqFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    ParamEqFactory_CreateInstance,
+    ClassFactory_LockServer
+};
+
 static IClassFactory echofx_factory = { &EchoFactoryVtbl };
 static IClassFactory chorusfx_factory = { &ChrousFactoryVtbl };
 static IClassFactory compressorfx_factory = { &CompressorFactoryVtbl };
 static IClassFactory distortionfx_factory = { &DistortionFactoryVtbl };
 static IClassFactory flangerfx_factory = { &FlangerFactoryVtbl };
 static IClassFactory garglefx_factory = { &GargleFactoryVtbl };
+static IClassFactory parameqfx_factory = { &ParamEqFactoryVtbl };
 
 /***********************************************************************
  *      DllGetClassObject
@@ -174,6 +183,11 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
     {
         TRACE("GUID_DSFX_STANDARD_GARGLE\n");
         return IClassFactory_QueryInterface(&garglefx_factory, riid, ppv);
+    }
+    else if(IsEqualGUID(&GUID_DSFX_STANDARD_PARAMEQ, rclsid))
+    {
+        TRACE("GUID_DSFX_STANDARD_PARAMEQ\n");
+        return IClassFactory_QueryInterface(&parameqfx_factory, riid, ppv);
     }
 
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);

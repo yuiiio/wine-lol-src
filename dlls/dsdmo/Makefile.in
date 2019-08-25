@@ -9,6 +9,7 @@ C_SRCS = \
 	echo.c \
 	flanger.c \
 	gargle.c \
-	main.c
+	main.c \
+	parameq.c
 
 IDL_SRCS = dsdmo_classes.idl

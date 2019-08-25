@@ -76,3 +76,13 @@ coclass DirectSoundFlangerDMO
 coclass DirectSoundGargleDMO
 {
 }
+
+[
+    uuid(120ced89-3bf4-4173-a132-3cb406cf3231),
+    threading(both),
+    progid("Microsoft.DirectSoundParamEqDMO.1"),
+    vi_progid("Microsoft.DirectSoundParamEqDMO")
+]
+coclass DirectSoundParamEqDMO
+{
+}

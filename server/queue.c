@@ -1659,7 +1659,7 @@ static int send_hook_ll_message( struct desktop *desktop, struct message *hardwa
 
 /* queue a hardware message for a mouse event */
 static int queue_mouse_message( struct desktop *desktop, user_handle_t win, const hw_input_t *input,
-                                unsigned int origin, struct msg_queue *sender )
+                                unsigned int origin, struct msg_queue *sender, unsigned int req_flags )
 {
     const struct rawinput_device *device;
     struct hardware_msg_data *msg_data;
@@ -1712,7 +1712,8 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
         y = desktop->cursor.y;
     }
 
-    if ((device = current->process->rawinput_mouse))
+    if ((device = current->process->rawinput_mouse) &&
+        (req_flags & SEND_HWMSG_RAWINPUT))
     {
         if (!(msg = alloc_hardware_message( input->mouse.info, source, time ))) return 0;
         msg_data = msg->data;
@@ -1730,6 +1731,9 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
 
         queue_hardware_message( desktop, msg, 0 );
     }
+
+    if (!(req_flags & SEND_HWMSG_WINDOW))
+        return 0;
 
     for (i = 0; i < ARRAY_SIZE( messages ); i++)
     {
@@ -1762,7 +1766,7 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
 
 /* queue a hardware message for a keyboard event */
 static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, const hw_input_t *input,
-                                   unsigned int origin, struct msg_queue *sender )
+                                   unsigned int origin, struct msg_queue *sender, unsigned int req_flags )
 {
     struct hw_msg_source source = { IMDT_KEYBOARD, origin };
     const struct rawinput_device *device;
@@ -1838,7 +1842,8 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
         break;
     }
 
-    if ((device = current->process->rawinput_kbd))
+    if ((device = current->process->rawinput_kbd) &&
+        (req_flags & SEND_HWMSG_RAWINPUT))
     {
         if (!(msg = alloc_hardware_message( input->kbd.info, source, time ))) return 0;
         msg_data = msg->data;
@@ -1855,6 +1860,9 @@ static int queue_keyboard_message( struct desktop *desktop, user_handle_t win, c
 
         queue_hardware_message( desktop, msg, 0 );
     }
+
+    if (!(req_flags & SEND_HWMSG_WINDOW))
+        return 0;
 
     if (!(msg = alloc_hardware_message( input->kbd.info, source, time ))) return 0;
     msg_data = msg->data;
@@ -2414,10 +2422,10 @@ DECL_HANDLER(send_hardware_message)
     switch (req->input.type)
     {
     case INPUT_MOUSE:
-        reply->wait = queue_mouse_message( desktop, req->win, &req->input, origin, sender );
+        reply->wait = queue_mouse_message( desktop, req->win, &req->input, origin, sender, req->flags );
         break;
     case INPUT_KEYBOARD:
-        reply->wait = queue_keyboard_message( desktop, req->win, &req->input, origin, sender );
+        reply->wait = queue_keyboard_message( desktop, req->win, &req->input, origin, sender, req->flags );
         break;
     case INPUT_HARDWARE:
         queue_custom_hardware_message( desktop, req->win, origin, &req->input );

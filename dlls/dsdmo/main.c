@@ -147,6 +147,14 @@ static const IClassFactoryVtbl ReverbFactoryVtbl = {
     ClassFactory_LockServer
 };
 
+static const IClassFactoryVtbl I3DL2ReverbFactoryVtbl = {
+    ClassFactory_QueryInterface,
+    ClassFactory_AddRef,
+    ClassFactory_Release,
+    I3DL2Reverb_CreateInstance,
+    ClassFactory_LockServer
+};
+
 static IClassFactory echofx_factory = { &EchoFactoryVtbl };
 static IClassFactory chorusfx_factory = { &ChrousFactoryVtbl };
 static IClassFactory compressorfx_factory = { &CompressorFactoryVtbl };
@@ -155,6 +163,7 @@ static IClassFactory flangerfx_factory = { &FlangerFactoryVtbl };
 static IClassFactory garglefx_factory = { &GargleFactoryVtbl };
 static IClassFactory parameqfx_factory = { &ParamEqFactoryVtbl };
 static IClassFactory reverbfx_factory = { &ReverbFactoryVtbl };
+static IClassFactory ie3lreverbfx_factory = { &I3DL2ReverbFactoryVtbl };
 
 /***********************************************************************
  *      DllGetClassObject
@@ -202,6 +211,11 @@ HRESULT WINAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID *ppv)
     {
         TRACE("GUID_DSFX_WAVES_REVERB\n");
         return IClassFactory_QueryInterface(&reverbfx_factory, riid, ppv);
+    }
+    else if(IsEqualGUID(&GUID_DSFX_STANDARD_I3DL2REVERB, rclsid))
+    {
+        TRACE("GUID_DSFX_STANDARD_I3DL2REVERB\n");
+        return IClassFactory_QueryInterface(&ie3lreverbfx_factory, riid, ppv);
     }
 
     FIXME("%s %s %p\n", debugstr_guid(rclsid), debugstr_guid(riid), ppv);

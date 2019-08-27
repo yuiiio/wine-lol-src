@@ -11,6 +11,7 @@ C_SRCS = \
 	gargle.c \
 	main.c \
 	parameq.c \
-	reverb.c
+	reverb.c \
+	reverb2.c
 
 IDL_SRCS = dsdmo_classes.idl

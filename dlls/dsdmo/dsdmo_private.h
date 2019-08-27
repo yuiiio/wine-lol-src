@@ -35,5 +35,6 @@ extern HRESULT WINAPI FlangerFactory_CreateInstance(IClassFactory *iface, IUnkno
 extern HRESULT WINAPI GargleFactory_CreateInstance(IClassFactory *iface, IUnknown *outer, REFIID riid, void **ppv) DECLSPEC_HIDDEN;
 extern HRESULT WINAPI ParamEqFactory_CreateInstance(IClassFactory *iface, IUnknown *outer, REFIID riid, void **ppv) DECLSPEC_HIDDEN;
 extern HRESULT WINAPI ReverbFactory_CreateInstance(IClassFactory *iface, IUnknown *outer, REFIID riid, void **ppv) DECLSPEC_HIDDEN;
+extern HRESULT WINAPI I3DL2Reverb_CreateInstance(IClassFactory *iface, IUnknown *outer, REFIID riid, void **ppv) DECLSPEC_HIDDEN;
 
 #endif

@@ -27,6 +27,8 @@ struct dmo_flangerfx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXFlanger params;
 };
 
 static inline struct dmo_flangerfx *impl_from_IDirectSoundFXFlanger(IDirectSoundFXFlanger *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI flangerfx_SetAllParameters(IDirectSoundFXFlanger *iface, c
 static HRESULT WINAPI flangerfx_GetAllParameters(IDirectSoundFXFlanger *iface, DSFXFlanger *flanger)
 {
     struct dmo_flangerfx *This = impl_from_IDirectSoundFXFlanger(iface);
-    FIXME("(%p) %p\n", This, flanger);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, flanger);
+
+    if(!flanger)
+        return E_INVALIDARG;
+
+    *flanger = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXFlangerVtbl flangerfxVtbl =
@@ -389,6 +397,14 @@ HRESULT WINAPI FlangerFactory_CreateInstance(IClassFactory *iface, IUnknown *out
     object->IMediaObject_iface.lpVtbl = &flanger_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &flanger_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fWetDryMix =  50.0f;
+    object->params.fDepth     = 100.0f;
+    object->params.fFeedback  = -50.0f;
+    object->params.fFrequency =   0.25f;
+    object->params.lWaveform = DSFXFLANGER_WAVE_SIN;
+    object->params.fDelay     =   2.0f;
+    object->params.lPhase     =   2;
 
     ret = flangerfx_QueryInterface(&object->IDirectSoundFXFlanger_iface, riid, ppv);
     flangerfx_Release(&object->IDirectSoundFXFlanger_iface);

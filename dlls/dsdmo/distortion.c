@@ -27,6 +27,8 @@ struct dmo_distortionfx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXDistortion params;
 };
 
 static inline struct dmo_distortionfx *impl_from_IDirectSoundFXDistortion(IDirectSoundFXDistortion *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI distortionfx_SetAllParameters(IDirectSoundFXDistortion *if
 static HRESULT WINAPI distortionfx_GetAllParameters(IDirectSoundFXDistortion *iface, DSFXDistortion *distortion)
 {
     struct dmo_distortionfx *This = impl_from_IDirectSoundFXDistortion(iface);
-    FIXME("(%p) %p\n", This, distortion);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, distortion);
+
+    if(!distortion)
+        return E_INVALIDARG;
+
+    *distortion = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXDistortionVtbl distortionfxVtbl =
@@ -389,6 +397,12 @@ HRESULT WINAPI DistortionFactory_CreateInstance(IClassFactory *iface, IUnknown *
     object->IMediaObject_iface.lpVtbl = &distortionfx_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &distortionfx_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fGain                  =  -18.0f;
+    object->params.fEdge                  =   15.0f;
+    object->params.fPostEQCenterFrequency = 2400.0f;
+    object->params.fPostEQBandwidth       = 2400.0f;
+    object->params.fPreLowpassCutoff      = 3675.0f;
 
     ret = distortionfx_QueryInterface(&object->IDirectSoundFXDistortion_iface, riid, ppv);
     distortionfx_Release(&object->IDirectSoundFXDistortion_iface);

@@ -27,6 +27,8 @@ struct dmo_reverb2fx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXI3DL2Reverb params;
 };
 
 static inline struct dmo_reverb2fx *impl_from_IDirectSoundFXI3DL2Reverb(IDirectSoundFXI3DL2Reverb *iface)
@@ -357,10 +359,16 @@ static HRESULT WINAPI reverb2_SetAllParameters(IDirectSoundFXI3DL2Reverb *iface,
 
 static HRESULT WINAPI reverb2_GetAllParameters(IDirectSoundFXI3DL2Reverb *iface, DSFXI3DL2Reverb *reverb)
 {
-    struct dmo_reverb2fx *This = impl_from_IDirectSoundFXI3DL2Reverb(iface);
-    FIXME("(%p) %p\n", This, reverb);
+     struct dmo_reverb2fx *This = impl_from_IDirectSoundFXI3DL2Reverb(iface);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, reverb);
+
+    if(!reverb)
+        return E_INVALIDARG;
+
+    *reverb = This->params;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI reverb2_SetPreset(IDirectSoundFXI3DL2Reverb *iface, DWORD preset)
@@ -428,6 +436,17 @@ HRESULT WINAPI I3DL2Reverb_CreateInstance(IClassFactory *iface, IUnknown *outer,
 
     ret = reverb2_QueryInterface(&object->IDirectSoundFXI3DL2Reverb_iface, riid, ppv);
     reverb2_Release(&object->IDirectSoundFXI3DL2Reverb_iface);
+
+    object->params.lRoom          =  DSFX_I3DL2REVERB_ROOM_DEFAULT;
+    object->params.flRoomRolloffFactor = DSFX_I3DL2REVERB_ROOMROLLOFFFACTOR_DEFAULT;
+    object->params.flDecayTime    =  DSFX_I3DL2REVERB_DECAYTIME_DEFAULT;
+    object->params.flDecayHFRatio =  DSFX_I3DL2REVERB_DECAYHFRATIO_DEFAULT;
+    object->params.lReflections   =  DSFX_I3DL2REVERB_REFLECTIONS_DEFAULT;
+    object->params.lReverb        =  DSFX_I3DL2REVERB_REVERB_DEFAULT;
+    object->params.flReverbDelay  =  DSFX_I3DL2REVERB_REVERBDELAY_DEFAULT;
+    object->params.flDiffusion    =  DSFX_I3DL2REVERB_DIFFUSION_DEFAULT;
+    object->params.flDensity      =  DSFX_I3DL2REVERB_DENSITY_DEFAULT;
+    object->params.flHFReference  =  DSFX_I3DL2REVERB_HFREFERENCE_DEFAULT;
 
     return ret;
 }

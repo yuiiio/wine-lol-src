@@ -1663,7 +1663,7 @@ static void test_reverb_parameters(IDirectSoundBuffer8 *secondary8)
         DSFXI3DL2Reverb params;
 
         rc = IDirectSoundFXI3DL2Reverb_GetAllParameters(reverb, &params);
-        todo_wine ok(rc == DS_OK, "Failed: %08x\n", rc);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
         if (rc == DS_OK)
         {
             ok(params.lRoom == -1000, "got %d\n", params.lRoom);

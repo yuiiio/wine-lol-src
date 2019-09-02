@@ -27,6 +27,8 @@ struct dmo_garglefx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXGargle params;
 };
 
 static inline struct dmo_garglefx *impl_from_IDirectSoundFXGargle(IDirectSoundFXGargle *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI garglefx_SetAllParameters(IDirectSoundFXGargle *iface, con
 static HRESULT WINAPI garglefx_GetAllParameters(IDirectSoundFXGargle *iface, DSFXGargle *gargle)
 {
     struct dmo_garglefx *This = impl_from_IDirectSoundFXGargle(iface);
-    FIXME("(%p) %p\n", This, gargle);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, gargle);
+
+    if(!gargle)
+        return E_INVALIDARG;
+
+    *gargle = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXGargleVtbl garglefxVtbl =
@@ -389,6 +397,9 @@ HRESULT WINAPI GargleFactory_CreateInstance(IClassFactory *iface, IUnknown *oute
     object->IMediaObject_iface.lpVtbl = &gargle_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &gargle_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.dwRateHz    = 20;
+    object->params.dwWaveShape = DSFXGARGLE_WAVE_TRIANGLE;
 
     ret = garglefx_QueryInterface(&object->IDirectSoundFXGargle_iface, riid, ppv);
     garglefx_Release(&object->IDirectSoundFXGargle_iface);

@@ -1521,7 +1521,7 @@ static void test_chorus_parameters(IDirectSoundBuffer8 *secondary8)
         DSFXChorus params;
 
         rc = IDirectSoundFXChorus_GetAllParameters(chorus, &params);
-        todo_wine ok(rc == DS_OK, "Failed: %08x\n", rc);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
         if (rc == DS_OK)
         {
             ok(params.fWetDryMix == 50.0f, "got %f\n", params.fWetDryMix);

@@ -27,6 +27,8 @@ struct dmo_chorusfx
     IMediaObject         IMediaObject_iface;
     IMediaObjectInPlace  IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXChorus params;
 };
 
 static inline struct dmo_chorusfx *impl_from_IDirectSoundFXChorus(IDirectSoundFXChorus *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI chrousfx_SetAllParameters(IDirectSoundFXChorus *iface, con
 static HRESULT WINAPI chrousfx_GetAllParameters(IDirectSoundFXChorus *iface, DSFXChorus *chorus)
 {
     struct dmo_chorusfx *This = impl_from_IDirectSoundFXChorus(iface);
-    FIXME("(%p) %p\n", This, chorus);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, chorus);
+
+    if(!chorus)
+        return E_INVALIDARG;
+
+    *chorus = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXChorusVtbl chorusfxVtbl =
@@ -389,6 +397,14 @@ HRESULT WINAPI ChrousFactory_CreateInstance(IClassFactory *iface, IUnknown *oute
     object->IMediaObject_iface.lpVtbl = &echo_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &echo_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fWetDryMix = 50.0f;
+    object->params.fDepth     = 10.0f;
+    object->params.fFeedback  = 25.0f;
+    object->params.fFrequency =  1.1f;
+    object->params.lWaveform  = DSFXCHORUS_WAVE_SIN;
+    object->params.fDelay     = 16.0f;
+    object->params.lPhase     =  3;
 
     ret = chrousfx_QueryInterface(&object->IDirectSoundFXChorus_iface, riid, ppv);
     chrousfx_Release(&object->IDirectSoundFXChorus_iface);

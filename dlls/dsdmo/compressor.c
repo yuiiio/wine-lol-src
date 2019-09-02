@@ -27,6 +27,8 @@ struct dmo_compressorfx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXCompressor params;
 };
 
 static inline struct dmo_compressorfx *impl_from_IDirectSoundFXCompressor(IDirectSoundFXCompressor *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI compressorfx_SetAllParameters(IDirectSoundFXCompressor *if
 static HRESULT WINAPI compressorfx_GetAllParameters(IDirectSoundFXCompressor *iface, DSFXCompressor *compressor)
 {
     struct dmo_compressorfx *This = impl_from_IDirectSoundFXCompressor(iface);
-    FIXME("(%p) %p\n", This, compressor);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, compressor);
+
+    if(!compressor)
+        return E_INVALIDARG;
+
+    *compressor = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXCompressorVtbl echofxVtbl =
@@ -389,6 +397,12 @@ HRESULT WINAPI CompressorFactory_CreateInstance(IClassFactory *iface, IUnknown *
     object->IMediaObject_iface.lpVtbl = &compressor_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &compressor_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fGain      =   0.0f;
+    object->params.fAttack    =  10.0f;
+    object->params.fThreshold = -20.0f;
+    object->params.fRatio     =   3.0f;
+    object->params.fPredelay  =   4.0f;
 
     ret = compressorfx_QueryInterface(&object->IDirectSoundFXCompressor_iface, riid, ppv);
     compressorfx_Release(&object->IDirectSoundFXCompressor_iface);

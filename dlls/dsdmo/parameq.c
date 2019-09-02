@@ -27,6 +27,8 @@ struct dmo_parameqfx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXParamEq params;
 };
 
 static inline struct dmo_parameqfx *impl_from_IDirectSoundFXParamEq(IDirectSoundFXParamEq *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI parameqfx_SetAllParameters(IDirectSoundFXParamEq *iface, c
 static HRESULT WINAPI parameqfx_GetAllParameters(IDirectSoundFXParamEq *iface, DSFXParamEq *param)
 {
     struct dmo_parameqfx *This = impl_from_IDirectSoundFXParamEq(iface);
-    FIXME("(%p) %p\n", This, param);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, param);
+
+    if(!param)
+        return E_INVALIDARG;
+
+    *param = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXParamEqVtbl parameqfxVtbl =
@@ -389,6 +397,10 @@ HRESULT WINAPI ParamEqFactory_CreateInstance(IClassFactory *iface, IUnknown *out
     object->IMediaObject_iface.lpVtbl = &parameq_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &parameq_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fCenter    = 3675.0f;
+    object->params.fBandwidth =   12.0f;
+    object->params.fGain      =    0.0f;
 
     ret = parameqfx_QueryInterface(&object->IDirectSoundFXParamEq_iface, riid, ppv);
     parameqfx_Release(&object->IDirectSoundFXParamEq_iface);

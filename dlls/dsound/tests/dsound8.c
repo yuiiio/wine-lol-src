@@ -1637,7 +1637,7 @@ static void test_parameq_parameters(IDirectSoundBuffer8 *secondary8)
         DSFXParamEq params;
 
         rc = IDirectSoundFXParamEq_GetAllParameters(parameq, &params);
-        todo_wine ok(rc == DS_OK, "Failed: %08x\n", rc);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
         if (rc == DS_OK)
         {
             ok(params.fCenter == 3675.0f, "got %f\n", params.fCenter);

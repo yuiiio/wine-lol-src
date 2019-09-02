@@ -1468,7 +1468,7 @@ static void test_echo_parameters(IDirectSoundBuffer8 *secondary8)
         DSFXEcho params;
 
         rc = IDirectSoundFXEcho_GetAllParameters(echo, &params);
-        todo_wine ok(rc == DS_OK, "Failed: %08x\n", rc);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
         if (rc == DS_OK )
         {
             ok(params.fWetDryMix == 50.0f, "got %f\n", params.fWetDryMix);

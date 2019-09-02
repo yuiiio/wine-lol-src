@@ -27,6 +27,8 @@ struct dmo_echofx
     IMediaObject        IMediaObject_iface;
     IMediaObjectInPlace IMediaObjectInPlace_iface;
     LONG ref;
+
+    DSFXEcho params;
 };
 
 static inline struct dmo_echofx *impl_from_IDirectSoundFXEcho(IDirectSoundFXEcho *iface)
@@ -358,9 +360,15 @@ static HRESULT WINAPI echofx_SetAllParameters(IDirectSoundFXEcho *iface, const D
 static HRESULT WINAPI echofx_GetAllParameters(IDirectSoundFXEcho *iface, DSFXEcho *echo)
 {
     struct dmo_echofx *This = impl_from_IDirectSoundFXEcho(iface);
-    FIXME("(%p) %p\n", This, echo);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, echo);
+
+    if(!echo)
+        return E_INVALIDARG;
+
+    *echo = This->params;
+
+    return S_OK;
 }
 
 static const struct IDirectSoundFXEchoVtbl echofxVtbl =
@@ -389,6 +397,12 @@ HRESULT WINAPI EchoFactory_CreateInstance(IClassFactory *iface, IUnknown *outer,
     object->IMediaObject_iface.lpVtbl = &echo_mediaobjectVtbl;
     object->IMediaObjectInPlace_iface.lpVtbl = &echo_mediainplaceVtbl;
     object->ref = 1;
+
+    object->params.fWetDryMix  =  50.0f;
+    object->params.fFeedback   =  50.0f;
+    object->params.fLeftDelay  = 500.0f;
+    object->params.fRightDelay = 500.0f;
+    object->params.lPanDelay   =   0;
 
     ret = echofx_QueryInterface(&object->IDirectSoundFXEcho_iface, riid, ppv);
     echofx_Release(&object->IDirectSoundFXEcho_iface);

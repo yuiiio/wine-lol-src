@@ -1775,6 +1775,36 @@ static void test_compressor_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXCompressor", (IUnknown *)compressor, &IID_IDirectSoundFXCompressor);
 
+        rc = IDirectSoundFXCompressor_SetAllParameters(compressor, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fGain = -61.0f;
+        rc = IDirectSoundFXCompressor_SetAllParameters(compressor, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fGain = 61.1f;
+        rc = IDirectSoundFXCompressor_SetAllParameters(compressor, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fGain = -21.0f;
+        rc = IDirectSoundFXCompressor_SetAllParameters(compressor, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        params.fGain = -21.0f;
+        rc = IDirectSoundFXCompressor_GetAllParameters(compressor, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.fGain == -21.0f, "got %f\n", params.fGain);
+            ok(params.fAttack == 10.0f, "got %f\n", params.fAttack);
+            ok(params.fThreshold == -20.0f, "got %f\n", params.fThreshold);
+            ok(params.fRatio == 3.0f, "got %f\n", params.fRatio);
+            ok(params.fPredelay == 4.0f, "got %f\n", params.fPredelay);
+        }
+
+
         IDirectSoundFXCompressor_Release(compressor);
     }
 }

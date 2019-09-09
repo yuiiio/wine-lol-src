@@ -352,9 +352,24 @@ static ULONG WINAPI compressorfx_Release(IDirectSoundFXCompressor *iface)
 static HRESULT WINAPI compressorfx_SetAllParameters(IDirectSoundFXCompressor *iface, const DSFXCompressor *compressor)
 {
     struct dmo_compressorfx *This = impl_from_IDirectSoundFXCompressor(iface);
-    FIXME("(%p) %p\n", This, compressor);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, compressor);
+
+    if(!compressor)
+        return E_POINTER;
+
+    if( (compressor->fGain < DSFXCOMPRESSOR_GAIN_MIN || compressor->fGain > DSFXCOMPRESSOR_GAIN_MAX) ||
+        (compressor->fAttack < DSFXCOMPRESSOR_ATTACK_MIN || compressor->fAttack > DSFXCOMPRESSOR_ATTACK_MAX) ||
+        (compressor->fThreshold < DSFXCOMPRESSOR_THRESHOLD_MIN || compressor->fThreshold > DSFXCOMPRESSOR_THRESHOLD_MAX) ||
+        (compressor->fRatio < DSFXCOMPRESSOR_RATIO_MIN || compressor->fRatio > DSFXCOMPRESSOR_RATIO_MAX) ||
+        (compressor->fPredelay < DSFXCOMPRESSOR_PREDELAY_MIN || compressor->fPredelay > DSFXCOMPRESSOR_PREDELAY_MAX))
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *compressor;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI compressorfx_GetAllParameters(IDirectSoundFXCompressor *iface, DSFXCompressor *compressor)

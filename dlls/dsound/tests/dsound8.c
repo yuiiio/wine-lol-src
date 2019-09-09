@@ -1831,6 +1831,33 @@ static void test_parameq_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXParamEq", (IUnknown *)parameq, &IID_IDirectSoundFXParamEq);
 
+        rc = IDirectSoundFXParamEq_SetAllParameters(parameq, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fGain = -61.0f;
+        rc = IDirectSoundFXParamEq_SetAllParameters(parameq, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fGain = 61.1f;
+        rc = IDirectSoundFXParamEq_SetAllParameters(parameq, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fGain = -10.0f;
+        rc = IDirectSoundFXParamEq_SetAllParameters(parameq, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        rc = IDirectSoundFXParamEq_GetAllParameters(parameq, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.fCenter == 3675.0f, "got %f\n", params.fCenter);
+            ok(params.fBandwidth == 12.0f, "got %f\n", params.fBandwidth);
+            ok(params.fGain == -10.0f, "got %f\n", params.fGain);
+        }
+
+
         IDirectSoundFXParamEq_Release(parameq);
     }
 }

@@ -352,9 +352,22 @@ static ULONG WINAPI parameqfx_Release(IDirectSoundFXParamEq *iface)
 static HRESULT WINAPI parameqfx_SetAllParameters(IDirectSoundFXParamEq *iface, const DSFXParamEq *param)
 {
     struct dmo_parameqfx *This = impl_from_IDirectSoundFXParamEq(iface);
-    FIXME("(%p) %p\n", This, param);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, param);
+
+    if(!param)
+        return E_POINTER;
+
+    if( (param->fCenter < DSFXPARAMEQ_CENTER_MIN || param->fCenter > DSFXPARAMEQ_CENTER_MAX) ||
+        (param->fBandwidth < DSFXPARAMEQ_BANDWIDTH_MIN || param->fBandwidth > DSFXPARAMEQ_BANDWIDTH_MAX) ||
+        (param->fGain < DSFXPARAMEQ_GAIN_MIN || param->fGain > DSFXPARAMEQ_GAIN_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *param;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI parameqfx_GetAllParameters(IDirectSoundFXParamEq *iface, DSFXParamEq *param)

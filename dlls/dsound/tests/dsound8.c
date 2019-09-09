@@ -1717,6 +1717,36 @@ static void test_distortion_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXDistortion", (IUnknown *)distortion, &IID_IDirectSoundFXDistortion);
 
+        rc = IDirectSoundFXDistortion_SetAllParameters(distortion, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fGain = -61.0f;
+
+        rc = IDirectSoundFXDistortion_SetAllParameters(distortion, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fGain = 1.1f;
+        rc = IDirectSoundFXDistortion_SetAllParameters(distortion, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fGain = -20.0f;
+        rc = IDirectSoundFXDistortion_SetAllParameters(distortion, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        rc = IDirectSoundFXDistortion_GetAllParameters(distortion, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.fGain == -20.0f, "got %f\n", params.fGain);
+            ok(params.fEdge == 15.0f, "got %f\n", params.fEdge);
+            ok(params.fPostEQCenterFrequency == 2400.0f, "got %f\n", params.fPostEQCenterFrequency);
+            ok(params.fPostEQBandwidth == 2400.0f, "got %f\n", params.fPostEQBandwidth);
+            ok(params.fPreLowpassCutoff == 3675.0f, "got %f\n", params.fPreLowpassCutoff);
+        }
+
+
         IDirectSoundFXDistortion_Release(distortion);
     }
 }

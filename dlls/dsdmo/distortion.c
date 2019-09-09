@@ -352,9 +352,24 @@ static ULONG WINAPI distortionfx_Release(IDirectSoundFXDistortion *iface)
 static HRESULT WINAPI distortionfx_SetAllParameters(IDirectSoundFXDistortion *iface, const DSFXDistortion *distortion)
 {
     struct dmo_distortionfx *This = impl_from_IDirectSoundFXDistortion(iface);
-    FIXME("(%p) %p\n", This, distortion);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, distortion);
+
+    if(!distortion)
+        return E_POINTER;
+
+    if( (distortion->fGain < DSFXDISTORTION_GAIN_MIN || distortion->fGain > DSFXDISTORTION_GAIN_MAX) ||
+        (distortion->fEdge < DSFXDISTORTION_EDGE_MIN || distortion->fEdge > DSFXDISTORTION_EDGE_MAX) ||
+        (distortion->fPostEQCenterFrequency < DSFXDISTORTION_POSTEQCENTERFREQUENCY_MIN || distortion->fPostEQCenterFrequency > DSFXDISTORTION_POSTEQCENTERFREQUENCY_MAX) ||
+        (distortion->fPostEQBandwidth < DSFXDISTORTION_POSTEQBANDWIDTH_MIN || distortion->fPostEQBandwidth > DSFXDISTORTION_POSTEQBANDWIDTH_MAX) ||
+        (distortion->fPreLowpassCutoff < DSFXDISTORTION_PRELOWPASSCUTOFF_MIN || distortion->fPreLowpassCutoff > DSFXDISTORTION_PRELOWPASSCUTOFF_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *distortion;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI distortionfx_GetAllParameters(IDirectSoundFXDistortion *iface, DSFXDistortion *distortion)

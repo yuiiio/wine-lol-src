@@ -352,9 +352,25 @@ static ULONG WINAPI echofx_Release(IDirectSoundFXEcho *iface)
 static HRESULT WINAPI echofx_SetAllParameters(IDirectSoundFXEcho *iface, const DSFXEcho *echo)
 {
     struct dmo_echofx *This = impl_from_IDirectSoundFXEcho(iface);
-    FIXME("(%p) %p\n", This, echo);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, echo);
+
+    if(!echo)
+        return E_POINTER;
+
+    /* Out of Range values */
+    if( (echo->fWetDryMix < DSFXECHO_WETDRYMIX_MIN || echo->fWetDryMix > DSFXECHO_WETDRYMIX_MAX) ||
+        (echo->fFeedback < DSFXECHO_FEEDBACK_MIN   || echo->fFeedback > DSFXECHO_FEEDBACK_MAX) ||
+        (echo->fLeftDelay < DSFXECHO_LEFTDELAY_MIN || echo->fLeftDelay > DSFXECHO_LEFTDELAY_MAX) ||
+        (echo->fRightDelay < DSFXECHO_RIGHTDELAY_MIN || echo->fRightDelay > DSFXECHO_RIGHTDELAY_MAX) ||
+        (echo->lPanDelay != DSFXECHO_PANDELAY_MIN && echo->lPanDelay != DSFXECHO_PANDELAY_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *echo;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI echofx_GetAllParameters(IDirectSoundFXEcho *iface, DSFXEcho *echo)

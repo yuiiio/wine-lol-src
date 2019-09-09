@@ -1480,6 +1480,38 @@ static void test_echo_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXEcho", (IUnknown *)echo, &IID_IDirectSoundFXEcho);
 
+        rc = IDirectSoundFXEcho_SetAllParameters(echo, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fWetDryMix  = -1.0f;
+
+        rc = IDirectSoundFXEcho_SetAllParameters(echo, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fWetDryMix  = 101.0f;
+
+        rc = IDirectSoundFXEcho_SetAllParameters(echo, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fWetDryMix  = DSFXECHO_WETDRYMIX_MIN;
+
+        rc = IDirectSoundFXEcho_SetAllParameters(echo, &params);
+        ok(rc == S_OK, "Failed: %08x\n", rc);
+
+        rc = IDirectSoundFXEcho_GetAllParameters(echo, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK )
+        {
+            ok(params.fWetDryMix == DSFXECHO_WETDRYMIX_MIN, "got %f\n", params.fWetDryMix);
+            ok(params.fFeedback == 50.0f, "got %f\n", params.fFeedback);
+            ok(params.fLeftDelay == 500.0f,"got %f\n", params.fLeftDelay);
+            ok(params.fRightDelay == 500.0f,"got %f\n", params.fRightDelay);
+            ok(params.lPanDelay == 0, "got %d\n", params.lPanDelay);
+        }
+
+
         IDirectSoundFXEcho_Release(echo);
     }
 }

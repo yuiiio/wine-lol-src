@@ -352,9 +352,26 @@ static ULONG WINAPI flangerfx_Release(IDirectSoundFXFlanger *iface)
 static HRESULT WINAPI flangerfx_SetAllParameters(IDirectSoundFXFlanger *iface, const DSFXFlanger *flanger)
 {
     struct dmo_flangerfx *This = impl_from_IDirectSoundFXFlanger(iface);
-    FIXME("(%p) %p\n", This, flanger);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, flanger);
+
+    if(!flanger)
+        return E_POINTER;
+
+    if( (flanger->fWetDryMix < DSFXECHO_WETDRYMIX_MIN || flanger->fWetDryMix > DSFXECHO_WETDRYMIX_MAX) ||
+        (flanger->fDepth < DSFXFLANGER_DEPTH_MIN   || flanger->fDepth > DSFXFLANGER_DEPTH_MAX) ||
+        (flanger->fFeedback < DSFXFLANGER_FEEDBACK_MIN   || flanger->fFeedback > DSFXFLANGER_FEEDBACK_MAX) ||
+        (flanger->fFrequency < DSFXFLANGER_FREQUENCY_MIN || flanger->fFrequency > DSFXFLANGER_FREQUENCY_MAX) ||
+        (flanger->lWaveform != DSFXFLANGER_WAVE_SIN && flanger->lWaveform != DSFXFLANGER_WAVE_TRIANGLE) ||
+        (flanger->fDelay < DSFXFLANGER_DELAY_MIN || flanger->fDelay > DSFXFLANGER_DELAY_MAX) ||
+        (flanger->lPhase < DSFXFLANGER_PHASE_MIN || flanger->lPhase > DSFXFLANGER_PHASE_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *flanger;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI flangerfx_GetAllParameters(IDirectSoundFXFlanger *iface, DSFXFlanger *flanger)

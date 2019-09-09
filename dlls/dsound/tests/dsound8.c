@@ -1657,6 +1657,38 @@ static void test_flanger_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXFlanger", (IUnknown *)flanger, &IID_IDirectSoundFXFlanger);
 
+        rc = IDirectSoundFXFlanger_SetAllParameters(flanger, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fWetDryMix = -1.0f;
+
+        rc = IDirectSoundFXFlanger_SetAllParameters(flanger, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fWetDryMix = 101.1f;
+        rc = IDirectSoundFXFlanger_SetAllParameters(flanger, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fWetDryMix = 80.1f;
+        rc = IDirectSoundFXFlanger_SetAllParameters(flanger, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        rc = IDirectSoundFXFlanger_GetAllParameters(flanger, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.fWetDryMix == 80.1f, "got %f\n", params.fWetDryMix);
+            ok(params.fDepth == 100.0f, "got %f\n", params.fDepth);
+            ok(params.fFeedback == -50.0f, "got %f\n", params.fFeedback);
+            ok(params.fFrequency == 0.25f, "got %f\n", params.fFrequency);
+            ok(params.lWaveform == DSFXFLANGER_WAVE_SIN, "got %d\n", params.lWaveform);
+            ok(params.fDelay == 2.0f, "got %f\n", params.fDelay);
+            ok(params.lPhase == 2, "got %d\n", params.lPhase);
+        }
+
+
         IDirectSoundFXFlanger_Release(flanger);
     }
 }

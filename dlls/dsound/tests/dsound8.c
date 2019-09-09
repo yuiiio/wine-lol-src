@@ -1595,6 +1595,38 @@ static void test_chorus_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXChorus", (IUnknown *)chorus, &IID_IDirectSoundFXChorus);
 
+        rc = IDirectSoundFXChorus_SetAllParameters(chorus, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.fWetDryMix = -1.0f;
+
+        rc = IDirectSoundFXChorus_SetAllParameters(chorus, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.fWetDryMix = 101.1f;
+        rc = IDirectSoundFXChorus_SetAllParameters(chorus, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.fWetDryMix = 80.1f;
+        rc = IDirectSoundFXChorus_SetAllParameters(chorus, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        rc = IDirectSoundFXChorus_GetAllParameters(chorus, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.fWetDryMix == 80.1f, "got %f\n", params.fWetDryMix);
+            ok(params.fDepth == 10.0f, "got %f\n", params.fDepth);
+            ok(params.fFeedback == 25.0f, "got %f\n", params.fFeedback);
+            ok(params.fFrequency == 1.1f, "got %f\n", params.fFrequency);
+            ok(params.lWaveform == DSFXCHORUS_WAVE_SIN, "got %d\n", params.lWaveform);
+            ok(params.fDelay == 16.0f, "got %f\n", params.fDelay);
+            ok(params.lPhase == 3, "got %d\n", params.lPhase);
+        }
+
+
         IDirectSoundFXChorus_Release(chorus);
     }
 }

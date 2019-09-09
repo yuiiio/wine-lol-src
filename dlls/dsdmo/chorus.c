@@ -352,9 +352,27 @@ static ULONG WINAPI chrousfx_Release(IDirectSoundFXChorus *iface)
 static HRESULT WINAPI chrousfx_SetAllParameters(IDirectSoundFXChorus *iface, const DSFXChorus *chorus)
 {
     struct dmo_chorusfx *This = impl_from_IDirectSoundFXChorus(iface);
-    FIXME("(%p) %p\n", This, chorus);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, chorus);
+
+    if(!chorus)
+        return E_POINTER;
+
+    /* Out of Range values */
+    if( (chorus->fWetDryMix < DSFXCHORUS_WETDRYMIX_MIN || chorus->fWetDryMix > DSFXCHORUS_WETDRYMIX_MAX) ||
+        (chorus->fDepth < DSFXCHORUS_DEPTH_MIN || chorus->fDepth > DSFXCHORUS_DEPTH_MAX) ||
+        (chorus->fFeedback < DSFXCHORUS_FEEDBACK_MIN || chorus->fFeedback >  DSFXCHORUS_FEEDBACK_MAX) ||
+        (chorus->fFrequency < DSFXCHORUS_FREQUENCY_MIN || chorus->fFrequency > DSFXCHORUS_FREQUENCY_MAX) ||
+        (chorus->lWaveform != DSFXCHORUS_WAVE_SIN && chorus->lWaveform != DSFXCHORUS_WAVE_TRIANGLE ) ||
+        (chorus->fDelay < DSFXCHORUS_DELAY_MIN || chorus->fDelay > DSFXCHORUS_DELAY_MAX) ||
+        (chorus->lPhase < DSFXCHORUS_PHASE_MIN || chorus->lPhase > DSFXCHORUS_PHASE_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *chorus;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI chrousfx_GetAllParameters(IDirectSoundFXChorus *iface, DSFXChorus *chorus)

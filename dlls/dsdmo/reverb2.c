@@ -352,9 +352,29 @@ static ULONG WINAPI reverb2_Release(IDirectSoundFXI3DL2Reverb *iface)
 static HRESULT WINAPI reverb2_SetAllParameters(IDirectSoundFXI3DL2Reverb *iface, const DSFXI3DL2Reverb *reverb)
 {
     struct dmo_reverb2fx *This = impl_from_IDirectSoundFXI3DL2Reverb(iface);
-    FIXME("(%p) %p\n", This, reverb);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, reverb);
+
+    if(!reverb)
+        return E_POINTER;
+
+    if( (reverb->lRoom < DSFX_I3DL2REVERB_ROOM_MIN || reverb->lRoom > DSFX_I3DL2REVERB_ROOM_MAX) ||
+        (reverb->flRoomRolloffFactor < DSFX_I3DL2REVERB_ROOMROLLOFFFACTOR_MIN || reverb->flRoomRolloffFactor > DSFX_I3DL2REVERB_ROOMROLLOFFFACTOR_MAX) ||
+        (reverb->flDecayTime < DSFX_I3DL2REVERB_DECAYTIME_MIN || reverb->flDecayTime > DSFX_I3DL2REVERB_DECAYTIME_MAX) ||
+        (reverb->flDecayHFRatio < DSFX_I3DL2REVERB_DECAYHFRATIO_MIN || reverb->flDecayHFRatio > DSFX_I3DL2REVERB_DECAYHFRATIO_MAX) ||
+        (reverb->lReflections < DSFX_I3DL2REVERB_REFLECTIONS_MIN || reverb->lReflections > DSFX_I3DL2REVERB_REFLECTIONS_MAX) ||
+        (reverb->lReverb < DSFX_I3DL2REVERB_REVERB_MIN || reverb->lReverb > DSFX_I3DL2REVERB_REVERB_MAX) ||
+        (reverb->flReverbDelay < DSFX_I3DL2REVERB_REFLECTIONSDELAY_MIN || reverb->flReverbDelay > DSFX_I3DL2REVERB_REFLECTIONSDELAY_MAX) ||
+        (reverb->flDiffusion < DSFX_I3DL2REVERB_DIFFUSION_MIN || reverb->flDiffusion > DSFX_I3DL2REVERB_DIFFUSION_MAX) ||
+        (reverb->flDensity < DSFX_I3DL2REVERB_DENSITY_MIN || reverb->flDensity > DSFX_I3DL2REVERB_DENSITY_MAX) ||
+        (reverb->flHFReference < DSFX_I3DL2REVERB_HFREFERENCE_MIN || reverb->flHFReference > DSFX_I3DL2REVERB_HFREFERENCE_MAX) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *reverb;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI reverb2_GetAllParameters(IDirectSoundFXI3DL2Reverb *iface, DSFXI3DL2Reverb *reverb)

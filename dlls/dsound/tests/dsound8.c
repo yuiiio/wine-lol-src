@@ -1891,6 +1891,40 @@ static void test_reverb_parameters(IDirectSoundBuffer8 *secondary8)
 
         test_dsfx_interfaces("FXI3DL2Reverb", (IUnknown *)reverb, &IID_IDirectSoundFXI3DL2Reverb);
 
+        rc = IDirectSoundFXI3DL2Reverb_SetAllParameters(reverb, NULL);
+        ok(rc == E_POINTER, "got: %08x\n", rc);
+
+        /* Out of range Min */
+        params.lRoom = -10001;
+        rc = IDirectSoundFXI3DL2Reverb_SetAllParameters(reverb, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        /* Out of range Max */
+        params.lRoom = 1;
+        rc = IDirectSoundFXI3DL2Reverb_SetAllParameters(reverb, &params);
+        ok(rc == E_INVALIDARG, "got: %08x\n", rc);
+
+        params.lRoom = -900;
+        rc = IDirectSoundFXI3DL2Reverb_SetAllParameters(reverb, &params);
+        ok(rc == S_OK, "got: %08x\n", rc);
+
+        rc = IDirectSoundFXI3DL2Reverb_GetAllParameters(reverb, &params);
+        ok(rc == DS_OK, "Failed: %08x\n", rc);
+        if (rc == DS_OK)
+        {
+            ok(params.lRoom == -900, "got %d\n", params.lRoom);
+            ok(params.flRoomRolloffFactor == 0.0f, "got %f\n", params.flRoomRolloffFactor);
+            ok(params.flDecayTime == 1.49f, "got %f\n", params.flDecayTime);
+            ok(params.flDecayHFRatio == 0.83f, "got %f\n", params.flDecayHFRatio);
+            ok(params.lReflections == -2602, "got %d\n", params.lReflections);
+            ok(params.lReverb == 200, "got %d\n", params.lReverb);
+            ok(params.flReverbDelay == 0.011f, "got %f\n", params.flReverbDelay);
+            ok(params.flDiffusion == 100.0f, "got %f\n", params.flDiffusion);
+            ok(params.flDensity == 100.0f, "got %f\n", params.flDensity);
+            ok(params.flHFReference == 5000.0f, "got %f\n", params.flHFReference);
+        }
+
+
         IDirectSoundFXI3DL2Reverb_Release(reverb);
     }
 }

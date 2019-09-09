@@ -352,9 +352,22 @@ static ULONG WINAPI garglefx_Release(IDirectSoundFXGargle *iface)
 static HRESULT WINAPI garglefx_SetAllParameters(IDirectSoundFXGargle *iface, const DSFXGargle *gargle)
 {
     struct dmo_garglefx *This = impl_from_IDirectSoundFXGargle(iface);
-    FIXME("(%p) %p\n", This, gargle);
 
-    return E_NOTIMPL;
+    TRACE("(%p) %p\n", This, gargle);
+
+    if(!gargle)
+        return E_POINTER;
+
+    /* Out of Range values */
+    if( (gargle->dwRateHz < DSFXGARGLE_RATEHZ_MIN || gargle->dwRateHz > DSFXGARGLE_RATEHZ_MAX) ||
+        (gargle->dwWaveShape != DSFXGARGLE_WAVE_SQUARE && gargle->dwWaveShape != DSFXGARGLE_WAVE_TRIANGLE) )
+    {
+        return E_INVALIDARG;
+    }
+
+    This->params = *gargle;
+
+    return S_OK;
 }
 
 static HRESULT WINAPI garglefx_GetAllParameters(IDirectSoundFXGargle *iface, DSFXGargle *gargle)

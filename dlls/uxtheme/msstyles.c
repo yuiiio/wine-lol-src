@@ -18,6 +18,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+
 #include <stdarg.h>
 #include <stdlib.h>
 
@@ -33,6 +35,7 @@
 #include "msstyles.h"
 
 #include "wine/exception.h"
+#include "wine/unicode.h"
 #include "wine/debug.h"
 #include "wine/heap.h"
 
@@ -353,7 +356,7 @@ static BOOL MSSTYLES_ParseIniSectionName(LPCWSTR lpSection, DWORD dwLen, LPWSTR 
     *iStateId = 0;
     comp = sec;
     /* Get the application name */
-    tmp = wcschr(comp, ':');
+    tmp = strchrW(comp, ':');
     if(tmp) {
         *tmp++ = 0;
         tmp++;
@@ -361,19 +364,19 @@ static BOOL MSSTYLES_ParseIniSectionName(LPCWSTR lpSection, DWORD dwLen, LPWSTR 
         comp = tmp;
     }
 
-    tmp = wcschr(comp, '.');
+    tmp = strchrW(comp, '.');
     if(tmp) {
         *tmp++ = 0;
         lstrcpynW(szClassName, comp, MAX_THEME_CLASS_NAME);
         comp = tmp;
         /* now get the part & state */
-        tmp = wcschr(comp, '(');
+        tmp = strchrW(comp, '(');
         if(tmp) {
             *tmp++ = 0;
             lstrcpynW(part, comp, ARRAY_SIZE(part));
             comp = tmp;
             /* now get the state */
-            tmp = wcschr(comp, ')');
+            tmp = strchrW(comp, ')');
             if (!tmp)
                 return FALSE;
             *tmp = 0;
@@ -384,13 +387,13 @@ static BOOL MSSTYLES_ParseIniSectionName(LPCWSTR lpSection, DWORD dwLen, LPWSTR 
         }
     }
     else {
-        tmp = wcschr(comp, '(');
+        tmp = strchrW(comp, '(');
         if(tmp) {
             *tmp++ = 0;
             lstrcpynW(szClassName, comp, MAX_THEME_CLASS_NAME);
             comp = tmp;
             /* now get the state */
-            tmp = wcschr(comp, ')');
+            tmp = strchrW(comp, ')');
             if (!tmp)
                 return FALSE;
             *tmp = 0;
@@ -1014,7 +1017,7 @@ PTHEME_CLASS MSSTYLES_OpenThemeClass(LPCWSTR pszAppName, LPCWSTR pszClassList)
     }
 
     start = pszClassList;
-    while((end = wcschr(start, ';'))) {
+    while((end = strchrW(start, ';'))) {
         len = end-start;
         lstrcpynW(szClassName, start, min(len+1, ARRAY_SIZE(szClassName)));
         start = end+1;

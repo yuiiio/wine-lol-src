@@ -1883,6 +1883,9 @@ static BOOL set_active_window( HWND hwnd, HWND *prev, BOOL mouse, BOOL focus )
         send_message( hwnd, WM_ACTIVATE,
                       MAKEWPARAM( mouse ? WA_CLICKACTIVE : WA_ACTIVE, is_iconic(hwnd) ),
                       (LPARAM)previous );
+
+        send_message( hwnd, WM_NCPOINTERUP, 0, 0);
+
         if (NtUserGetAncestor( hwnd, GA_PARENT ) == get_desktop_window())
             NtUserPostMessage( get_desktop_window(), WM_PARENTNOTIFY, WM_NCACTIVATE, (LPARAM)hwnd );
 

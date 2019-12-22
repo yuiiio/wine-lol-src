@@ -357,7 +357,7 @@ static HRESULT WINAPI content_SetContentRect(IDirectManipulationContent *iface, 
 {
     struct primarycontext *This = impl_from_IDirectManipulationContent(iface);
     FIXME("%p, %p\n", This, size);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI content_GetViewport(IDirectManipulationContent *iface, REFIID riid, void **object)
@@ -540,7 +540,7 @@ static HRESULT WINAPI viewport_SetViewportRect(IDirectManipulationViewport2 *ifa
 {
     struct directviewport *This = impl_from_IDirectManipulationViewport2(iface);
     FIXME("%p, %p\n", This, viewport);
-    return E_NOTIMPL;
+    return S_OK;
 }
 
 static HRESULT WINAPI viewport_ZoomToRect(IDirectManipulationViewport2 *iface, const float left,

@@ -39,6 +39,10 @@ WINE_DEFAULT_DEBUG_CHANNEL(xact3);
 
 static HINSTANCE instance;
 
+#if XACT3_VER >= 0x0301 && XACT3_VER <= 0x304
+DEFINE_GUID(IID_IXACT3Engine301, 0xe72c1b9a, 0xd717, 0x41c0, 0x81, 0xa6, 0x50, 0xeb, 0x56, 0xe8, 0x06, 0x49);
+#endif
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD reason, void *pReserved)
 {
     TRACE("(%p, %d, %p)\n", hinstDLL, reason, pReserved);
@@ -852,7 +856,12 @@ static HRESULT WINAPI IXACT3EngineImpl_QueryInterface(IXACT3Engine *iface,
     TRACE("(%p)->(%s, %p)\n", This, debugstr_guid(riid), ppvObject);
 
     if(IsEqualGUID(riid, &IID_IUnknown) ||
-            IsEqualGUID(riid, &IID_IXACT3Engine)){
+#if XACT3_VER >= 0x0301 && XACT3_VER <= 0x304
+            IsEqualGUID(riid, &IID_IXACT3Engine301)
+#else
+            IsEqualGUID(riid, &IID_IXACT3Engine)
+#endif
+        ){
         *ppvObject = &This->IXACT3Engine_iface;
     }
     else

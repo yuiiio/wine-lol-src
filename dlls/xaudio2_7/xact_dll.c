@@ -934,6 +934,7 @@ static HRESULT WINAPI IXACT3EngineImpl_Initialize(IXACT3Engine *iface,
 {
     XACT3EngineImpl *This = impl_from_IXACT3Engine(iface);
     FACTRuntimeParameters params;
+    UINT ret;
 
     TRACE("(%p)->(%p)\n", This, pParams);
 
@@ -972,7 +973,11 @@ static HRESULT WINAPI IXACT3EngineImpl_Initialize(IXACT3Engine *iface,
     params.fileIOCallbacks.readFileCallback = wrap_readfile;
     params.fileIOCallbacks.getOverlappedResultCallback = wrap_getoverlappedresult;
 
-    return FACTAudioEngine_Initialize(This->fact_engine, &params);
+    ret = FACTAudioEngine_Initialize(This->fact_engine, &params);
+    if (ret != 0)
+        FIXME("FACTAudioEngine_Initialize returned %d\n", ret);
+
+    return !ret ? S_OK : E_FAIL;
 }
 
 static HRESULT WINAPI IXACT3EngineImpl_ShutDown(IXACT3Engine *iface)

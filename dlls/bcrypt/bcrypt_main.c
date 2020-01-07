@@ -1425,6 +1425,12 @@ NTSTATUS key_import_ecc( struct key *key, UCHAR *input, ULONG len )
     ERR( "support for keys not available at build time\n" );
     return STATUS_NOT_IMPLEMENTED;
 }
+
+NTSTATUS compute_secret_ecc (struct key *pubkey_in, struct key *privkey_in, struct secret *secret)
+{
+    ERR( "support for secrets not available at build time\n" );
+    return STATUS_NOT_IMPLEMENTED;
+}
 #endif
 
 NTSTATUS WINAPI BCryptGenerateSymmetricKey( BCRYPT_ALG_HANDLE algorithm, BCRYPT_KEY_HANDLE *handle,
@@ -1842,8 +1848,9 @@ NTSTATUS WINAPI BCryptSecretAgreement(BCRYPT_KEY_HANDLE privatekey, BCRYPT_KEY_H
     struct key *privkey = privatekey;
     struct key *pubkey = publickey;
     struct secret *secret;
+    NTSTATUS status;
 
-    FIXME( "%p, %p, %p, %08x\n", privatekey, publickey, handle, flags );
+    TRACE( "%p, %p, %p, %08x\n", privatekey, publickey, handle, flags );
 
     if (!privkey || privkey->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
     if (!pubkey || pubkey->hdr.magic != MAGIC_KEY) return STATUS_INVALID_HANDLE;
@@ -1852,7 +1859,16 @@ NTSTATUS WINAPI BCryptSecretAgreement(BCRYPT_KEY_HANDLE privatekey, BCRYPT_KEY_H
     if (!(secret = heap_alloc_zero( sizeof(*secret) ))) return STATUS_NO_MEMORY;
     secret->hdr.magic = MAGIC_SECRET;
 
-    *handle = secret;
+    if ((status = compute_secret_ecc( privkey, pubkey, secret )))
+    {
+        heap_free( secret );
+        *handle = NULL;
+    }
+    else
+    {
+        *handle = secret;
+    }
+
     return STATUS_SUCCESS;
 }
 
@@ -1860,10 +1876,11 @@ NTSTATUS WINAPI BCryptDestroySecret(BCRYPT_SECRET_HANDLE handle)
 {
     struct secret *secret = handle;
 
-    FIXME( "%p\n", handle );
+    TRACE( "%p\n", handle );
 
     if (!secret || secret->hdr.magic != MAGIC_SECRET) return STATUS_INVALID_HANDLE;
     secret->hdr.magic = 0;
+    heap_free( secret->data );
     heap_free( secret );
     return STATUS_SUCCESS;
 }
@@ -1873,12 +1890,33 @@ NTSTATUS WINAPI BCryptDeriveKey(BCRYPT_SECRET_HANDLE handle, LPCWSTR kdf, BCrypt
 {
     struct secret *secret = handle;
 
-    FIXME( "%p, %s, %p, %p, %d, %p, %08x\n", secret, debugstr_w(kdf), parameter, derived, derived_size, result, flags );
+    TRACE( "%p, %s, %p, %p, %d, %p, %08x\n", secret, debugstr_w(kdf), parameter, derived, derived_size, result, flags );
 
     if (!secret || secret->hdr.magic != MAGIC_SECRET) return STATUS_INVALID_HANDLE;
     if (!kdf) return STATUS_INVALID_PARAMETER;
 
-    return STATUS_INTERNAL_ERROR;
+    if (!(strcmpW( kdf, BCRYPT_KDF_RAW_SECRET )))
+    {
+        ULONG n;
+        ULONG secret_length = secret->len;
+
+        if (!derived)
+        {
+            *result = secret_length;
+            return STATUS_SUCCESS;
+        }
+
+        /* outputs in little endian for some reason */
+        for (n = 0; n < secret_length && n < derived_size; n++)
+        {
+            derived[n] = secret->data[secret_length - n - 1];
+        }
+
+        *result = n;
+        return STATUS_SUCCESS;
+    }
+    FIXME( "Derivation function %s not supported.\n", debugstr_w(kdf) );
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
@@ -1890,6 +1928,9 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
         DisableThreadLibraryCalls( hinst );
 #ifdef HAVE_GNUTLS_CIPHER_INIT
         gnutls_initialize();
+#ifdef SONAME_LIBGCRYPT
+        gcrypt_initialize();
+#endif
 #endif
         break;
 
@@ -1897,6 +1938,9 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
         if (reserved) break;
 #ifdef HAVE_GNUTLS_CIPHER_INIT
         gnutls_uninitialize();
+#ifdef SONAME_LIBGCRYPT
+    gcrypt_uninitialize();
+#endif
 #endif
         break;
     }

@@ -320,13 +320,12 @@ static HRESULT WINAPI IXACT34CueImpl_GetState(IXACT34Cue *iface, DWORD *pdwState
 static HRESULT WINAPI IXACT34CueImpl_Destroy(IXACT34Cue *iface)
 {
     XACT3CueImpl *This = impl_from_IXACT34Cue(iface);
-    HRESULT hr;
 
     TRACE("(%p)\n", iface);
 
-    hr = FACTCue_Destroy(This->fact_cue);
+    FACTCue_Destroy(This->fact_cue);
     HeapFree(GetProcessHeap(), 0, This);
-    return hr;
+    return S_OK;
 }
 
 static HRESULT WINAPI IXACT34CueImpl_SetMatrixCoefficients(IXACT34Cue *iface,

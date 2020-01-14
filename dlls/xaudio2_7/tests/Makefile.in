@@ -2,4 +2,5 @@ TESTDLL = xaudio2_7.dll
 IMPORTS = ole32
 
 C_SRCS = \
+	xact.c \
 	xaudio2.c

@@ -112,6 +112,9 @@ static const BYTE VIRTUAL_Win32Flags[16] =
 
 static struct wine_rb_tree views_tree;
 
+static void *last_already_mapped;
+static size_t last_already_mapped_size;
+
 static RTL_CRITICAL_SECTION csVirtual;
 static RTL_CRITICAL_SECTION_DEBUG critsect_debug =
 {
@@ -610,6 +613,13 @@ static void* try_map_free_area( void *base, void *end, ptrdiff_t step,
 
         if (ptr != (void *)-1)
             munmap( ptr, size );
+
+        if (!last_already_mapped && step)
+        {
+            last_already_mapped = start;
+            last_already_mapped_size = step > 0 ? step : -step;
+            last_already_mapped_size = min(last_already_mapped_size, (char *)end - (char *)start);
+        }
 
         if ((step > 0 && (char *)end - (char *)start < step) ||
             (step < 0 && (char *)start - (char *)base < -step) ||
@@ -1194,6 +1204,8 @@ static int alloc_free_area_callback( void *base, size_t area_size, void *arg )
     ptrdiff_t step = alloc->top_down ? -(granularity_mask + 1) : (granularity_mask + 1);
     void *start;
 
+    TRACE("base %p, area_size %p, size %p.\n", base, (void *)area_size, (void *)size);
+
     if (base < address_space_start) base = address_space_start;
     if (is_beyond_limit( base, size, alloc->limit )) end = alloc->limit;
     if (base >= end) return 0;
@@ -1323,10 +1335,20 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
             goto done;
         }
 
+
         if (is_win64 || zero_bits_64)
         {
+            last_already_mapped = NULL;
+
             if (!wine_mmap_enum_free_areas( alloc_free_area_callback, &alloc, top_down ))
                 return STATUS_NO_MEMORY;
+
+            if (last_already_mapped)
+            {
+                TRACE("Permanently excluding %p - %p from free list.\n",
+                        last_already_mapped, (char *)last_already_mapped + last_already_mapped_size - 1);
+                wine_mmap_remove_free_area(last_already_mapped, last_already_mapped_size, 0);
+            }
 
             ptr = alloc.result;
             TRACE( "got mem in free area %p-%p\n", ptr, (char *)ptr + size );

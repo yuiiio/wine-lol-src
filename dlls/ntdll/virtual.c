@@ -588,22 +588,28 @@ static struct wine_rb_entry *find_view_inside_range( void **base_ptr, void **end
 static void* try_map_free_area( void *base, void *end, ptrdiff_t step,
                                 void *start, size_t size, int unix_prot )
 {
+#ifdef MAP_FIXED_NOREPLACE
+    static int flags = MAP_FIXED_NOREPLACE;
+#else
+    static int flags = 0;
+#endif
     void *ptr;
 
     while (start && base <= start && (char*)start + size <= (char*)end)
     {
-        if ((ptr = wine_anon_mmap( start, size, unix_prot, 0 )) == start)
+        if ((ptr = wine_anon_mmap( start, size, unix_prot, flags )) == start)
             return start;
         TRACE( "Found free area is already mapped, start %p.\n", start );
 
-        if (ptr == (void *)-1)
+        if (ptr == (void *)-1 && errno != EEXIST)
         {
             ERR("wine_anon_mmap() error %s, start %p, size %p, unix_prot %#x.\n",
                     strerror(errno), start, (void *)size, unix_prot);
             return NULL;
         }
 
-        munmap( ptr, size );
+        if (ptr != (void *)-1)
+            munmap( ptr, size );
 
         if ((step > 0 && (char *)end - (char *)start < step) ||
             (step < 0 && (char *)start - (char *)base < -step) ||

@@ -1321,12 +1321,12 @@ static void set_input_key_state( unsigned char *keystate, unsigned char key, int
 
 /* update the key state for a keyboard message */
 static void update_key_state( struct desktop *desktop, unsigned char *keystate,
-                              const struct message *msg )
+                              unsigned int msg, lparam_t wparam )
 {
     unsigned char key;
     int down = 0;
 
-    switch (msg->msg)
+    switch (msg)
     {
     case WM_LBUTTONDOWN:
         down = (keystate == desktop->keystate) ? 0xc0 : 0x80;
@@ -1350,8 +1350,8 @@ static void update_key_state( struct desktop *desktop, unsigned char *keystate,
         down = (keystate == desktop->keystate) ? 0xc0 : 0x80;
         /* fall through */
     case WM_XBUTTONUP:
-        if (msg->wparam >> 16 == XBUTTON1) set_input_key_state( keystate, VK_XBUTTON1, down );
-        else if (msg->wparam >> 16 == XBUTTON2) set_input_key_state( keystate, VK_XBUTTON2, down );
+        if (wparam >> 16 == XBUTTON1) set_input_key_state( keystate, VK_XBUTTON1, down );
+        else if (wparam >> 16 == XBUTTON2) set_input_key_state( keystate, VK_XBUTTON2, down );
         break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
@@ -1359,7 +1359,7 @@ static void update_key_state( struct desktop *desktop, unsigned char *keystate,
         /* fall through */
     case WM_KEYUP:
     case WM_SYSKEYUP:
-        key = (unsigned char)msg->wparam;
+        key = (unsigned char)wparam;
         set_input_key_state( keystate, key, down );
         switch(key)
         {
@@ -1403,11 +1403,35 @@ static void synchronize_input_key_state( struct thread_input *input )
     }
 }
 
+/* update the desktop key state according to a mouse message flags */
+static void update_desktop_mouse_state( struct desktop *desktop, unsigned int flags,
+                                        int x, int y, lparam_t wparam )
+{
+    if (flags & MOUSEEVENTF_MOVE)
+        update_desktop_cursor_pos( desktop, x, y );
+    if (flags & MOUSEEVENTF_LEFTDOWN)
+        update_key_state( desktop, desktop->keystate, WM_LBUTTONDOWN, wparam );
+    if (flags & MOUSEEVENTF_LEFTUP)
+        update_key_state( desktop, desktop->keystate, WM_LBUTTONUP, wparam );
+    if (flags & MOUSEEVENTF_RIGHTDOWN)
+        update_key_state( desktop, desktop->keystate, WM_RBUTTONDOWN, wparam );
+    if (flags & MOUSEEVENTF_RIGHTUP)
+        update_key_state( desktop, desktop->keystate, WM_RBUTTONUP, wparam );
+    if (flags & MOUSEEVENTF_MIDDLEDOWN)
+        update_key_state( desktop, desktop->keystate, WM_MBUTTONDOWN, wparam );
+    if (flags & MOUSEEVENTF_MIDDLEUP)
+        update_key_state( desktop, desktop->keystate, WM_MBUTTONUP, wparam );
+    if (flags & MOUSEEVENTF_XDOWN)
+        update_key_state( desktop, desktop->keystate, WM_XBUTTONDOWN, wparam );
+    if (flags & MOUSEEVENTF_XUP)
+        update_key_state( desktop, desktop->keystate, WM_XBUTTONUP, wparam );
+}
+
 /* update the thread input key state for a keyboard message */
 static void update_input_key_state( struct thread_input *input, const struct message *msg )
 {
     synchronize_input_key_state( input );
-    update_key_state( input->desktop, input->keystate, msg );
+    update_key_state( input->desktop, input->keystate, msg->msg, msg->wparam );
 }
 
 /* release the hardware message currently being processed by the given thread */
@@ -1560,7 +1584,7 @@ static void queue_hardware_message( struct desktop *desktop, struct message *msg
     struct thread_input *input;
     unsigned int msg_code;
 
-    update_key_state( desktop, desktop->keystate, msg );
+    update_key_state( desktop, desktop->keystate, msg->msg, msg->wparam );
     last_input_time = get_tick_count();
     if (msg->msg != WM_MOUSEMOVE) always_queue = 1;
 
@@ -1811,7 +1835,7 @@ static int queue_mouse_message( struct desktop *desktop, user_handle_t win, cons
         return 0;
     if ((device = current->process->rawinput_mouse) && (device->flags & RIDEV_NOLEGACY))
     {
-        if (flags & MOUSEEVENTF_MOVE) update_desktop_cursor_pos( desktop, x, y );
+        update_desktop_mouse_state( desktop, flags, x, y, input->mouse.data << 16 );
         return 0;
     }
 

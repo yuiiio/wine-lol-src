@@ -2377,7 +2377,6 @@ START_TEST(thread)
        }
        return;
    }
-
    test_thread_info();
    test_reserved_tls();
    test_CreateRemoteThread();
@@ -2405,6 +2404,5 @@ START_TEST(thread)
    test_thread_fpu_cw();
    test_thread_actctx();
    test_thread_description();
-
    test_threadpool();
 }

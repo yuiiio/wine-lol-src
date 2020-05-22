@@ -3179,6 +3179,27 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         memset(SystemInformation, 0, Length);
         ret = STATUS_SUCCESS;
         break;
+    case SystemCodeIntegrityInformation:
+    {
+        SYSTEM_CODEINTEGRITY_INFORMATION *info = (SYSTEM_CODEINTEGRITY_INFORMATION*)SystemInformation;
+
+        FIXME("SystemCodeIntegrityInformation, len %u, buffer %p, stub!\n", Length, info);
+
+        if (Length < sizeof(SYSTEM_CODEINTEGRITY_INFORMATION))
+        {
+            ret = STATUS_INFO_LENGTH_MISMATCH;
+            break;
+        }
+
+        if (!SystemInformation)
+        {
+            ret = STATUS_ACCESS_VIOLATION;
+            break;
+        }
+
+        info->CodeIntegrityOptions = CODEINTEGRITY_OPTION_ENABLED;
+        break;
+    }
     default:
 	FIXME("(0x%08x,%p,0x%08x,%p) stub\n",
 	      SystemInformationClass,SystemInformation,Length,ResultLength);

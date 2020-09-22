@@ -66,10 +66,10 @@ struct x11drv_mode_info *X11DRV_Settings_SetHandlers(const char *name,
     if (reserve_depths)
         /* leave room for other depths */
         dd_max_modes = (3+1)*(nmodes);
-    else 
+    else
         dd_max_modes = nmodes;
 
-    if (dd_modes) 
+    if (dd_modes)
     {
         TRACE("Destroying old display modes array\n");
         HeapFree(GetProcessHeap(), 0, dd_modes);
@@ -95,7 +95,7 @@ void X11DRV_Settings_AddOneMode(unsigned int width, unsigned int height, unsigne
     info->height        = height;
     info->refresh_rate  = freq;
     info->bpp           = bpp;
-    TRACE("initialized mode %d: %dx%dx%d @%d Hz (%s)\n", 
+    TRACE("initialized mode %d: %dx%dx%d @%d Hz (%s)\n",
           dd_mode_count, width, height, bpp, freq, handler_name);
     dd_mode_count++;
 }
@@ -127,6 +127,17 @@ unsigned int X11DRV_Settings_GetModeCount(void)
     return dd_mode_count;
 }
 
+BOOL restore_display_mode(void)
+{
+    static int is_int = -1;
+    if(is_int < 0)
+    {
+        const char *e = getenv("WINE_RESTORE_DISPLAY_MODE");
+        is_int = e && strcmp(e, "0");
+    }
+    return is_int;
+}
+
 /***********************************************************************
  * Default handlers if resolution switching is not enabled
  *
@@ -147,9 +158,9 @@ static LONG X11DRV_nores_SetCurrentMode(int mode)
 void X11DRV_Settings_Init(void)
 {
     RECT primary = get_host_primary_monitor_rect();
-    X11DRV_Settings_SetHandlers("NoRes", 
-                                X11DRV_nores_GetCurrentMode, 
-                                X11DRV_nores_SetCurrentMode, 
+    X11DRV_Settings_SetHandlers("NoRes",
+                                X11DRV_nores_GetCurrentMode,
+                                X11DRV_nores_SetCurrentMode,
                                 1, 0);
     X11DRV_Settings_AddOneMode( primary.right - primary.left, primary.bottom - primary.top, 0, 60);
 }
@@ -301,7 +312,7 @@ BOOL CDECL X11DRV_EnumDisplaySettingsEx( LPCWSTR name, DWORD n, LPDEVMODEW devmo
         else
         {
             TRACE("mode %d -- %dx%dx%dbpp (%s)\n", n,
-                  devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmBitsPerPel, 
+                  devmode->dmPelsWidth, devmode->dmPelsHeight, devmode->dmBitsPerPel,
                   handler_name);
         }
         return TRUE;

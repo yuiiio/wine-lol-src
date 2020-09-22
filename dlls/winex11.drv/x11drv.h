@@ -609,6 +609,8 @@ extern void change_systray_owner( Display *display, Window systray_window ) DECL
 extern void update_systray_balloon_position(void) DECLSPEC_HIDDEN;
 extern HWND create_foreign_window( Display *display, Window window ) DECLSPEC_HIDDEN;
 extern BOOL update_clipboard( HWND hwnd ) DECLSPEC_HIDDEN;
+extern BOOL restore_display_mode(void) DECLSPEC_HIDDEN;
+extern BOOL matches_current_mode(int w, int h) DECLSPEC_HIDDEN;
 
 static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 {

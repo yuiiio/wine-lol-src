@@ -461,6 +461,12 @@ static LONG xrandr12_set_current_mode( int mode )
     return DISP_CHANGE_SUCCESSFUL;
 }
 
+BOOL matches_current_mode(int w, int h)
+{
+    return (w == dd_modes[xrandr_current_mode].width &&
+            h == dd_modes[xrandr_current_mode].height);
+}
+
 static XRRCrtcInfo *xrandr12_get_primary_crtc_info( XRRScreenResources *resources, int *crtc_idx )
 {
     XRRCrtcInfo *crtc_info;

@@ -1134,6 +1134,33 @@ static void unmap_window( HWND hwnd )
 
     if (data->mapped)
     {
+        if(restore_display_mode()){
+            // Change display mode setting
+            TRACE( "atbjyk's HACK: Change display mode\n" );
+
+            if(matches_current_mode(
+                    data->whole_rect.right - data->whole_rect.left,
+                    data->whole_rect.bottom - data->whole_rect.top)){
+                TRACE( "this window is fullscreen\n" );
+
+                LPCWSTR devname = L"DISPLAY1"; // do not care
+                DEVMODEW devmode;
+
+                memset(&devmode, 0, sizeof(devmode));
+                devmode.dmSize = sizeof(devmode);
+                devmode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+                devmode.dmPelsWidth = 3840;
+                devmode.dmPelsHeight = 2160;
+                //devmode.dmDisplayFrequency = 60.0;
+
+                ChangeDisplaySettingsExW(devname, &devmode, NULL,
+                        CDS_FULLSCREEN, NULL);
+            }else{
+                TRACE( "this window is not fullscreen\n" );
+            }
+
+        }
+
         TRACE( "win %p/%lx\n", data->hwnd, data->whole_window );
 
         if (data->embedded) set_xembed_flags( data, 0 );

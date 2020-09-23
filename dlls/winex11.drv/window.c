@@ -1026,6 +1026,13 @@ void update_net_wm_states( struct x11drv_win_data *data )
             XSendEvent( data->display, root_window, False,
                         SubstructureRedirectMask | SubstructureNotifyMask, &xev );
         }
+
+        // XFWM does not work _NET_WM_BYPASS_COMPOSITOR so dirty hack
+        if(bypass_compositor() && net_wm_bypass_compositor){
+            TRACE( "atbjyk's HACK: xfconf-query compositing off\n" );
+            char *compositor_off = "xfconf-query -c xfwm4 -p /general/use_compositing -s false";
+            system(compositor_off);
+        }
     }
     data->net_wm_state = new_state;
 
@@ -1167,7 +1174,13 @@ static void unmap_window( HWND hwnd )
             }else{
                 TRACE( "this window is not fullscreen\n" );
             }
+        }
 
+        // XFWM does not work _NET_WM_BYPASS_COMPOSITOR so dirty hack
+        if(bypass_compositor()){
+            TRACE( "atbjyk's HACK: xfconf-query compositing on\n" );
+            char *compositor_on = "xfconf-query -c xfwm4 -p /general/use_compositing -s true";
+            system(compositor_on);
         }
 
         TRACE( "win %p/%lx\n", data->hwnd, data->whole_window );

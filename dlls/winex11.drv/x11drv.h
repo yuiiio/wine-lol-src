@@ -446,6 +446,7 @@ enum x11drv_atoms
     XATOM__NET_SYSTEM_TRAY_OPCODE,
     XATOM__NET_SYSTEM_TRAY_S0,
     XATOM__NET_SYSTEM_TRAY_VISUAL,
+    XATOM__NET_WM_BYPASS_COMPOSITOR,
     XATOM__NET_WM_ICON,
     XATOM__NET_WM_MOVERESIZE,
     XATOM__NET_WM_NAME,
@@ -612,6 +613,7 @@ extern BOOL update_clipboard( HWND hwnd ) DECLSPEC_HIDDEN;
 
 extern BOOL restore_display_mode(void) DECLSPEC_HIDDEN;
 extern void get_default_mode(int width, int height) DECLSPEC_HIDDEN;
+extern BOOL bypass_compositor(void) DECLSPEC_HIDDEN;
 
 static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 {

@@ -138,6 +138,17 @@ BOOL restore_display_mode(void)
     return is_int;
 }
 
+BOOL bypass_compositor(void)
+{
+    static int is_int = -1;
+    if(is_int < 0)
+    {
+        const char *e = getenv("WINE_FULLSCREEN_BYPASS_COMPOSITOR");
+        is_int = e && strcmp(e, "0");
+    }
+    return is_int;
+}
+
 /***********************************************************************
  * Default handlers if resolution switching is not enabled
  *

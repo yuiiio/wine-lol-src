@@ -50,10 +50,11 @@ typedef struct pf_output_t
 
 typedef struct pf_flags_t
 {
-    enum { LEN_DEFAULT, LEN_SHORT, LEN_LONG } IntegerLength;
-    BOOLEAN IntegerDouble, IntegerNative, LeftAlign, Alternate, PadZero, WideString;
+    char Sign, LeftAlign, Alternate, PadZero;
     int FieldLength, Precision;
-    char Sign, Format;
+    char IntegerLength, IntegerDouble, IntegerNative;
+    char WideString;
+    char Format;
 } pf_flags;
 
 /*
@@ -267,9 +268,9 @@ static int pf_handle_string_format( pf_output *out, const void* str, int len,
         return pf_output_format_A( out, "(null)", -1, flags);
 
      /* prefixes take priority over %c,%s vs. %C,%S, so we handle them first */
-    if (flags->WideString || flags->IntegerLength == LEN_LONG)
+    if(flags->WideString || flags->IntegerLength == 'l')
         return pf_output_format_W( out, str, len, flags);
-    if (flags->IntegerLength == LEN_SHORT)
+    if(flags->IntegerLength == 'h')
         return pf_output_format_A( out, str, len, flags);
 
     /* %s,%c ->  chars in ansi functions & wchars in unicode
@@ -309,7 +310,7 @@ static void pf_integer_conv( char *buf, pf_flags *flags, LONGLONG x )
     i = 0;
     if( x == 0 )
     {
-        flags->Alternate = FALSE;
+        flags->Alternate = 0;
         if( flags->Precision )
             buf[i++] = '0';
     }
@@ -409,11 +410,11 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
                     flags.Sign = *p;
             }
             else if( *p == '-' )
-                flags.LeftAlign = TRUE;
+                flags.LeftAlign = *p;
             else if( *p == '0' )
-                flags.PadZero = TRUE;
+                flags.PadZero = *p;
             else if( *p == '#' )
-                flags.Alternate = TRUE;
+                flags.Alternate = *p;
             else
                 break;
             p++;
@@ -426,7 +427,7 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
             flags.FieldLength = va_arg( valist, int );
             if (flags.FieldLength < 0)
             {
-                flags.LeftAlign = TRUE;
+                flags.LeftAlign = '-';
                 flags.FieldLength = -flags.FieldLength;
             }
             p++;
@@ -460,24 +461,19 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
         {
             if (*p == 'l' && *(p+1) == 'l')
             {
-                flags.IntegerDouble = TRUE;
+                flags.IntegerDouble++;
                 p += 2;
             }
-            else if( *p == 'l' || *p == 'L' )
+            else if( *p == 'h' || *p == 'l' || *p == 'L' )
             {
-                flags.IntegerLength = LEN_LONG;
-                p++;
-            }
-            else if( *p == 'h')
-            {
-                flags.IntegerLength = LEN_SHORT;
+                flags.IntegerLength = *p;
                 p++;
             }
             else if( *p == 'I' )
             {
                 if( *(p+1) == '6' && *(p+2) == '4' )
                 {
-                    flags.IntegerDouble = TRUE;
+                    flags.IntegerDouble++;
                     p += 3;
                 }
                 else if( *(p+1) == '3' && *(p+2) == '2' )
@@ -485,7 +481,7 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
                 else if( p[1] && strchr( "diouxX", p[1] ) )
                 {
                     if( sizeof(void *) == 8 )
-                        flags.IntegerDouble = TRUE;
+                        flags.IntegerDouble = *p;
                     p++;
                 }
                 else if( isDigit(*(p+1)) || *(p+1) == 0 )
@@ -494,18 +490,12 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
                     p++;
             }
             else if( *p == 'w' )
-            {
-                flags.WideString = TRUE;
-                p++;
-            }
+                flags.WideString = *p++;
             else if ((*p == 'z' || *p == 't') && p[1] && strchr("diouxX", p[1]))
-            {
-                flags.IntegerNative = TRUE;
-                p++;
-            }
+                flags.IntegerNative = *p++;
             else if (*p == 'j')
             {
-                flags.IntegerDouble = TRUE;
+                flags.IntegerDouble++;
                 p++;
             }
             else if( *p == 'F' )
@@ -542,10 +532,10 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
             void *ptr = va_arg( valist, void * );
             int prec = flags.Precision;
             flags.Format = 'X';
-            flags.PadZero = TRUE;
+            flags.PadZero = '0';
             flags.Precision = 2*sizeof(void*);
             pf_integer_conv( pointer, &flags, (ULONG_PTR)ptr );
-            flags.PadZero = FALSE;
+            flags.PadZero = 0;
             flags.Precision = prec;
             r = pf_output_format_A( out, pointer, -1, &flags );
         }
@@ -573,10 +563,10 @@ static int pf_vsnprintf( pf_output *out, const WCHAR *format, __ms_va_list valis
             if(flags.IntegerDouble || (flags.IntegerNative && sizeof(void*) == 8))
                 pf_integer_conv( x, &flags, va_arg(valist, LONGLONG) );
             else if(flags.Format=='d' || flags.Format=='i')
-                pf_integer_conv( x, &flags, flags.IntegerLength != LEN_SHORT ?
+                pf_integer_conv( x, &flags, flags.IntegerLength!='h' ?
                                  va_arg(valist, int) : (short)va_arg(valist, int) );
             else
-                pf_integer_conv( x, &flags, flags.IntegerLength != LEN_SHORT ?
+                pf_integer_conv( x, &flags, flags.IntegerLength!='h' ?
                                  (unsigned int)va_arg(valist, int) : (unsigned short)va_arg(valist, int) );
 
             r = pf_output_format_A( out, x, -1, &flags );

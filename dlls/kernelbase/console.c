@@ -275,18 +275,20 @@ BOOL WINAPI AllocConsole(void)
     STARTUPINFOW app_si, console_si;
     WCHAR buffer[1024], cmd[256];
     PROCESS_INFORMATION pi;
-    HANDLE event, console;
+    HANDLE event, std_in, console;
+    DWORD mode;
     BOOL ret;
 
     TRACE("()\n");
 
     RtlEnterCriticalSection( &console_section );
 
-    if (RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle)
+    std_in = CreateFileW( L"CONIN$", GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, 0, NULL, OPEN_EXISTING, 0, 0 );
+    if (GetConsoleMode( std_in, &mode ))
     {
         /* we already have a console opened on this process, don't create a new one */
+        CloseHandle( std_in );
         RtlLeaveCriticalSection( &console_section );
-        SetLastError( ERROR_ACCESS_DENIED );
         return FALSE;
     }
 

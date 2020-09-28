@@ -913,7 +913,6 @@ static struct unix_funcs unix_funcs =
     NtIsProcessInJob,
     NtLockVirtualMemory,
     NtMapViewOfSection,
-    NtNotifyChangeDirectoryFile,
     NtOpenEvent,
     NtOpenFile,
     NtOpenIoCompletion,

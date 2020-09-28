@@ -1044,7 +1044,7 @@ NTSTATUS WINAPI NtQueryTimer( HANDLE handle, TIMER_INFORMATION_CLASS class,
         if (basic_info->RemainingTime.QuadPart > 0) NtQuerySystemTime( &now );
         else
         {
-            NtQueryPerformanceCounter( &now, NULL );
+            RtlQueryPerformanceCounter( &now );
             basic_info->RemainingTime.QuadPart = -basic_info->RemainingTime.QuadPart;
         }
 
@@ -1239,23 +1239,6 @@ ULONG WINAPI NtGetTickCount(void)
 {
     /* note: we ignore TickCountMultiplier */
     return user_shared_data->u.TickCount.LowPart;
-}
-
-
-/******************************************************************************
- *              RtlGetSystemTimePrecise (NTDLL.@)
- */
-LONGLONG WINAPI RtlGetSystemTimePrecise(void)
-{
-    struct timeval now;
-#ifdef HAVE_CLOCK_GETTIME
-    struct timespec ts;
-
-    if (!clock_gettime( CLOCK_REALTIME, &ts ))
-        return ts.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970 + (ts.tv_nsec + 50) / 100;
-#endif
-    gettimeofday( &now, 0 );
-    return now.tv_sec * (ULONGLONG)TICKSPERSEC + TICKS_1601_TO_1970 + now.tv_usec * 10;
 }
 
 
@@ -2265,7 +2248,7 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     {
         LARGE_INTEGER now;
 
-        NtQueryPerformanceCounter( &now, NULL );
+        RtlQueryPerformanceCounter(&now);
         abs_timeout -= now.QuadPart;
     }
 

@@ -1002,7 +1002,6 @@ done:
  */
 NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
 {
-    static BOOL clean_exit;
     NTSTATUS ret;
     BOOL self;
 
@@ -1014,12 +1013,7 @@ NTSTATUS WINAPI NtTerminateProcess( HANDLE handle, LONG exit_code )
         self = reply->self;
     }
     SERVER_END_REQ;
-    if (self)
-    {
-        if (!handle) clean_exit = TRUE;
-        else if (clean_exit) exit_process( exit_code );
-        else abort_process( exit_code );
-    }
+    if (self && handle) abort_process( exit_code );
     return ret;
 }
 

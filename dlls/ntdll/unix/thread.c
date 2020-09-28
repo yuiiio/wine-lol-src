@@ -83,6 +83,13 @@ static void pthread_exit_wrapper( int status )
 }
 
 
+/* info passed to a starting thread */
+struct startup_info
+{
+    PRTL_THREAD_START_ROUTINE entry;
+    void                     *arg;
+};
+
 /***********************************************************************
  *           start_thread
  *
@@ -90,6 +97,7 @@ static void pthread_exit_wrapper( int status )
  */
 static void start_thread( TEB *teb )
 {
+    struct startup_info *info = (struct startup_info *)(teb + 1);
     struct ntdll_thread_data *thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
     struct debug_info debug_info;
     BOOL suspend;
@@ -98,8 +106,8 @@ static void start_thread( TEB *teb )
     thread_data->debug_info = &debug_info;
     thread_data->pthread_id = pthread_self();
     signal_init_thread( teb );
-    server_init_thread( thread_data->start, &suspend );
-    signal_start_thread( thread_data->start, thread_data->param, suspend, pRtlUserThreadStart, teb );
+    server_init_thread( info->entry, &suspend );
+    signal_start_thread( info->entry, info->arg, suspend, pRtlUserThreadStart, teb );
 }
 
 
@@ -144,6 +152,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     data_size_t len;
     struct object_attributes *objattr;
     struct ntdll_thread_data *thread_data;
+    struct startup_info *info;
     DWORD tid = 0;
     int request_pipe[2];
     SIZE_T extra_stack = PTHREAD_STACK_MIN;
@@ -227,6 +236,10 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     client_id.UniqueThread  = ULongToHandle( tid );
     teb->ClientId = client_id;
 
+    info = (struct startup_info *)(teb + 1);
+    info->entry  = start;
+    info->arg    = param;
+
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
@@ -234,8 +247,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
     thread_data->request_fd  = request_pipe[1];
     thread_data->start_stack = (char *)teb->Tib.StackBase;
-    thread_data->start = start;
-    thread_data->param = param;
 
     pthread_attr_init( &pthread_attr );
     pthread_attr_setstack( &pthread_attr, teb->DeallocationStack,

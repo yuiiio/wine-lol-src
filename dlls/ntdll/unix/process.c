@@ -662,7 +662,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     pid_t pid;
     int fd[2], stdin_fd = -1, stdout_fd = -1;
     char **argv, **envp;
-    char *unix_name;
+    ANSI_STRING unix_name;
     NTSTATUS status;
 
     status = nt_to_unix_file_name( path, &unix_name, FILE_OPEN );
@@ -712,7 +712,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
                 fchdir( unixdir );
                 close( unixdir );
             }
-            execve( unix_name, argv, envp );
+            execve( unix_name.Buffer, argv, envp );
         }
 
         if (pid <= 0)  /* grandchild if exec failed or child if fork failed */
@@ -750,7 +750,7 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
     if (stdin_fd != -1) close( stdin_fd );
     if (stdout_fd != -1) close( stdout_fd );
 done:
-    RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+    RtlFreeAnsiString( &unix_name );
     return status;
 }
 

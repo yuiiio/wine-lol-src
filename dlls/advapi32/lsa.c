@@ -69,11 +69,19 @@ static void* ADVAPI_GetDomainName(unsigned sz, unsigned ofs)
     BYTE* ptr = NULL;
     UNICODE_STRING* ustr;
 
-    ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"System\\CurrentControlSet\\Services\\VxD\\VNETSUP", 0, KEY_READ, &key);
+    static const WCHAR wVNETSUP[] = {
+        'S','y','s','t','e','m','\\',
+        'C','u','r','r','e','n','t','C','o','n','t','r','o','l','S','e','t','\\',
+        'S','e','r','v','i','c','e','s','\\',
+        'V','x','D','\\','V','N','E','T','S','U','P','\0'};
+
+    ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, wVNETSUP, 0, KEY_READ, &key);
     if (ret == ERROR_SUCCESS)
     {
         DWORD size = 0;
-        ret = RegQueryValueExW(key, L"Workgroup", NULL, NULL, NULL, &size);
+        static const WCHAR wg[] = { 'W','o','r','k','g','r','o','u','p',0 };
+
+        ret = RegQueryValueExW(key, wg, NULL, NULL, NULL, &size);
         if (ret == ERROR_MORE_DATA || ret == ERROR_SUCCESS)
         {
             ptr = heap_alloc_zero(sz + size);
@@ -81,7 +89,7 @@ static void* ADVAPI_GetDomainName(unsigned sz, unsigned ofs)
             ustr = (UNICODE_STRING*)(ptr + ofs);
             ustr->MaximumLength = size;
             ustr->Buffer = (WCHAR*)(ptr + sz);
-            ret = RegQueryValueExW(key, L"Workgroup", NULL, NULL, (LPBYTE)ustr->Buffer, &size);
+            ret = RegQueryValueExW(key, wg, NULL, NULL, (LPBYTE)ustr->Buffer, &size);
             if (ret != ERROR_SUCCESS)
             {
                 heap_free(ptr);
@@ -93,13 +101,14 @@ static void* ADVAPI_GetDomainName(unsigned sz, unsigned ofs)
     }
     if (!ptr)
     {
-        ptr = heap_alloc_zero(sz + sizeof(L"DOMAIN"));
+        static const WCHAR wDomain[] = {'D','O','M','A','I','N','\0'};
+        ptr = heap_alloc_zero(sz + sizeof(wDomain));
         if (!ptr) return NULL;
         ustr = (UNICODE_STRING*)(ptr + ofs);
-        ustr->MaximumLength = sizeof(L"DOMAIN");
+        ustr->MaximumLength = sizeof(wDomain);
         ustr->Buffer = (WCHAR*)(ptr + sz);
-        ustr->Length = sizeof(L"DOMAIN") - sizeof(WCHAR);
-        memcpy(ustr->Buffer, L"DOMAIN", sizeof(L"DOMAIN"));
+        ustr->Length = sizeof(wDomain) - sizeof(WCHAR);
+        memcpy(ustr->Buffer, wDomain, sizeof(wDomain));
     }
     return ptr;
 }

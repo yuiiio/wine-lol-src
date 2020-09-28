@@ -889,8 +889,6 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG_PTR base, ULONG_PTR pc,
 
     TRACE( "type %x pc %lx sp %lx func %lx\n", type, pc, context->Sp, base + func->BeginAddress );
 
-    *handler_data = NULL;
-
     if (func->u.s.Flag)
         handler = unwind_packed_data( base, pc, func, context, ctx_ptr );
     else

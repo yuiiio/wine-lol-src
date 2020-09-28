@@ -1952,10 +1952,8 @@ struct get_next_console_request_reply
 {
     struct reply_header __header;
     unsigned int code;
-    unsigned int output;
     data_size_t  out_size;
     /* VARARG(in_data,bytes); */
-    char __pad_20[4];
 };
 
 
@@ -6337,7 +6335,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 640
+#define SERVER_PROTOCOL_VERSION 639
 
 /* ### protocol_version end ### */
 

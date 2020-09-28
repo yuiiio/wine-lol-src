@@ -647,7 +647,6 @@ typedef union
         unsigned int     status;
         process_id_t     pid;
         thread_id_t      tid;
-        client_ptr_t     teb;
         obj_handle_t     handle;
     } create_thread;
     struct
@@ -6482,7 +6481,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 625
+#define SERVER_PROTOCOL_VERSION 624
 
 /* ### protocol_version end ### */
 

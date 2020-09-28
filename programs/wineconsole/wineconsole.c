@@ -685,6 +685,7 @@ static struct inner_data* WINECON_Init(HINSTANCE hInst, DWORD pid, LPCWSTR appna
         req->access     = GENERIC_READ | GENERIC_WRITE;
         req->attributes = 0;
         req->pid        = pid;
+        req->input_fd   = -1;
 
         ret = !wine_server_call_err( req );
         con_in = wine_server_ptr_handle( reply->handle_in );
@@ -710,6 +711,7 @@ static struct inner_data* WINECON_Init(HINSTANCE hInst, DWORD pid, LPCWSTR appna
         req->access     = GENERIC_WRITE|GENERIC_READ;
         req->attributes = 0;
         req->share      = FILE_SHARE_READ|FILE_SHARE_WRITE;
+        req->fd         = -1;
         ret = !wine_server_call_err( req );
         con_out         = wine_server_ptr_handle( reply->handle_out );
     }

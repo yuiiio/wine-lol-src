@@ -106,12 +106,11 @@ static char **main_envp;
 static char *argv0;
 static const char *bin_dir;
 static const char *dll_dir;
+static const char *data_dir;
+static const char *build_dir;
+static const char *config_dir;
 static const char **dll_paths;
 static SIZE_T dll_path_maxlen;
-
-const char *data_dir = NULL;
-const char *build_dir = NULL;
-const char *config_dir = NULL;
 
 static CPTABLEINFO unix_table;
 
@@ -687,7 +686,7 @@ static void exec_wineserver( char **argv )
  *
  * Start a new wine server.
  */
-void start_server( BOOL debug )
+static void CDECL start_server( BOOL debug )
 {
     static BOOL started;  /* we only try once */
     char *argv[3];
@@ -991,17 +990,12 @@ static struct unix_funcs unix_funcs =
     get_build_id,
     get_host_version,
     exec_wineloader,
+    start_server,
     map_so_dll,
     mmap_add_reserved_area,
     mmap_remove_reserved_area,
     mmap_is_in_reserved_area,
     mmap_enum_reserved_areas,
-    server_send_fd,
-    receive_fd,
-    server_pipe,
-    server_init_process,
-    server_init_process_done,
-    server_init_thread,
     dbg_init,
     __wine_dbg_get_channel_flags,
     __wine_dbg_strdup,

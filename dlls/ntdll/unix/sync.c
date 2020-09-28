@@ -2663,10 +2663,10 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     if ((ret = fast_wait_addr( addr, cmp, size, timeout )) != STATUS_NOT_IMPLEMENTED)
         return ret;
 
-    mutex_lock( &addr_mutex );
+    pthread_mutex_lock( &addr_mutex );
     if (!compare_addr( addr, cmp, size ))
     {
-        mutex_unlock( &addr_mutex );
+        pthread_mutex_unlock( &addr_mutex );
         return STATUS_SUCCESS;
     }
 
@@ -2693,9 +2693,9 @@ void WINAPI RtlWakeAddressAll( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    mutex_lock( &addr_mutex );
+    pthread_mutex_lock( &addr_mutex );
     while (NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout ) == STATUS_SUCCESS) {}
-    mutex_unlock( &addr_mutex );
+    pthread_mutex_unlock( &addr_mutex );
 }
 
 /***********************************************************************
@@ -2705,7 +2705,7 @@ void WINAPI RtlWakeAddressSingle( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    mutex_lock( &addr_mutex );
+    pthread_mutex_lock( &addr_mutex );
     NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout );
-    mutex_unlock( &addr_mutex );
+    pthread_mutex_unlock( &addr_mutex );
 }

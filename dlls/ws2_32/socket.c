@@ -7648,13 +7648,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
             protocol = lpProtocolInfo->iProtocol;
     }
 
-    if (!af && !protocol)
-    {
-        WSASetLastError(WSAEINVAL);
-        return INVALID_SOCKET;
-    }
-
-    if (!type)
+    if (!type && (af || protocol))
     {
         int autoproto = protocol;
         WSAPROTOCOL_INFOW infow;

@@ -2182,11 +2182,6 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             ret = STATUS_INFO_LENGTH_MISMATCH;
             break;
         }
-        if (!(sppi = calloc( out_cpus, sizeof(*sppi) )))
-        {
-            ret = STATUS_NO_MEMORY;
-            break;
-        }
         else
 #ifdef __APPLE__
         {
@@ -2201,6 +2196,8 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             {
                 int i;
                 cpus = min(cpus,out_cpus);
+                len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
+                sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
                 for (i = 0; i < cpus; i++)
                 {
                     sppi[i].IdleTime.QuadPart = pinfo[i].cpu_ticks[CPU_STATE_IDLE];
@@ -2217,7 +2214,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             {
                 unsigned long clk_tck = sysconf(_SC_CLK_TCK);
                 unsigned long usr,nice,sys,idle,remainder[8];
-                int i, count, id;
+                int i, count;
                 char name[32];
                 char line[255];
 
@@ -2233,12 +2230,17 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
                     for (i = 0; i + 5 < count; ++i) sys += remainder[i];
                     sys += idle;
                     usr += nice;
-                    id = atoi( name + 3 ) + 1;
-                    if (id > out_cpus) break;
-                    if (id > cpus) cpus = id;
-                    sppi[id-1].IdleTime.QuadPart   = (ULONGLONG)idle * 10000000 / clk_tck;
-                    sppi[id-1].KernelTime.QuadPart = (ULONGLONG)sys * 10000000 / clk_tck;
-                    sppi[id-1].UserTime.QuadPart   = (ULONGLONG)usr * 10000000 / clk_tck;
+                    cpus = atoi( name + 3 ) + 1;
+                    if (cpus > out_cpus) break;
+                    len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
+                    if (sppi)
+                        sppi = RtlReAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, sppi, len );
+                    else
+                        sppi = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, len );
+
+                    sppi[cpus-1].IdleTime.QuadPart   = (ULONGLONG)idle * 10000000 / clk_tck;
+                    sppi[cpus-1].KernelTime.QuadPart = (ULONGLONG)sys * 10000000 / clk_tck;
+                    sppi[cpus-1].UserTime.QuadPart   = (ULONGLONG)usr * 10000000 / clk_tck;
                 }
                 fclose(cpuinfo);
             }
@@ -2249,6 +2251,8 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             static int i = 1;
             unsigned int n;
             cpus = min(NtCurrentTeb()->Peb->NumberOfProcessors, out_cpus);
+            len = sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) * cpus;
+            sppi = RtlAllocateHeap(GetProcessHeap(), HEAP_ZERO_MEMORY, len);
             FIXME("stub info_class SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION\n");
             /* many programs expect these values to change so fake change */
             for (n = 0; n < cpus; n++)
@@ -2260,7 +2264,6 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
             i++;
         }
 
-        len = sizeof(*sppi) * cpus;
         if (size >= len)
         {
             if (!info) ret = STATUS_ACCESS_VIOLATION;
@@ -2268,7 +2271,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
         else ret = STATUS_INFO_LENGTH_MISMATCH;
 
-        free( sppi );
+        RtlFreeHeap(GetProcessHeap(),0,sppi);
         break;
     }
 

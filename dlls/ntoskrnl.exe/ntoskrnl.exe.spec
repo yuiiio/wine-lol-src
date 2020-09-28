@@ -1174,8 +1174,6 @@
 @ stdcall RtlLengthSecurityDescriptor(ptr)
 @ stdcall RtlLengthSid(ptr)
 @ stdcall RtlLocalTimeToSystemTime(ptr ptr)
-@ stdcall RtlLocateExtendedFeature(ptr long ptr)
-@ stdcall RtlLocateExtendedFeature2(ptr long ptr ptr)
 @ stub RtlLockBootStatusData
 @ stdcall RtlLookupAtomInAtomTable(ptr wstr ptr)
 @ stub RtlLookupElementGenericTable

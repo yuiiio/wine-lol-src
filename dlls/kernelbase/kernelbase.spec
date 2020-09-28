@@ -942,7 +942,7 @@
 @ stdcall LocalReAlloc(long long long)
 @ stdcall LocalUnlock(long)
 @ stdcall LocaleNameToLCID(wstr long)
-@ stdcall -arch=i386,x86_64 LocateXStateFeature(ptr long ptr)
+# @ stub LocateXStateFeature
 @ stdcall LockFile(long long long long long)
 @ stdcall LockFileEx(long long long long long ptr)
 @ stdcall LockResource(long)

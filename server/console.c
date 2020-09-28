@@ -620,8 +620,8 @@ int free_console( struct process *process )
  *	2/ parent is a renderer which launches process, and process should attach to the console
  *	   rendered by parent
  */
-obj_handle_t inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
-                              obj_handle_t hconin )
+void inherit_console( struct thread *parent_thread, struct process *parent, struct process *process,
+                      obj_handle_t hconin )
 {
     int done = 0;
 
@@ -652,10 +652,6 @@ obj_handle_t inherit_console( struct thread *parent_thread, struct process *pare
         process->console = (struct console_input *)grab_object( parent->console );
         process->console->num_proc++;
     }
-
-    if (!process->console) return 0;
-    return alloc_handle( process, process->console,
-                         SYNCHRONIZE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES, 0 );
 }
 
 struct thread *console_get_renderer( struct console_input *console )

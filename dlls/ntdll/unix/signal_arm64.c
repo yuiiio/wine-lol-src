@@ -1077,13 +1077,13 @@ void signal_init_process(void)
 /***********************************************************************
  *           init_thread_context
  */
-static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
+static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, void *relay )
 {
     context->u.s.X0  = (DWORD64)entry;
     context->u.s.X1  = (DWORD64)arg;
-    context->u.s.X18 = (DWORD64)teb;
-    context->Sp      = (DWORD64)teb->Tib.StackBase;
-    context->Pc      = (DWORD64)pRtlUserThreadStart;
+    context->u.s.X18 = (DWORD64)NtCurrentTeb();
+    context->Sp      = (DWORD64)NtCurrentTeb()->Tib.StackBase;
+    context->Pc      = (DWORD64)relay;
 }
 
 
@@ -1091,7 +1091,7 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
  *           get_initial_context
  */
 PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
-                                              BOOL suspend, TEB *teb )
+                                              BOOL suspend, void *relay )
 {
     CONTEXT *ctx;
 
@@ -1099,15 +1099,15 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
     {
         CONTEXT context = { CONTEXT_ALL };
 
-        init_thread_context( &context, entry, arg, teb );
+        init_thread_context( &context, entry, arg, relay );
         wait_suspend( &context );
         ctx = (CONTEXT *)((ULONG_PTR)context.Sp & ~15) - 1;
         *ctx = context;
     }
     else
     {
-        ctx = (CONTEXT *)teb->Tib.StackBase - 1;
-        init_thread_context( ctx, entry, arg, teb );
+        ctx = (CONTEXT *)NtCurrentTeb()->Tib.StackBase - 1;
+        init_thread_context( ctx, entry, arg, relay );
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
@@ -1120,16 +1120,15 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
  */
 __ASM_GLOBAL_FUNC( signal_start_thread,
                    "stp x29, x30, [sp,#-16]!\n\t"
-                   "mov x19, x3\n\t"             /* thunk */
-                   "mov x18, x4\n\t"             /* teb */
+                   "mov x19, x4\n\t"             /* thunk */
+                   "mov x18, x5\n\t"             /* teb */
                    /* store exit frame */
                    "mov x29, sp\n\t"
-                   "str x29, [x4, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
+                   "str x29, [x5, #0x2f0]\n\t"  /* arm64_thread_data()->exit_frame */
                    /* switch to thread stack */
-                   "ldr x5, [x4, #8]\n\t"       /* teb->Tib.StackBase */
+                   "ldr x5, [x5, #8]\n\t"       /* teb->Tib.StackBase */
                    "sub sp, x5, #0x1000\n\t"
                    /* attach dlls */
-                   "mov x3, x4\n\t"
                    "bl " __ASM_NAME("get_initial_context") "\n\t"
                    "mov lr, #0\n\t"
                    "br x19" )

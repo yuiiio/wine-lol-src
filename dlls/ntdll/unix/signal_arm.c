@@ -983,12 +983,12 @@ void signal_init_process(void)
 /***********************************************************************
  *           init_thread_context
  */
-static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, TEB *teb )
+static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry, void *arg, void *relay )
 {
     context->R0 = (DWORD)entry;
     context->R1 = (DWORD)arg;
-    context->Sp = (DWORD)teb->Tib.StackBase;
-    context->Pc = (DWORD)pRtlUserThreadStart;
+    context->Sp = (DWORD)NtCurrentTeb()->Tib.StackBase;
+    context->Pc = (DWORD)relay;
 }
 
 
@@ -996,7 +996,7 @@ static void init_thread_context( CONTEXT *context, LPTHREAD_START_ROUTINE entry,
  *           get_initial_context
  */
 PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void *arg,
-                                              BOOL suspend, TEB *teb )
+                                              BOOL suspend, void *relay )
 {
     CONTEXT *ctx;
 
@@ -1004,15 +1004,15 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
     {
         CONTEXT context = { CONTEXT_ALL };
 
-        init_thread_context( &context, entry, arg, teb );
+        init_thread_context( &context, entry, arg, relay );
         wait_suspend( &context );
         ctx = (CONTEXT *)((ULONG_PTR)context.Sp & ~15) - 1;
         *ctx = context;
     }
     else
     {
-        ctx = (CONTEXT *)teb->Tib.StackBase - 1;
-        init_thread_context( ctx, entry, arg, teb );
+        ctx = (CONTEXT *)NtCurrentTeb()->Tib.StackBase - 1;
+        init_thread_context( ctx, entry, arg, relay );
     }
     pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
     ctx->ContextFlags = CONTEXT_FULL;
@@ -1026,12 +1026,12 @@ PCONTEXT DECLSPEC_HIDDEN get_initial_context( LPTHREAD_START_ROUTINE entry, void
 __ASM_GLOBAL_FUNC( signal_start_thread,
                    ".arm\n\t"
                    "push {r4-r12,lr}\n\t"
-                   "mov r5, r3\n\t"           /* thunk */
+                   "ldr r5, [sp, #40]\n\t"    /* thunk */
                    /* store exit frame */
-                   "ldr r3, [sp, #40]\n\t"    /* teb */
-                   "str sp, [r3, #0x1d4]\n\t" /* arm_thread_data()->exit_frame */
+                   "ldr r4, [sp, #44]\n\t"    /* teb */
+                   "str sp, [r4, #0x1d4]\n\t" /* teb->GdiTebBatch */
                    /* switch to thread stack */
-                   "ldr r4, [r3, #4]\n\t"     /* teb->Tib.StackBase */
+                   "ldr r4, [r4, #4]\n\t"     /* teb->Tib.StackBase */
                    "sub sp, r4, #0x1000\n\t"
                    /* attach dlls */
                    "bl " __ASM_NAME("get_initial_context") "\n\t"
@@ -1042,7 +1042,7 @@ __ASM_GLOBAL_FUNC( signal_start_thread,
 extern void DECLSPEC_NORETURN call_thread_exit_func( int status, void (*func)(int), TEB *teb );
 __ASM_GLOBAL_FUNC( call_thread_exit_func,
                    ".arm\n\t"
-                   "ldr r3, [r2, #0x1d4]\n\t"  /* arm_thread_data()->exit_frame */
+                   "ldr r3, [r2, #0x1d4]\n\t"  /* teb->GdiTebBatch */
                    "mov ip, #0\n\t"
                    "str ip, [r2, #0x1d4]\n\t"
                    "cmp r3, ip\n\t"

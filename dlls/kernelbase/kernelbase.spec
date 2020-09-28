@@ -766,7 +766,7 @@
 @ stdcall GetWriteWatch(long ptr long ptr ptr ptr)
 # @ stub GetWsChanges
 # @ stub GetWsChangesEx
-@ stdcall -arch=i386,x86_64 GetXStateFeaturesMask(ptr ptr)
+# @ stub GetXStateFeaturesMask
 @ stdcall GlobalAlloc(long long)
 @ stdcall GlobalFree(long)
 @ stdcall GlobalMemoryStatusEx(ptr)

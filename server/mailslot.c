@@ -433,12 +433,11 @@ static void mailslot_device_destroy( struct object *obj )
     free( device->mailslots );
 }
 
-struct object *create_mailslot_device( struct object *root, const struct unicode_str *name,
-                                       unsigned int attr, const struct security_descriptor *sd )
+struct object *create_mailslot_device( struct object *root, const struct unicode_str *name )
 {
     struct mailslot_device *dev;
 
-    if ((dev = create_named_object( root, &mailslot_device_ops, name, attr, sd )) &&
+    if ((dev = create_named_object( root, &mailslot_device_ops, name, 0, NULL )) &&
         get_error() != STATUS_OBJECT_NAME_EXISTS)
     {
         dev->mailslots = NULL;

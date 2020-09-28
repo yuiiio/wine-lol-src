@@ -695,8 +695,6 @@
 # @ stub RtlGetElementGenericTableAvl
 @ stdcall RtlGetEnabledExtendedFeatures(int64)
 @ stdcall RtlGetExePath(wstr ptr)
-@ stdcall RtlGetExtendedContextLength(long ptr)
-@ stdcall RtlGetExtendedContextLength2(long ptr int64)
 # @ stub RtlGetFirstRange
 @ stdcall RtlGetFrame()
 @ stdcall RtlGetFullPathName_U(wstr long ptr ptr)

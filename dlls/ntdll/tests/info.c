@@ -116,34 +116,40 @@ static void test_query_basic(void)
     */
 
     /* Use a nonexistent info class */
+    trace("Check nonexistent info class\n");
     status = pNtQuerySystemInformation(-1, NULL, 0, NULL);
     ok( status == STATUS_INVALID_INFO_CLASS || status == STATUS_NOT_IMPLEMENTED /* vista */,
         "Expected STATUS_INVALID_INFO_CLASS or STATUS_NOT_IMPLEMENTED, got %08x\n", status);
 
     /* Use an existing class but with a zero-length buffer */
+    trace("Check zero-length buffer\n");
     status = pNtQuerySystemInformation(SystemBasicInformation, NULL, 0, NULL);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
 
     /* Use an existing class, correct length but no SystemInformation buffer */
+    trace("Check no SystemInformation buffer\n");
     status = pNtQuerySystemInformation(SystemBasicInformation, NULL, sizeof(sbi), NULL);
     ok( status == STATUS_ACCESS_VIOLATION || status == STATUS_INVALID_PARAMETER /* vista */,
         "Expected STATUS_ACCESS_VIOLATION or STATUS_INVALID_PARAMETER, got %08x\n", status);
 
     /* Use an existing class, correct length, a pointer to a buffer but no ReturnLength pointer */
+    trace("Check no ReturnLength pointer\n");
     status = pNtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), NULL);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
 
     /* Check a too large buffer size */
+    trace("Check a too large buffer size\n");
     status = pNtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi) * 2, &ReturnLength);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
 
     /* Finally some correct calls */
+    trace("Check with correct parameters\n");
     status = pNtQuerySystemInformation(SystemBasicInformation, &sbi, sizeof(sbi), &ReturnLength);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( sizeof(sbi) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1) trace("Number of Processors : %d\n", sbi.NumberOfProcessors);
+    trace("Number of Processors : %d\n", sbi.NumberOfProcessors);
     ok( sbi.NumberOfProcessors > 0, "Expected more than 0 processors, got %d\n", sbi.NumberOfProcessors);
 
     memset(&sbi2, 0, sizeof(sbi2));
@@ -190,7 +196,7 @@ static void test_query_cpu(void)
     ok( sizeof(sci) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1) trace("Processor FeatureSet : %08x\n", sci.FeatureSet);
+    trace("Processor FeatureSet : %08x\n", sci.FeatureSet);
     ok( sci.FeatureSet != 0, "Expected some features for this processor, got %08x\n", sci.FeatureSet);
 }
 
@@ -264,7 +270,7 @@ static void test_query_timeofday(void)
     ok( sizeof(sti) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1) trace("uCurrentTimeZoneId : (%d)\n", sti.uCurrentTimeZoneId);
+    trace("uCurrentTimeZoneId : (%d)\n", sti.uCurrentTimeZoneId);
 }
 
 static void test_query_process(void)
@@ -349,7 +355,8 @@ static void test_query_process(void)
 
         spi = (SYSTEM_PROCESS_INFORMATION_PRIVATE*)((char*)spi + spi->NextEntryOffset);
     }
-    if (winetest_debug > 1) trace("%u processes, %u threads\n", i, k);
+    trace("Total number of running processes : %d\n", i);
+    trace("Total number of running threads   : %d\n", k);
 
     if (one_before_last_pid == 0) one_before_last_pid = last_pid;
 
@@ -837,12 +844,6 @@ static void test_query_logicalprocex(void)
         ex = (void *)(((char *)infoex) + i);
         ok(ex->Size, "%u: got size 0\n", i);
 
-        if (winetest_debug <= 1)
-        {
-            i += ex->Size;
-            continue;
-        }
-
         trace("infoex[%u].Size: %u\n", i, ex->Size);
         switch (ex->Relationship)
         {
@@ -1032,21 +1033,18 @@ static void test_query_battery(void)
     }
     ok(status == STATUS_SUCCESS, "expected success\n");
 
-    if (winetest_debug > 1)
-    {
-        trace("Battery state:\n");
-        trace("AcOnLine          : %u\n", bs.AcOnLine);
-        trace("BatteryPresent    : %u\n", bs.BatteryPresent);
-        trace("Charging          : %u\n", bs.Charging);
-        trace("Discharging       : %u\n", bs.Discharging);
-        trace("Tag               : %u\n", bs.Tag);
-        trace("MaxCapacity       : %u\n", bs.MaxCapacity);
-        trace("RemainingCapacity : %u\n", bs.RemainingCapacity);
-        trace("Rate              : %d\n", (LONG)bs.Rate);
-        trace("EstimatedTime     : %u\n", bs.EstimatedTime);
-        trace("DefaultAlert1     : %u\n", bs.DefaultAlert1);
-        trace("DefaultAlert2     : %u\n", bs.DefaultAlert2);
-    }
+    trace("Battery state:\n");
+    trace("AcOnLine          : %u\n", bs.AcOnLine);
+    trace("BatteryPresent    : %u\n", bs.BatteryPresent);
+    trace("Charging          : %u\n", bs.Charging);
+    trace("Discharging       : %u\n", bs.Discharging);
+    trace("Tag               : %u\n", bs.Tag);
+    trace("MaxCapacity       : %u\n", bs.MaxCapacity);
+    trace("RemainingCapacity : %u\n", bs.RemainingCapacity);
+    trace("Rate              : %d\n", (LONG)bs.Rate);
+    trace("EstimatedTime     : %u\n", bs.EstimatedTime);
+    trace("DefaultAlert1     : %u\n", bs.DefaultAlert1);
+    trace("DefaultAlert2     : %u\n", bs.DefaultAlert2);
 
     ok(bs.MaxCapacity >= bs.RemainingCapacity,
        "expected MaxCapacity %u to be greater than or equal to RemainingCapacity %u\n",
@@ -1174,6 +1172,7 @@ static void test_query_process_wow64(void)
     pbi[0] = pbi[1] = dummy;
     status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessWow64Information, pbi, sizeof(ULONG_PTR), NULL);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
+    trace( "Platform is_wow64 %d, ProcessInformation of ProcessWow64Information %lx\n", is_wow64, pbi[0]);
     ok( is_wow64 == (pbi[0] != 0), "is_wow64 %x, pbi[0] %lx\n", is_wow64, pbi[0]);
     ok( pbi[0] != dummy, "pbi[0] %lx\n", pbi[0]);
     ok( pbi[1] == dummy, "pbi[1] changed to %lx\n", pbi[1]);
@@ -1232,35 +1231,52 @@ static void test_query_process_basic(void)
      * every information class
     */
 
+    /* Use a nonexistent info class */
+    trace("Check nonexistent info class\n");
     status = pNtQueryInformationProcess(NULL, -1, NULL, 0, NULL);
     ok( status == STATUS_INVALID_INFO_CLASS || status == STATUS_NOT_IMPLEMENTED /* vista */,
         "Expected STATUS_INVALID_INFO_CLASS or STATUS_NOT_IMPLEMENTED, got %08x\n", status);
 
+    /* Do not give a handle and buffer */
+    trace("Check NULL handle and buffer and zero-length buffersize\n");
     status = pNtQueryInformationProcess(NULL, ProcessBasicInformation, NULL, 0, NULL);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
 
+    /* Use a correct info class and buffer size, but still no handle and buffer */
+    trace("Check NULL handle and buffer\n");
     status = pNtQueryInformationProcess(NULL, ProcessBasicInformation, NULL, sizeof(pbi), NULL);
     ok( status == STATUS_ACCESS_VIOLATION || status == STATUS_INVALID_HANDLE,
         "Expected STATUS_ACCESS_VIOLATION or STATUS_INVALID_HANDLE(W2K3), got %08x\n", status);
 
+    /* Use a correct info class and buffer size, but still no handle */
+    trace("Check NULL handle\n");
     status = pNtQueryInformationProcess(NULL, ProcessBasicInformation, &pbi, sizeof(pbi), NULL);
     ok( status == STATUS_INVALID_HANDLE, "Expected STATUS_INVALID_HANDLE, got %08x\n", status);
 
+    /* Use a greater buffer size */
+    trace("Check NULL handle and too large buffersize\n");
     status = pNtQueryInformationProcess(NULL, ProcessBasicInformation, &pbi, sizeof(pbi) * 2, NULL);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
 
+    /* Use no ReturnLength */
+    trace("Check NULL ReturnLength\n");
     status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
 
+    /* Finally some correct calls */
+    trace("Check with correct parameters\n");
     status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), &ReturnLength);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( sizeof(pbi) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
+    /* Everything is correct except a too large buffersize */
+    trace("Too large buffersize\n");
     status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi) * 2, &ReturnLength);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
     ok( sizeof(pbi) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
-
-    if (winetest_debug > 1) trace("ProcessID : %lx\n", pbi.UniqueProcessId);
+                                                                                                                                               
+    /* Check if we have some return values */
+    trace("ProcessID : %lx\n", pbi.UniqueProcessId);
     ok( pbi.UniqueProcessId > 0, "Expected a ProcessID > 0, got 0\n");
 }
 
@@ -1309,8 +1325,7 @@ static void test_query_process_vm(void)
     todo_wine ok( ReturnLength == sizeof(VM_COUNTERS), "wrong size %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1)
-        dump_vm_counters("VM counters for GetCurrentProcess", &pvi);
+    dump_vm_counters("VM counters for GetCurrentProcess", &pvi);
     ok( pvi.WorkingSetSize > 0, "Expected a WorkingSetSize > 0\n");
     ok( pvi.PagefileUsage > 0, "Expected a PagefileUsage > 0\n");
 
@@ -1331,8 +1346,7 @@ static void test_query_process_vm(void)
     ok( pvi.PrivateUsage == pvi.PagefileUsage, "wrong value %lu/%lu\n", pvi.PrivateUsage, pvi.PagefileUsage );
 
     /* Check if we have some return values */
-    if (winetest_debug > 1)
-        dump_vm_counters("VM counters for GetCurrentProcessId", &pvi);
+    dump_vm_counters("VM counters for GetCurrentProcessId", &pvi);
     ok( pvi.WorkingSetSize > 0, "Expected a WorkingSetSize > 0\n");
     ok( pvi.PagefileUsage > 0, "Expected a PagefileUsage > 0\n");
 
@@ -1410,7 +1424,7 @@ static void test_query_process_io(void)
     ok( sizeof(pii) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1) trace("OtherOperationCount : 0x%s\n", wine_dbgstr_longlong(pii.OtherOperationCount));
+    trace("OtherOperationCount : 0x%s\n", wine_dbgstr_longlong(pii.OtherOperationCount));
     todo_wine
     {
         ok( pii.OtherOperationCount > 0, "Expected an OtherOperationCount > 0\n");
@@ -1438,8 +1452,9 @@ static void test_query_process_times(void)
     process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, one_before_last_pid);
     if (!process)
     {
-        if (winetest_debug > 1) trace("Could not open process with ID : %d, error : %u. Going to use current one.\n", one_before_last_pid, GetLastError());
+        trace("Could not open process with ID : %d, error : %u. Going to use current one.\n", one_before_last_pid, GetLastError());
         process = GetCurrentProcess();
+        trace("ProcessTimes for current process\n");
     }
     else
         trace("ProcessTimes for process with ID : %d\n", one_before_last_pid);
@@ -1451,19 +1466,19 @@ static void test_query_process_times(void)
 
     FileTimeToSystemTime((const FILETIME *)&spti.CreateTime, &UTC);
     SystemTimeToTzSpecificLocalTime(NULL, &UTC, &Local);
-    if (winetest_debug > 1) trace("CreateTime : %02d/%02d/%04d %02d:%02d:%02d\n", Local.wMonth, Local.wDay, Local.wYear,
+    trace("CreateTime : %02d/%02d/%04d %02d:%02d:%02d\n", Local.wMonth, Local.wDay, Local.wYear,
            Local.wHour, Local.wMinute, Local.wSecond);
 
     FileTimeToSystemTime((const FILETIME *)&spti.ExitTime, &UTC);
     SystemTimeToTzSpecificLocalTime(NULL, &UTC, &Local);
-    if (winetest_debug > 1) trace("ExitTime   : %02d/%02d/%04d %02d:%02d:%02d\n", Local.wMonth, Local.wDay, Local.wYear,
+    trace("ExitTime   : %02d/%02d/%04d %02d:%02d:%02d\n", Local.wMonth, Local.wDay, Local.wYear,
            Local.wHour, Local.wMinute, Local.wSecond);
 
     FileTimeToSystemTime((const FILETIME *)&spti.KernelTime, &Local);
-    if (winetest_debug > 1) trace("KernelTime : %02d:%02d:%02d.%03d\n", Local.wHour, Local.wMinute, Local.wSecond, Local.wMilliseconds);
+    trace("KernelTime : %02d:%02d:%02d.%03d\n", Local.wHour, Local.wMinute, Local.wSecond, Local.wMilliseconds);
 
     FileTimeToSystemTime((const FILETIME *)&spti.UserTime, &Local);
-    if (winetest_debug > 1) trace("UserTime   : %02d:%02d:%02d.%03d\n", Local.wHour, Local.wMinute, Local.wSecond, Local.wMilliseconds);
+    trace("UserTime   : %02d:%02d:%02d.%03d\n", Local.wHour, Local.wMinute, Local.wSecond, Local.wMilliseconds);
 
     status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessTimes, &spti, sizeof(spti) * 2, &ReturnLength);
     ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
@@ -1601,9 +1616,10 @@ static void test_query_process_handlecount(void)
     {
         trace("Could not open process with ID : %d, error : %u. Going to use current one.\n", one_before_last_pid, GetLastError());
         process = GetCurrentProcess();
+        trace("ProcessHandleCount for current process\n");
     }
     else
-        if (winetest_debug > 1) trace("ProcessHandleCount for process with ID : %d\n", one_before_last_pid);
+        trace("ProcessHandleCount for process with ID : %d\n", one_before_last_pid);
 
     status = pNtQueryInformationProcess( process, ProcessHandleCount, &handlecount, sizeof(handlecount), &ReturnLength);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
@@ -1616,7 +1632,7 @@ static void test_query_process_handlecount(void)
     ok( sizeof(handlecount) == ReturnLength, "Inconsistent length %d\n", ReturnLength);
 
     /* Check if we have some return values */
-    if (winetest_debug > 1) trace("HandleCount : %d\n", handlecount);
+    trace("HandleCount : %d\n", handlecount);
     todo_wine
     {
         ok( handlecount > 0, "Expected some handles, got 0\n");
@@ -2015,7 +2031,7 @@ static void test_mapprotection(void)
         return;
     }
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status );
-    if (winetest_debug > 1) trace("Process execute flags %08x\n", oldflags);
+    trace("Process execute flags %08x\n", oldflags);
 
     if (!(oldflags & MEM_EXECUTE_OPTION_ENABLE))
     {
@@ -2064,9 +2080,9 @@ static void test_mapprotection(void)
 #else
     ok(0, "Add a return opcode for your architecture or expect a crash in this test\n");
 #endif
-    if (winetest_debug > 1) trace("trying to execute code in the readwrite only mapped anon file...\n");
+    trace("trying to execute code in the readwrite only mapped anon file...\n");
     f = addr;f();
-    if (winetest_debug > 1) trace("...done.\n");
+    trace("...done.\n");
 
     status = pNtQueryVirtualMemory( GetCurrentProcess(), addr, MemoryBasicInformation, &info, sizeof(info), &retlen );
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
@@ -2094,6 +2110,7 @@ static void test_queryvirtualmemory(void)
     void *user_shared_data = (void *)0x7ffe0000;
 
     module = GetModuleHandleA( "ntdll.dll" );
+    trace("Check flags of the PE header of NTDLL.DLL at %p\n", module);
     status = pNtQueryVirtualMemory(NtCurrentProcess(), module, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2103,6 +2120,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.Protect == PAGE_READONLY, "mbi.Protect is 0x%x, expected 0x%x\n", mbi.Protect, PAGE_READONLY);
     ok (mbi.Type == MEM_IMAGE, "mbi.Type is 0x%x, expected 0x%x\n", mbi.Type, MEM_IMAGE);
 
+    trace("Check flags of a function entry in NTDLL.DLL at %p\n", pNtQueryVirtualMemory);
     module = GetModuleHandleA( "ntdll.dll" );
     status = pNtQueryVirtualMemory(NtCurrentProcess(), pNtQueryVirtualMemory, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
@@ -2112,6 +2130,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.State == MEM_COMMIT, "mbi.State is 0x%x, expected 0x%x\n", mbi.State, MEM_COMMIT);
     ok (mbi.Protect == PAGE_EXECUTE_READ, "mbi.Protect is 0x%x, expected 0x%x\n", mbi.Protect, PAGE_EXECUTE_READ);
 
+    trace("Check flags of heap at %p\n", GetProcessHeap());
     status = pNtQueryVirtualMemory(NtCurrentProcess(), GetProcessHeap(), MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2121,6 +2140,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.Protect == PAGE_READWRITE || mbi.Protect == PAGE_EXECUTE_READWRITE,
         "mbi.Protect is 0x%x\n", mbi.Protect);
 
+    trace("Check flags of stack at %p\n", stackbuf);
     status = pNtQueryVirtualMemory(NtCurrentProcess(), stackbuf, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2128,6 +2148,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.State == MEM_COMMIT, "mbi.State is 0x%x, expected 0x%x\n", mbi.State, MEM_COMMIT);
     ok (mbi.Protect == PAGE_READWRITE, "mbi.Protect is 0x%x, expected 0x%x\n", mbi.Protect, PAGE_READWRITE);
 
+    trace("Check flags of read-only data at %p\n", teststring);
     module = GetModuleHandleA( NULL );
     status = pNtQueryVirtualMemory(NtCurrentProcess(), teststring, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
@@ -2137,6 +2158,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.State == MEM_COMMIT, "mbi.State is 0x%x, expected 0x%X\n", mbi.State, MEM_COMMIT);
     ok (mbi.Protect == PAGE_READONLY, "mbi.Protect is 0x%x, expected 0x%X\n", mbi.Protect, PAGE_READONLY);
 
+    trace("Check flags of read-write data at %p\n", datatestbuf);
     status = pNtQueryVirtualMemory(NtCurrentProcess(), datatestbuf, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2146,6 +2168,7 @@ static void test_queryvirtualmemory(void)
     ok (mbi.Protect == PAGE_READWRITE || mbi.Protect == PAGE_WRITECOPY,
         "mbi.Protect is 0x%x\n", mbi.Protect);
 
+    trace("Check flags of read-write uninitialized data (.bss) at %p\n", rwtestbuf);
     status = pNtQueryVirtualMemory(NtCurrentProcess(), rwtestbuf, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok( readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2158,6 +2181,7 @@ static void test_queryvirtualmemory(void)
     }
     else skip( "bss is outside of module\n" );  /* this can happen on Mac OS */
 
+    trace("Check flags of user shared data at %p\n", user_shared_data);
     status = pNtQueryVirtualMemory(NtCurrentProcess(), user_shared_data, MemoryBasicInformation, &mbi, sizeof(MEMORY_BASIC_INFORMATION), &readcount);
     ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     ok(readcount == sizeof(MEMORY_BASIC_INFORMATION), "Expected to read %d bytes, got %ld\n",(int)sizeof(MEMORY_BASIC_INFORMATION),readcount);
@@ -2371,7 +2395,7 @@ static void test_NtGetCurrentProcessorNumber(void)
 
     GetSystemInfo(&si);
     current_cpu = pNtGetCurrentProcessorNumber();
-    if (winetest_debug > 1) trace("dwNumberOfProcessors: %d, current processor: %d\n", si.dwNumberOfProcessors, current_cpu);
+    trace("dwNumberOfProcessors: %d, current processor: %d\n", si.dwNumberOfProcessors, current_cpu);
 
     status = pNtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL);
     old_process_mask = pbi.AffinityMask;
@@ -2585,53 +2609,153 @@ START_TEST(info)
     if (argc >= 3) return; /* Child */
 
     /* NtQuerySystemInformation */
+
+    /* 0x0 SystemBasicInformation */
+    trace("Starting test_query_basic()\n");
     test_query_basic();
+
+    /* 0x1 SystemCpuInformation */
+    trace("Starting test_query_cpu()\n");
     test_query_cpu();
+
+    /* 0x2 SystemPerformanceInformation */
+    trace("Starting test_query_performance()\n");
     test_query_performance();
+
+    /* 0x3 SystemTimeOfDayInformation */
+    trace("Starting test_query_timeofday()\n");
     test_query_timeofday();
+
+    /* 0x5 SystemProcessInformation */
+    trace("Starting test_query_process()\n");
     test_query_process();
+
+    /* 0x8 SystemProcessorPerformanceInformation */
+    trace("Starting test_query_procperf()\n");
     test_query_procperf();
+
+    /* 0xb SystemModuleInformation */
+    trace("Starting test_query_module()\n");
     test_query_module();
+
+    /* 0x10 SystemHandleInformation */
+    trace("Starting test_query_handle()\n");
     test_query_handle();
+
+    /* 0x15 SystemCacheInformation */
+    trace("Starting test_query_cache()\n");
     test_query_cache();
+
+    /* 0x17 SystemInterruptInformation */
+    trace("Starting test_query_interrupt()\n");
     test_query_interrupt();
+
+    /* 0x1c SystemTimeAdjustmentInformation */
+    trace("Starting test_time_adjustment()\n");
     test_time_adjustment();
+
+    /* 0x23 SystemKernelDebuggerInformation */
+    trace("Starting test_query_kerndebug()\n");
     test_query_kerndebug();
+
+    /* 0x25 SystemRegistryQuotaInformation */
+    trace("Starting test_query_regquota()\n");
     test_query_regquota();
+
+    /* 0x49 SystemLogicalProcessorInformation */
+    trace("Starting test_query_logicalproc()\n");
     test_query_logicalproc();
     test_query_logicalprocex();
-    test_query_firmware();
-    test_query_data_alignment();
 
     /* NtPowerInformation */
+
+    /* 0x5 SystemBatteryState */
+    trace("Starting test_query_battery()\n");
     test_query_battery();
+
+    /* 0xb ProcessorInformation */
+    trace("Starting test_query_processor_power_info()\n");
     test_query_processor_power_info();
 
     /* NtQueryInformationProcess */
+
+    /* 0x0 ProcessBasicInformation */
+    trace("Starting test_query_process_basic()\n");
     test_query_process_basic();
+
+    /* 0x2 ProcessIoCounters */
+    trace("Starting test_query_process_io()\n");
     test_query_process_io();
+
+    /* 0x3 ProcessVmCounters */
+    trace("Starting test_query_process_vm()\n");
     test_query_process_vm();
+
+    /* 0x4 ProcessTimes */
+    trace("Starting test_query_process_times()\n");
     test_query_process_times();
+
+    /* 0x7 ProcessDebugPort */
+    trace("Starting test_process_debug_port()\n");
     test_query_process_debug_port(argc, argv);
+
+    /* 0x12 ProcessPriorityClass */
+    trace("Starting test_query_process_priority()\n");
     test_query_process_priority();
+
+    /* 0x14 ProcessHandleCount */
+    trace("Starting test_query_process_handlecount()\n");
     test_query_process_handlecount();
+
+    /* 0x1A ProcessWow64Information */
+    trace("Starting test_query_process_wow64()\n");
     test_query_process_wow64();
+
+    /* 0x1B ProcessImageFileName */
+    trace("Starting test_query_process_image_file_name()\n");
     test_query_process_image_file_name();
+
+    /* 0x1E ProcessDebugObjectHandle */
+    trace("Starting test_query_process_debug_object_handle()\n");
     test_query_process_debug_object_handle(argc, argv);
+
+    /* 0x1F ProcessDebugFlags */
+    trace("Starting test_process_debug_flags()\n");
     test_query_process_debug_flags(argc, argv);
+
+    /* 0x25 ProcessImageInformation */
+    trace("Starting test_process_image_info()\n");
     test_query_process_image_info();
-    test_mapprotection();
 
-    /* NtQueryInformationThread */
-    test_thread_info();
-    test_HideFromDebugger();
-    test_thread_start_address();
-    test_thread_lookup();
-
-    test_affinity();
+    /* 0x4C SystemFirmwareTableInformation */
+    trace("Starting test_query_firmware()\n");
+    test_query_firmware();
 
     /* belongs to its own file */
+    trace("Starting test_readvirtualmemory()\n");
     test_readvirtualmemory();
+
+    trace("Starting test_queryvirtualmemory()\n");
     test_queryvirtualmemory();
+
+    trace("Starting test_mapprotection()\n");
+    test_mapprotection();
+
+    trace("Starting test_affinity()\n");
+    test_affinity();
+
+    trace("Starting test_HideFromDebugger()\n");
+    test_HideFromDebugger();
+
+    trace("Starting test_NtGetCurrentProcessorNumber()\n");
     test_NtGetCurrentProcessorNumber();
+
+    trace("Starting test_thread_start_address()\n");
+    test_thread_start_address();
+
+    trace("Starting test_query_data_alignment()\n");
+    test_query_data_alignment();
+
+    test_thread_lookup();
+    test_thread_info();
 }

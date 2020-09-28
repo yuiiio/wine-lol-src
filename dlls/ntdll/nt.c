@@ -135,6 +135,12 @@ struct smbios_board {
     BYTE product;
     BYTE version;
     BYTE serial;
+    BYTE asset_tag;
+    BYTE feature_flags;
+    BYTE location;
+    WORD chassis_handle;
+    BYTE board_type;
+    BYTE num_contained_handles;
 };
 
 struct smbios_chassis {
@@ -148,6 +154,18 @@ struct smbios_chassis {
     BYTE power_supply_state;
     BYTE thermal_state;
     BYTE security_status;
+    DWORD oem_defined;
+    BYTE height;
+    BYTE num_power_cords;
+    BYTE num_contained_elements;
+    BYTE contained_element_rec_length;
+};
+
+struct smbios_boot_info
+{
+    struct smbios_header hdr;
+    BYTE reserved[6];
+    BYTE boot_status[10];
 };
 
 #include "poppack.h"
@@ -2136,18 +2154,21 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             size_t system_vendor_len, system_product_len, system_version_len, system_serial_len;
             char system_sku[128], system_family[128];
             size_t system_sku_len, system_family_len;
-            char board_vendor[128], board_product[128], board_version[128], board_serial[128];
-            size_t board_vendor_len, board_product_len, board_version_len, board_serial_len;
+            char board_vendor[128], board_product[128], board_version[128], board_serial[128], board_asset_tag[128];
+            size_t board_vendor_len, board_product_len, board_version_len, board_serial_len, board_asset_tag_len;
             char chassis_vendor[128], chassis_version[128], chassis_serial[128], chassis_asset_tag[128];
             char chassis_type[11] = "2"; /* unknown */
             size_t chassis_vendor_len, chassis_version_len, chassis_serial_len, chassis_asset_tag_len;
             char *buffer = (char*)sfti->TableBuffer;
             BYTE string_count;
+            BYTE handle_count = 0;
             struct smbios_prologue *prologue;
             struct smbios_bios *bios;
             struct smbios_system *system;
             struct smbios_board *board;
             struct smbios_chassis *chassis;
+            struct smbios_boot_info *boot_info;
+            struct smbios_header *end_of_table;
 
 #define S(s) s, sizeof(s)
             bios_vendor_len = get_smbios_string("/sys/class/dmi/id/bios_vendor", S(bios_vendor));
@@ -2163,6 +2184,7 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             board_product_len = get_smbios_string("/sys/class/dmi/id/board_name", S(board_product));
             board_version_len = get_smbios_string("/sys/class/dmi/id/board_version", S(board_version));
             board_serial_len = get_smbios_string("/sys/class/dmi/id/board_serial", S(board_serial));
+            board_asset_tag_len = get_smbios_string("/sys/class/dmi/id/board_asset_tag", S(board_asset_tag));
             chassis_vendor_len = get_smbios_string("/sys/class/dmi/id/chassis_vendor", S(chassis_vendor));
             chassis_version_len = get_smbios_string("/sys/class/dmi/id/chassis_version", S(chassis_version));
             chassis_serial_len = get_smbios_string("/sys/class/dmi/id/chassis_serial", S(chassis_serial));
@@ -2181,11 +2203,18 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
                                  L(system_serial_len) + L(system_sku_len) + L(system_family_len) + 1, 2);
 
             *required_len += sizeof(struct smbios_board);
-            *required_len += max(L(board_vendor_len) + L(board_product_len) + L(board_version_len) + L(board_serial_len) + 1, 2);
+            *required_len += max(L(board_vendor_len) + L(board_product_len) + L(board_version_len) +
+                                 L(board_serial_len) + L(board_asset_tag_len) + 1, 2);
 
             *required_len += sizeof(struct smbios_chassis);
             *required_len += max(L(chassis_vendor_len) + L(chassis_version_len) + L(chassis_serial_len) +
                                  L(chassis_asset_tag_len) + 1, 2);
+
+            *required_len += sizeof(struct smbios_boot_info);
+            *required_len += 2;
+
+            *required_len += sizeof(struct smbios_header);
+            *required_len += 2;
 #undef L
 
             sfti->TableBufferLength = *required_len;
@@ -2207,7 +2236,7 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             bios = (struct smbios_bios*)buffer;
             bios->hdr.type = 0;
             bios->hdr.length = sizeof(struct smbios_bios);
-            bios->hdr.handle = 0;
+            bios->hdr.handle = handle_count++;
             bios->vendor = bios_vendor_len ? ++string_count : 0;
             bios->version = bios_version_len ? ++string_count : 0;
             bios->start = 0;
@@ -2232,7 +2261,7 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             system = (struct smbios_system*)buffer;
             system->hdr.type = 1;
             system->hdr.length = sizeof(struct smbios_system);
-            system->hdr.handle = 0;
+            system->hdr.handle = handle_count++;
             system->vendor = system_vendor_len ? ++string_count : 0;
             system->product = system_product_len ? ++string_count : 0;
             system->version = system_version_len ? ++string_count : 0;
@@ -2253,28 +2282,10 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             *buffer++ = 0;
 
             string_count = 0;
-            board = (struct smbios_board*)buffer;
-            board->hdr.type = 2;
-            board->hdr.length = sizeof(struct smbios_board);
-            board->hdr.handle = 0;
-            board->vendor = board_vendor_len ? ++string_count : 0;
-            board->product = board_product_len ? ++string_count : 0;
-            board->version = board_version_len ? ++string_count : 0;
-            board->serial = board_serial_len ? ++string_count : 0;
-            buffer += sizeof(struct smbios_board);
-
-            copy_smbios_string(&buffer, board_vendor, board_vendor_len);
-            copy_smbios_string(&buffer, board_product, board_product_len);
-            copy_smbios_string(&buffer, board_version, board_version_len);
-            copy_smbios_string(&buffer, board_serial, board_serial_len);
-            if (!string_count) *buffer++ = 0;
-            *buffer++ = 0;
-
-            string_count = 0;
             chassis = (struct smbios_chassis*)buffer;
             chassis->hdr.type = 3;
             chassis->hdr.length = sizeof(struct smbios_chassis);
-            chassis->hdr.handle = 0;
+            chassis->hdr.handle = handle_count++;
             chassis->vendor = chassis_vendor_len ? ++string_count : 0;
             chassis->type = atoi(chassis_type);
             chassis->version = chassis_version_len ? ++string_count : 0;
@@ -2284,6 +2295,11 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             chassis->power_supply_state = 0x02; /* unknown */
             chassis->thermal_state = 0x02; /* unknown */
             chassis->security_status = 0x02; /* unknown */
+            chassis->oem_defined = 0;
+            chassis->height = 0; /* undefined */
+            chassis->num_power_cords = 0; /* unspecified */
+            chassis->num_contained_elements = 0;
+            chassis->contained_element_rec_length = 3;
             buffer += sizeof(struct smbios_chassis);
 
             copy_smbios_string(&buffer, chassis_vendor, chassis_vendor_len);
@@ -2291,6 +2307,49 @@ static NTSTATUS get_firmware_info(SYSTEM_FIRMWARE_TABLE_INFORMATION *sfti, ULONG
             copy_smbios_string(&buffer, chassis_serial, chassis_serial_len);
             copy_smbios_string(&buffer, chassis_asset_tag, chassis_asset_tag_len);
             if (!string_count) *buffer++ = 0;
+            *buffer++ = 0;
+
+            string_count = 0;
+            board = (struct smbios_board*)buffer;
+            board->hdr.type = 2;
+            board->hdr.length = sizeof(struct smbios_board);
+            board->hdr.handle = handle_count++;
+            board->vendor = board_vendor_len ? ++string_count : 0;
+            board->product = board_product_len ? ++string_count : 0;
+            board->version = board_version_len ? ++string_count : 0;
+            board->serial = board_serial_len ? ++string_count : 0;
+            board->asset_tag = board_asset_tag_len ? ++string_count : 0;
+            board->feature_flags = 0x5; /* hosting board, removable */
+            board->location = 0;
+            board->chassis_handle = chassis->hdr.handle;
+            board->board_type = 0xa; /* motherboard */
+            board->num_contained_handles = 0;
+            buffer += sizeof(struct smbios_board);
+
+            copy_smbios_string(&buffer, board_vendor, board_vendor_len);
+            copy_smbios_string(&buffer, board_product, board_product_len);
+            copy_smbios_string(&buffer, board_version, board_version_len);
+            copy_smbios_string(&buffer, board_serial, board_serial_len);
+            copy_smbios_string(&buffer, board_asset_tag, board_asset_tag_len);
+            if (!string_count) *buffer++ = 0;
+            *buffer++ = 0;
+
+            boot_info = (struct smbios_boot_info*)buffer;
+            boot_info->hdr.type = 32;
+            boot_info->hdr.length = sizeof(struct smbios_boot_info);
+            boot_info->hdr.handle = handle_count++;
+            memset(boot_info->reserved, 0, sizeof(boot_info->reserved));
+            memset(boot_info->boot_status, 0, sizeof(boot_info->boot_status)); /* no errors detected */
+            buffer += sizeof(struct smbios_boot_info);
+            *buffer++ = 0;
+            *buffer++ = 0;
+
+            end_of_table = (struct smbios_header*)buffer;
+            end_of_table->type = 127;
+            end_of_table->length = sizeof(struct smbios_header);
+            end_of_table->handle = handle_count++;
+            buffer += sizeof(struct smbios_header);
+            *buffer++ = 0;
             *buffer++ = 0;
 
             return STATUS_SUCCESS;
@@ -2625,127 +2684,100 @@ NTSTATUS WINAPI NtQuerySystemInformation(
         break;
     case SystemProcessInformation:
         {
-            SYSTEM_PROCESS_INFORMATION* spi = SystemInformation;
-            SYSTEM_PROCESS_INFORMATION* last = NULL;
-            HANDLE hSnap = 0;
-            WCHAR procname[1024];
-            WCHAR* exename;
-            DWORD wlen = 0;
-            DWORD procstructlen = 0;
-
-            SERVER_START_REQ( create_snapshot )
+            unsigned int process_count, i, j;
+            char *buffer = NULL;
+            unsigned int pos = 0;
+            if (Length && !(buffer = RtlAllocateHeap( GetProcessHeap(), 0, Length )))
             {
-                req->flags      = SNAP_PROCESS | SNAP_THREAD;
-                req->attributes = 0;
-                if (!(ret = wine_server_call( req )))
-                    hSnap = wine_server_ptr_handle( reply->handle );
+                ret = STATUS_NO_MEMORY;
+                break;
+            }
+
+            SERVER_START_REQ( list_processes )
+            {
+                wine_server_set_reply( req, buffer, Length );
+                ret = wine_server_call( req );
+                len = reply->info_size;
+                process_count = reply->process_count;
             }
             SERVER_END_REQ;
-            len = 0;
-            while (ret == STATUS_SUCCESS)
+
+            if (ret)
             {
-                SERVER_START_REQ( next_process )
+                RtlFreeHeap( GetProcessHeap(), 0, buffer );
+                break;
+            }
+
+            len = 0;
+
+            for (i = 0; i < process_count; i++)
+            {
+                SYSTEM_PROCESS_INFORMATION *nt_process = (SYSTEM_PROCESS_INFORMATION *)((char *)SystemInformation + len);
+                const struct process_info *server_process;
+                const WCHAR *server_name, *file_part;
+                ULONG proc_len;
+                ULONG name_len = 0;
+
+                pos = (pos + 7) & ~7;
+                server_process = (const struct process_info *)(buffer + pos);
+                pos += sizeof(*server_process);
+
+                server_name = (const WCHAR *)(buffer + pos);
+                file_part = server_name + (server_process->name_len / sizeof(WCHAR));
+                pos += server_process->name_len;
+                while (file_part > server_name && file_part[-1] != '\\')
                 {
-                    req->handle = wine_server_obj_handle( hSnap );
-                    req->reset = (len == 0);
-                    wine_server_set_reply( req, procname, sizeof(procname)-sizeof(WCHAR) );
-                    if (!(ret = wine_server_call( req )))
-                    {
-                        /* Make sure procname is 0 terminated */
-                        procname[wine_server_reply_size(reply) / sizeof(WCHAR)] = 0;
-
-                        /* Get only the executable name, not the path */
-                        if ((exename = wcsrchr(procname, '\\')) != NULL) exename++;
-                        else exename = procname;
-
-                        wlen = (wcslen(exename) + 1) * sizeof(WCHAR);
-
-                        procstructlen = sizeof(*spi) + wlen + ((reply->threads - 1) * sizeof(SYSTEM_THREAD_INFORMATION));
-
-                        if (Length >= len + procstructlen)
-                        {
-                            /* ftCreationTime, ftUserTime, ftKernelTime;
-                             * vmCounters, ioCounters
-                             */
- 
-                            memset(spi, 0, sizeof(*spi));
-
-                            spi->NextEntryOffset = procstructlen - wlen;
-                            spi->dwThreadCount = reply->threads;
-
-                            /* spi->pszProcessName will be set later on */
-
-                            spi->dwBasePriority = reply->priority;
-                            spi->UniqueProcessId = UlongToHandle(reply->pid);
-                            spi->ParentProcessId = UlongToHandle(reply->ppid);
-                            spi->HandleCount = reply->handles;
-
-                            /* spi->ti will be set later on */
-
-                        }
-                        len += procstructlen;
-                    }
-                }
-                SERVER_END_REQ;
- 
-                if (ret != STATUS_SUCCESS)
-                {
-                    if (ret == STATUS_NO_MORE_FILES) ret = STATUS_SUCCESS;
-                    break;
+                    file_part--;
+                    name_len++;
                 }
 
-                if (Length >= len)
+                proc_len = sizeof(*nt_process) + server_process->thread_count * sizeof(SYSTEM_THREAD_INFORMATION)
+                             + (name_len + 1) * sizeof(WCHAR);
+                len += proc_len;
+
+                if (len <= Length)
                 {
-                    int     i, j;
+                    memset(nt_process, 0, sizeof(*nt_process));
+                    if (i < process_count - 1)
+                        nt_process->NextEntryOffset = proc_len;
+                    nt_process->dwThreadCount = server_process->thread_count;
+                    nt_process->dwBasePriority = server_process->priority;
+                    nt_process->UniqueProcessId = UlongToHandle(server_process->pid);
+                    nt_process->ParentProcessId = UlongToHandle(server_process->parent_pid);
+                    nt_process->HandleCount = server_process->handle_count;
+                }
 
-                    /* set thread info */
-                    i = j = 0;
-                    while (ret == STATUS_SUCCESS)
+                pos = (pos + 7) & ~7;
+                for (j = 0; j < server_process->thread_count; j++)
+                {
+                    const struct thread_info *server_thread = (const struct thread_info *)(buffer + pos);
+
+                    if (len <= Length)
                     {
-                        SERVER_START_REQ( next_thread )
-                        {
-                            req->handle = wine_server_obj_handle( hSnap );
-                            req->reset = (j == 0);
-                            if (!(ret = wine_server_call( req )))
-                            {
-                                j++;
-                                if (UlongToHandle(reply->pid) == spi->UniqueProcessId)
-                                {
-                                    /* ftKernelTime, ftUserTime, ftCreateTime;
-                                     * dwTickCount, dwStartAddress
-                                     */
-
-                                    memset(&spi->ti[i], 0, sizeof(spi->ti));
-
-                                    spi->ti[i].CreateTime.QuadPart = 0xdeadbeef;
-                                    spi->ti[i].ClientId.UniqueProcess = UlongToHandle(reply->pid);
-                                    spi->ti[i].ClientId.UniqueThread  = UlongToHandle(reply->tid);
-                                    spi->ti[i].dwCurrentPriority = reply->base_pri + reply->delta_pri;
-                                    spi->ti[i].dwBasePriority = reply->base_pri;
-                                    i++;
-                                }
-                            }
-                        }
-                        SERVER_END_REQ;
+                        nt_process->ti[j].CreateTime.QuadPart = 0xdeadbeef;
+                        nt_process->ti[j].ClientId.UniqueProcess = UlongToHandle(server_process->pid);
+                        nt_process->ti[j].ClientId.UniqueThread = UlongToHandle(server_thread->tid);
+                        nt_process->ti[j].dwCurrentPriority = server_thread->current_priority;
+                        nt_process->ti[j].dwBasePriority = server_thread->base_priority;
                     }
-                    if (ret == STATUS_NO_MORE_FILES) ret = STATUS_SUCCESS;
 
-                    /* now append process name */
-                    spi->ProcessName.Buffer = (WCHAR*)((char*)spi + spi->NextEntryOffset);
-                    spi->ProcessName.Length = wlen - sizeof(WCHAR);
-                    spi->ProcessName.MaximumLength = wlen;
-                    memcpy( spi->ProcessName.Buffer, exename, wlen );
-                    spi->NextEntryOffset += wlen;
+                    pos += sizeof(*server_thread);
+                }
 
-                    last = spi;
-                    spi = (SYSTEM_PROCESS_INFORMATION*)((char*)spi + spi->NextEntryOffset);
+                if (len <= Length)
+                {
+                    nt_process->ProcessName.Buffer = (WCHAR *)&nt_process->ti[server_process->thread_count];
+                    nt_process->ProcessName.Length = name_len * sizeof(WCHAR);
+                    nt_process->ProcessName.MaximumLength = (name_len + 1) * sizeof(WCHAR);
+                    memcpy(nt_process->ProcessName.Buffer, file_part, name_len * sizeof(WCHAR));
+                    nt_process->ProcessName.Buffer[name_len] = 0;
                 }
             }
-            if (ret == STATUS_SUCCESS && last) last->NextEntryOffset = 0;
+
             if (len > Length) ret = STATUS_INFO_LENGTH_MISMATCH;
-            if (hSnap) NtClose(hSnap);
+            RtlFreeHeap( GetProcessHeap(), 0, buffer );
+	    break;
         }
-        break;
     case SystemProcessorPerformanceInformation:
         {
             SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *sppi = NULL;

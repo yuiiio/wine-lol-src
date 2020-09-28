@@ -3945,29 +3945,6 @@ static void test_AllocConsole(void)
     CloseHandle(pipe_write);
 }
 
-static void test_pseudo_console_child(HANDLE input)
-{
-    DWORD mode;
-    BOOL ret;
-
-    ret = GetConsoleMode(input, &mode);
-    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
-    ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |
-                ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS | ENABLE_AUTO_POSITION),
-       "mode = %x\n", mode);
-
-    ret = SetConsoleMode(input, mode & ~ENABLE_AUTO_POSITION);
-    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
-
-    ret = GetConsoleMode(input, &mode);
-    ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
-    ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |
-                ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS), "mode = %x\n", mode);
-
-    ret = SetConsoleMode(input, mode | ENABLE_AUTO_POSITION);
-    ok(ret, "SetConsoleMode failed: %u\n", GetLastError());
-}
-
 static DWORD WINAPI read_pipe_proc( void *handle )
 {
     char buf[64];
@@ -4141,7 +4118,13 @@ START_TEST(console)
 
     if (using_pseudo_console)
     {
-        test_pseudo_console_child(hConIn);
+        DWORD mode;
+
+        ret = GetConsoleMode(hConIn, &mode);
+        ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
+        ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |
+                    ENABLE_INSERT_MODE | ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS | ENABLE_AUTO_POSITION),
+           "mode = %x\n", mode);
         return;
     }
 

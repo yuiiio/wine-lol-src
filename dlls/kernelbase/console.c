@@ -293,23 +293,24 @@ BOOL WINAPI DECLSPEC_HOTPATCH AttachConsole( DWORD pid )
 
     RtlEnterCriticalSection( &console_section );
 
-    if (RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle)
+    SERVER_START_REQ( attach_console )
     {
-        RtlLeaveCriticalSection( &console_section );
-        WARN( "console already attached\n" );
-        SetLastError( ERROR_ACCESS_DENIED );
-        return FALSE;
+        req->pid = pid;
+        ret = !wine_server_call_err( req );
     }
+    SERVER_END_REQ;
 
-    ret = create_console_connection( NULL ) &&
-        console_ioctl( console_connection, IOCTL_CONDRV_BIND_PID, &pid, sizeof(pid), NULL, 0, NULL );
     if (ret)
     {
-        RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle = create_console_reference( console_connection );
-        ret = RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle && init_console_std_handles();
+        if ((ret = init_console_std_handles()))
+        {
+            HANDLE console = CreateFileW( L"CONIN$", GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, 0, NULL, OPEN_EXISTING, 0, 0 );
+            if (console != INVALID_HANDLE_VALUE) RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle = console;
+            else ret = FALSE;
+        }
+        if (!ret) FreeConsole();
     }
 
-    if (!ret) FreeConsole();
     RtlLeaveCriticalSection( &console_section );
     return ret;
 }

@@ -1077,9 +1077,15 @@ unsigned CONSOLE_GetNumHistoryEntries(void)
  */
 BOOL CONSOLE_GetEditionMode(HANDLE hConIn, int* mode)
 {
-    struct condrv_input_info info;
-    return DeviceIoControl( hConIn, IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL )
-        ? info.edition_mode : 0;
+    unsigned ret = 0;
+    SERVER_START_REQ(get_console_input_info)
+    {
+        req->handle = console_handle_unmap(hConIn);
+        if ((ret = !wine_server_call_err( req )))
+            *mode = reply->edition_mode;
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************

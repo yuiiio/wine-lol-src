@@ -132,7 +132,6 @@ extern char **main_envp DECLSPEC_HIDDEN;
 extern WCHAR **main_wargv DECLSPEC_HIDDEN;
 extern unsigned int server_cpus DECLSPEC_HIDDEN;
 extern BOOL is_wow64 DECLSPEC_HIDDEN;
-extern BOOL process_exiting DECLSPEC_HIDDEN;
 extern HANDLE keyed_event DECLSPEC_HIDDEN;
 extern timeout_t server_start_time DECLSPEC_HIDDEN;
 extern sigset_t server_block_set DECLSPEC_HIDDEN;
@@ -281,12 +280,12 @@ static inline void *get_signal_stack(void)
 
 static inline void mutex_lock( pthread_mutex_t *mutex )
 {
-    if (!process_exiting) pthread_mutex_lock( mutex );
+    pthread_mutex_lock( mutex );
 }
 
 static inline void mutex_unlock( pthread_mutex_t *mutex )
 {
-    if (!process_exiting) pthread_mutex_unlock( mutex );
+    pthread_mutex_unlock( mutex );
 }
 
 #ifndef _WIN64

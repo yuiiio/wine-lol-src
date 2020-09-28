@@ -775,7 +775,23 @@ NTSTATUS WINAPI NtDelayExecution( BOOLEAN alertable, const LARGE_INTEGER *timeou
 NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
                                     const OBJECT_ATTRIBUTES *attr, ULONG flags )
 {
-    return unix_funcs->NtCreateKeyedEvent( handle, access, attr, flags );
+    NTSTATUS ret;
+    data_size_t len;
+    struct object_attributes *objattr;
+
+    if ((ret = alloc_object_attributes( attr, &objattr, &len ))) return ret;
+
+    SERVER_START_REQ( create_keyed_event )
+    {
+        req->access = access;
+        wine_server_add_data( req, objattr, len );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
+    return ret;
 }
 
 /******************************************************************************
@@ -783,7 +799,22 @@ NTSTATUS WINAPI NtCreateKeyedEvent( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJECT_ATTRIBUTES *attr )
 {
-    return unix_funcs->NtOpenKeyedEvent( handle, access, attr );
+    NTSTATUS ret;
+
+    if ((ret = validate_open_object_attributes( attr ))) return ret;
+
+    SERVER_START_REQ( open_keyed_event )
+    {
+        req->access     = access;
+        req->attributes = attr->Attributes;
+        req->rootdir    = wine_server_obj_handle( attr->RootDirectory );
+        if (attr->ObjectName)
+            wine_server_add_data( req, attr->ObjectName->Buffer, attr->ObjectName->Length );
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************************
@@ -792,7 +823,16 @@ NTSTATUS WINAPI NtOpenKeyedEvent( HANDLE *handle, ACCESS_MASK access, const OBJE
 NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
                                      BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    return unix_funcs->NtWaitForKeyedEvent( handle, key, alertable, timeout );
+    select_op_t select_op;
+    UINT flags = SELECT_INTERRUPTIBLE;
+
+    if (!handle) handle = keyed_event;
+    if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;
+    if (alertable) flags |= SELECT_ALERTABLE;
+    select_op.keyed_event.op     = SELECT_KEYED_EVENT_WAIT;
+    select_op.keyed_event.handle = wine_server_obj_handle( handle );
+    select_op.keyed_event.key    = wine_server_client_ptr( key );
+    return unix_funcs->server_wait( &select_op, sizeof(select_op.keyed_event), flags, timeout );
 }
 
 /******************************************************************************
@@ -801,7 +841,16 @@ NTSTATUS WINAPI NtWaitForKeyedEvent( HANDLE handle, const void *key,
 NTSTATUS WINAPI NtReleaseKeyedEvent( HANDLE handle, const void *key,
                                      BOOLEAN alertable, const LARGE_INTEGER *timeout )
 {
-    return unix_funcs->NtReleaseKeyedEvent( handle, key, alertable, timeout );
+    select_op_t select_op;
+    UINT flags = SELECT_INTERRUPTIBLE;
+
+    if (!handle) handle = keyed_event;
+    if ((ULONG_PTR)key & 1) return STATUS_INVALID_PARAMETER_1;
+    if (alertable) flags |= SELECT_ALERTABLE;
+    select_op.keyed_event.op     = SELECT_KEYED_EVENT_RELEASE;
+    select_op.keyed_event.handle = wine_server_obj_handle( handle );
+    select_op.keyed_event.key    = wine_server_client_ptr( key );
+    return unix_funcs->server_wait( &select_op, sizeof(select_op.keyed_event), flags, timeout );
 }
 
 /******************************************************************

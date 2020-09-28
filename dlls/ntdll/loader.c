@@ -3832,6 +3832,8 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknow
     WINE_MODREF *wm;
     LPCWSTR load_path = NtCurrentTeb()->Peb->ProcessParameters->DllPath.Buffer;
 
+    pthread_sigmask( SIG_UNBLOCK, &server_block_set, NULL );
+
     if (process_detaching) return;
 
     RtlEnterCriticalSection( &loader_section );
@@ -4364,7 +4366,6 @@ void __wine_process_init(void)
     static const WCHAR kernel32W[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                                       's','y','s','t','e','m','3','2','\\',
                                       'k','e','r','n','e','l','3','2','.','d','l','l',0};
-    void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) = NULL;
     RTL_USER_PROCESS_PARAMETERS *params;
     WINE_MODREF *wm;
     NTSTATUS status;
@@ -4473,7 +4474,7 @@ void __wine_process_init(void)
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
 
-    unix_funcs->server_init_process_done( kernel32_start_process );
+    server_init_process_done();
 }
 
 /***********************************************************************

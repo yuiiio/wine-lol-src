@@ -321,6 +321,15 @@ done:
 
 
 /***********************************************************************
+ *           start_process
+ */
+void CDECL start_process( PRTL_THREAD_START_ROUTINE entry, BOOL suspend, void *relay )
+{
+    signal_start_thread( entry, NtCurrentTeb()->Peb, suspend, relay, NtCurrentTeb() );
+}
+
+
+/***********************************************************************
  *           abort_thread
  */
 void CDECL abort_thread( int status )
@@ -385,7 +394,7 @@ void wait_suspend( CONTEXT *context )
  *
  * Send an EXCEPTION_DEBUG_EVENT event to the debugger.
  */
-NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
+static NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
 {
     NTSTATUS ret;
     DWORD i;

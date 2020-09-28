@@ -208,12 +208,13 @@ void map_user_shared_data(void)
  *
  * NOTES: The first allocated TEB on NT is at 0x7ffde000.
  */
-TEB *thread_init( SIZE_T *info_size, BOOL *suspend )
+TEB *thread_init(void)
 {
     TEB *teb;
     void *addr;
     SIZE_T size;
     NTSTATUS status;
+    struct ntdll_thread_data *thread_data;
 
     virtual_init();
 
@@ -232,8 +233,8 @@ TEB *thread_init( SIZE_T *info_size, BOOL *suspend )
 
     /* allocate and initialize the PEB and initial TEB */
 
-    teb = unix_funcs->init_threading( &nb_threads, &__wine_ldt_copy, info_size, suspend, &server_cpus,
-                                      &is_wow64, &server_start_time );
+    teb = unix_funcs->virtual_alloc_first_teb();
+    unix_funcs->init_threading( &nb_threads, &__wine_ldt_copy );
 
     peb = teb->Peb;
     peb->FastPebLock        = &peb_lock;
@@ -265,9 +266,15 @@ TEB *thread_init( SIZE_T *info_size, BOOL *suspend )
      */
     peb->SessionId = 1;
 
+    thread_data = (struct ntdll_thread_data *)&teb->GdiTebBatch;
+    thread_data->request_fd = -1;
+    thread_data->reply_fd   = -1;
+    thread_data->wait_fd[0] = -1;
+    thread_data->wait_fd[1] = -1;
+
+    unix_funcs->dbg_init();
     unix_funcs->get_paths( &build_dir, &data_dir, &config_dir );
     fill_cpu_info();
-    server_init_process();
     return teb;
 }
 

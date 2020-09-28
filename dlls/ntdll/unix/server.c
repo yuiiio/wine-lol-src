@@ -590,7 +590,7 @@ static void invoke_system_apc( const apc_call_t *call, apc_result_t *result )
  *              server_select
  */
 unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT flags,
-                            timeout_t abs_timeout, CONTEXT *context, pthread_mutex_t *mutex,
+                            timeout_t abs_timeout, CONTEXT *context, RTL_CRITICAL_SECTION *cs,
                             user_apc_t *user_apc )
 {
     unsigned int ret;
@@ -649,10 +649,10 @@ unsigned int server_select( const select_op_t *select_op, data_size_t size, UINT
                 size = offsetof( select_op_t, signal_and_wait.signal );
         }
         pthread_sigmask( SIG_SETMASK, &old_set, NULL );
-        if (mutex)
+        if (cs)
         {
-            pthread_mutex_unlock( mutex );
-            mutex = NULL;
+            RtlLeaveCriticalSection( cs );
+            cs = NULL;
         }
         if (ret != STATUS_PENDING) break;
 

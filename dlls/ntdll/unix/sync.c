@@ -78,7 +78,15 @@ HANDLE keyed_event = 0;
 
 static const LARGE_INTEGER zero_timeout;
 
-static pthread_mutex_t addr_mutex = PTHREAD_MUTEX_INITIALIZER;
+static RTL_CRITICAL_SECTION addr_section;
+static RTL_CRITICAL_SECTION_DEBUG addr_section_debug =
+{
+    0, 0, &addr_section,
+    { &addr_section_debug.ProcessLocksList, &addr_section_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": addr_section") }
+};
+static RTL_CRITICAL_SECTION addr_section = { &addr_section_debug, -1, 0, 0, 0, 0 };
+
 
 /* return a monotonic time counter, in Win32 ticks */
 static inline ULONGLONG monotonic_counter(void)
@@ -2245,10 +2253,10 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     if ((ret = fast_wait_addr( addr, cmp, size, timeout )) != STATUS_NOT_IMPLEMENTED)
         return ret;
 
-    pthread_mutex_lock( &addr_mutex );
+    RtlEnterCriticalSection( &addr_section );
     if (!compare_addr( addr, cmp, size ))
     {
-        pthread_mutex_unlock( &addr_mutex );
+        RtlLeaveCriticalSection( &addr_section );
         return STATUS_SUCCESS;
     }
 
@@ -2264,8 +2272,7 @@ NTSTATUS WINAPI RtlWaitOnAddress( const void *addr, const void *cmp, SIZE_T size
     select_op.keyed_event.handle = wine_server_obj_handle( keyed_event );
     select_op.keyed_event.key    = wine_server_client_ptr( addr );
 
-    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE,
-                          abs_timeout, NULL, &addr_mutex, NULL );
+    return server_select( &select_op, sizeof(select_op.keyed_event), SELECT_INTERRUPTIBLE, abs_timeout, NULL, &addr_section, NULL );
 }
 
 /***********************************************************************
@@ -2275,9 +2282,9 @@ void WINAPI RtlWakeAddressAll( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    pthread_mutex_lock( &addr_mutex );
+    RtlEnterCriticalSection( &addr_section );
     while (NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout ) == STATUS_SUCCESS) {}
-    pthread_mutex_unlock( &addr_mutex );
+    RtlLeaveCriticalSection( &addr_section );
 }
 
 /***********************************************************************
@@ -2287,7 +2294,7 @@ void WINAPI RtlWakeAddressSingle( const void *addr )
 {
     if (fast_wake_addr( addr ) != STATUS_NOT_IMPLEMENTED) return;
 
-    pthread_mutex_lock( &addr_mutex );
+    RtlEnterCriticalSection( &addr_section );
     NtReleaseKeyedEvent( 0, addr, 0, &zero_timeout );
-    pthread_mutex_unlock( &addr_mutex );
+    RtlLeaveCriticalSection( &addr_section );
 }

@@ -1488,7 +1488,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputA( HANDLE handle, const CHAR_INF
 BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputW( HANDLE handle, const CHAR_INFO *buffer,
                                                    COORD size, COORD coord, SMALL_RECT *region )
 {
-    struct condrv_output_params *params;
+    struct condrv_write_output_params *params;
     unsigned int width, height, y;
     size_t params_size;
     BOOL ret;
@@ -1535,7 +1535,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputW( HANDLE handle, const CHAR_INF
 BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputAttribute( HANDLE handle, const WORD *attr, DWORD length,
                                                            COORD coord, DWORD *written )
 {
-    struct condrv_output_params *params;
+    struct condrv_write_output_params *params;
     size_t size;
     BOOL ret;
 
@@ -1602,7 +1602,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputCharacterA( HANDLE handle, LPCST
 BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleOutputCharacterW( HANDLE handle, LPCWSTR str, DWORD length,
                                                             COORD coord, DWORD *written )
 {
-    struct condrv_output_params *params;
+    struct condrv_write_output_params *params;
     size_t size;
     BOOL ret;
 

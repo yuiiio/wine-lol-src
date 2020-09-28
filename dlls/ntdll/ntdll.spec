@@ -208,7 +208,7 @@
 # @ stub NtEnumerateSystemEnvironmentValuesEx
 @ stdcall -syscall NtEnumerateValueKey(long long long ptr long ptr)
 @ stub NtExtendSection
-@ stdcall -syscall NtFilterToken(long long ptr ptr ptr ptr)
+# @ stub NtFilterToken
 @ stdcall -syscall NtFindAtom(ptr long ptr)
 @ stdcall -syscall NtFlushBuffersFile(long ptr)
 @ stdcall -syscall NtFlushInstructionCache(long ptr long)

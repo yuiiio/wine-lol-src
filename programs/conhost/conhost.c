@@ -25,7 +25,6 @@
 #include <winuser.h>
 #include <winternl.h>
 
-#include "wine/condrv.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 
@@ -34,7 +33,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(conhost);
 struct console
 {
     HANDLE                server;        /* console server handle */
-    unsigned int          mode;          /* input mode */
 };
 
 static void *ioctl_buffer;
@@ -55,22 +53,8 @@ static void *alloc_ioctl_buffer( size_t size )
 static NTSTATUS console_input_ioctl( struct console *console, unsigned int code, const void *in_data,
                                      size_t in_size, size_t *out_size )
 {
-    switch (code)
-    {
-    case IOCTL_CONDRV_GET_MODE:
-        {
-            DWORD *mode;
-            TRACE( "returning mode %x\n", console->mode );
-            if (in_size || *out_size != sizeof(*mode)) return STATUS_INVALID_PARAMETER;
-            if (!(mode = alloc_ioctl_buffer( *out_size ))) return STATUS_NO_MEMORY;
-            *mode = console->mode;
-            return STATUS_SUCCESS;
-        }
-
-    default:
-        FIXME( "unsupported ioctl %x\n", code );
-        return STATUS_NOT_SUPPORTED;
-    }
+    FIXME( "unsupported ioctl %x\n", code );
+    return STATUS_NOT_SUPPORTED;
 }
 
 static NTSTATUS process_console_ioctls( struct console *console )
@@ -177,10 +161,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
 
     for (i = 0; i < argc; i++) TRACE("%s ", wine_dbgstr_w(argv[i]));
     TRACE("\n");
-
-    console.mode = ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT |
-                   ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT | ENABLE_INSERT_MODE |
-                   ENABLE_QUICK_EDIT_MODE | ENABLE_EXTENDED_FLAGS | ENABLE_AUTO_POSITION;
 
     for (i = 1; i < argc; i++)
     {

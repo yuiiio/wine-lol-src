@@ -51,12 +51,6 @@ static BOOL is_wow64;
 */
 static DWORD one_before_last_pid = 0;
 
-static inline DWORD_PTR get_affinity_mask(DWORD num_cpus)
-{
-    if (num_cpus >= sizeof(DWORD_PTR) * 8) return ~(DWORD_PTR)0;
-    return ((DWORD_PTR)1 << num_cpus) - 1;
-}
-
 #define NTDLL_GET_PROC(func) do {                     \
     p ## func = (void*)GetProcAddress(hntdll, #func); \
     if(!p ## func) { \
@@ -2257,8 +2251,8 @@ static void test_affinity(void)
     status = pNtQueryInformationProcess( GetCurrentProcess(), ProcessBasicInformation, &pbi, sizeof(pbi), NULL );
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     proc_affinity = pbi.AffinityMask;
-    ok( proc_affinity == get_affinity_mask( si.dwNumberOfProcessors ), "Unexpected process affinity\n" );
-    proc_affinity = (DWORD_PTR)1 << si.dwNumberOfProcessors;
+    ok( proc_affinity == (1 << si.dwNumberOfProcessors) - 1, "Unexpected process affinity\n" );
+    proc_affinity = 1 << si.dwNumberOfProcessors;
     status = pNtSetInformationProcess( GetCurrentProcess(), ProcessAffinityMask, &proc_affinity, sizeof(proc_affinity) );
     ok( status == STATUS_INVALID_PARAMETER,
         "Expected STATUS_INVALID_PARAMETER, got %08x\n", status);
@@ -2270,8 +2264,8 @@ static void test_affinity(void)
 
     status = pNtQueryInformationThread( GetCurrentThread(), ThreadBasicInformation, &tbi, sizeof(tbi), NULL );
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
-    ok( tbi.AffinityMask == get_affinity_mask( si.dwNumberOfProcessors ), "Unexpected thread affinity\n" );
-    thread_affinity = (DWORD_PTR)1 << si.dwNumberOfProcessors;
+    ok( tbi.AffinityMask == (1 << si.dwNumberOfProcessors) - 1, "Unexpected thread affinity\n" );
+    thread_affinity = 1 << si.dwNumberOfProcessors;
     status = pNtSetInformationThread( GetCurrentThread(), ThreadAffinityMask, &thread_affinity, sizeof(thread_affinity) );
     ok( status == STATUS_INVALID_PARAMETER,
         "Expected STATUS_INVALID_PARAMETER, got %08x\n", status);
@@ -2325,7 +2319,7 @@ static void test_affinity(void)
     {
         status = pNtQueryInformationThread( GetCurrentThread(), ThreadBasicInformation, &tbi, sizeof(tbi), NULL );
         ok(status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
-        ok( tbi.AffinityMask == get_affinity_mask( si.dwNumberOfProcessors ), "unexpected affinity %#lx\n", tbi.AffinityMask );
+        ok( tbi.AffinityMask == (1 << si.dwNumberOfProcessors) - 1, "unexpected affinity %#lx\n", tbi.AffinityMask );
     }
     else
         skip("Cannot test thread affinity mask for 'all processors' flag\n");
@@ -2347,13 +2341,13 @@ static void test_affinity(void)
     ok( status == STATUS_INVALID_PARAMETER,
         "Expected STATUS_INVALID_PARAMETER, got %08x\n", status);
 
-    proc_affinity = get_affinity_mask( si.dwNumberOfProcessors );
+    proc_affinity = (1 << si.dwNumberOfProcessors) - 1;
     status = pNtSetInformationProcess( GetCurrentProcess(), ProcessAffinityMask, &proc_affinity, sizeof(proc_affinity) );
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
     /* Resetting the process affinity also resets the thread affinity */
     status = pNtQueryInformationThread( GetCurrentThread(), ThreadBasicInformation, &tbi, sizeof(tbi), NULL );
     ok( status == STATUS_SUCCESS, "Expected STATUS_SUCCESS, got %08x\n", status);
-    ok( tbi.AffinityMask == get_affinity_mask( si.dwNumberOfProcessors ),
+    ok( tbi.AffinityMask == (1 << si.dwNumberOfProcessors) - 1,
         "Unexpected thread affinity\n" );
 }
 
@@ -2451,13 +2445,13 @@ static void test_NtGetCurrentProcessorNumber(void)
     ok(status == STATUS_SUCCESS, "got 0x%x (expected STATUS_SUCCESS)\n", status);
 
     /* allow the test to run on all processors */
-    new_mask = get_affinity_mask( si.dwNumberOfProcessors );
+    new_mask = (1 << si.dwNumberOfProcessors) - 1;
     status = pNtSetInformationProcess(GetCurrentProcess(), ProcessAffinityMask, &new_mask, sizeof(new_mask));
     ok(status == STATUS_SUCCESS, "got 0x%x (expected STATUS_SUCCESS)\n", status);
 
     for (i = 0; i < si.dwNumberOfProcessors; i++)
     {
-        new_mask = (DWORD_PTR)1 << i;
+        new_mask = 1 << i;
         status = pNtSetInformationThread(GetCurrentThread(), ThreadAffinityMask, &new_mask, sizeof(new_mask));
         ok(status == STATUS_SUCCESS, "%d: got 0x%x (expected STATUS_SUCCESS)\n", i, status);
 

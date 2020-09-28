@@ -1453,7 +1453,7 @@ void server_init_process(void)
 /***********************************************************************
  *           server_init_process_done
  */
-void server_init_process_done(void)
+void CDECL server_init_process_done( void *relay )
 {
     PEB *peb = NtCurrentTeb()->Peb;
     IMAGE_NT_HEADERS *nt = get_exe_nt_header();

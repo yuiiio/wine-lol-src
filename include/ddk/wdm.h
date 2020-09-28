@@ -1841,7 +1841,6 @@ void      WINAPI RtlCopyMemoryNonTemporal(void*,const void*,SIZE_T);
 #else
 #define RtlCopyMemoryNonTemporal RtlCopyMemory
 #endif
-ULONG64   WINAPI RtlGetEnabledExtendedFeatures(ULONG64);
 BOOLEAN   WINAPI RtlIsNtDdiVersionAvailable(ULONG);
 
 NTSTATUS  WINAPI ZwAddBootEntry(PUNICODE_STRING,PUNICODE_STRING);

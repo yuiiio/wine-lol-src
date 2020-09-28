@@ -1105,7 +1105,6 @@
 @ stdcall RtlGetProductInfo(long long long long ptr)
 @ stdcall RtlGetSaclSecurityDescriptor(ptr ptr ptr ptr)
 @ stub RtlGetSetBootStatusData
-@ stdcall RtlGetEnabledExtendedFeatures(int64)
 @ stdcall RtlGetVersion(ptr)
 @ stdcall RtlHashUnicodeString(ptr long long ptr)
 @ stdcall RtlIdnToAscii(long wstr long ptr ptr)

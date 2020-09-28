@@ -33,7 +33,6 @@
 #include "winnls.h"
 #include "winternl.h"
 #include "winerror.h"
-#include "ddk/wdm.h"
 
 #include "kernelbase.h"
 #include "wine/exception.h"
@@ -1168,23 +1167,6 @@ LPVOID WINAPI DECLSPEC_HOTPATCH VirtualAllocExNuma( HANDLE process, void *addr, 
     if (node) FIXME( "Ignoring preferred node %u\n", node );
     return VirtualAllocEx( process, addr, size, type, protect );
 }
-
-
-/***********************************************************************
- * CPU functions
- ***********************************************************************/
-
-
-#if defined(__i386__) || defined(__x86_64__)
-/***********************************************************************
- *             GetEnabledXStateFeatures   (kernelbase.@)
- */
-DWORD64 WINAPI GetEnabledXStateFeatures(void)
-{
-    TRACE( "\n" );
-    return RtlGetEnabledExtendedFeatures( ~(ULONG64)0 );
-}
-#endif
 
 
 /***********************************************************************

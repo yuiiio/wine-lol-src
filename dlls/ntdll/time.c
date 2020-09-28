@@ -376,11 +376,30 @@ LONGLONG WINAPI RtlGetSystemTimePrecise( void )
 }
 
 /******************************************************************************
+ *  NtQueryPerformanceCounter	[NTDLL.@]
+ */
+NTSTATUS WINAPI NtQueryPerformanceCounter( LARGE_INTEGER *counter, LARGE_INTEGER *frequency )
+{
+    NTSTATUS status;
+
+    __TRY
+    {
+        status = unix_funcs->NtQueryPerformanceCounter( counter, frequency );
+    }
+    __EXCEPT_PAGE_FAULT
+    {
+        return STATUS_ACCESS_VIOLATION;
+    }
+    __ENDTRY
+    return status;
+}
+
+/******************************************************************************
  *  RtlQueryPerformanceCounter   [NTDLL.@]
  */
 BOOL WINAPI DECLSPEC_HOTPATCH RtlQueryPerformanceCounter( LARGE_INTEGER *counter )
 {
-    NtQueryPerformanceCounter( counter, NULL );
+    unix_funcs->NtQueryPerformanceCounter( counter, NULL );
     return TRUE;
 }
 

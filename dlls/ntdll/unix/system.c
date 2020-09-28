@@ -1729,8 +1729,7 @@ static BOOL reg_query_value( HKEY key, LPCWSTR name, DWORD type, void *data, DWO
 
     if (count > sizeof(buf) - sizeof(KEY_VALUE_PARTIAL_INFORMATION)) return FALSE;
 
-    nameW.Buffer = (WCHAR *)name;
-    nameW.Length = wcslen( name ) * sizeof(WCHAR);
+    RtlInitUnicodeString( &nameW, name );
     if (NtQueryValueKey( key, &nameW, KeyValuePartialInformation, buf, sizeof(buf), &count ))
         return FALSE;
 
@@ -1757,7 +1756,7 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
     HANDLE key, subkey, subkey_dyn = 0;
     ULONG idx, len;
     OBJECT_ATTRIBUTES attr;
-    UNICODE_STRING nameW;
+    UNICODE_STRING nameW, nameDynamicW;
     WCHAR yearW[16];
     char buffer[128];
     KEY_BASIC_INFORMATION *info = (KEY_BASIC_INFORMATION *)buffer;
@@ -1765,8 +1764,9 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
     sprintf( buffer, "%u", year );
     ascii_to_unicode( yearW, buffer, strlen(buffer) + 1 );
 
-    nameW.Buffer = (WCHAR *)Time_ZonesW;
-    nameW.Length = sizeof(Time_ZonesW) - sizeof(WCHAR);
+    RtlInitUnicodeString( &nameW, Time_ZonesW );
+    RtlInitUnicodeString( &nameDynamicW, Dynamic_DstW );
+
     InitializeObjectAttributes( &attr, &nameW, 0, 0, NULL );
     if (NtOpenKey( &key, KEY_READ, &attr )) return;
 
@@ -1785,7 +1785,7 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
 
         nameW.Buffer = info->Name;
         nameW.Length = info->NameLength;
-        attr.RootDirectory = key;
+        InitializeObjectAttributes( &attr, &nameW, 0, key, NULL );
         if (NtOpenKey( &subkey, KEY_READ, &attr )) continue;
 
         memset( &reg_tzi, 0, sizeof(reg_tzi) );
@@ -1801,9 +1801,7 @@ static void find_reg_tz_info(RTL_DYNAMIC_TIME_ZONE_INFORMATION *tzi, const char*
             goto next;
 
         /* Check for Dynamic DST entry first */
-        nameW.Buffer = (WCHAR *)Dynamic_DstW;
-        nameW.Length = sizeof(Dynamic_DstW) - sizeof(WCHAR);
-        attr.RootDirectory = subkey;
+        InitializeObjectAttributes( &attr, &nameDynamicW, 0, subkey, NULL );
         if (!NtOpenKey( &subkey_dyn, KEY_READ, &attr ))
         {
             is_dynamic = reg_query_value( subkey_dyn, yearW, REG_BINARY, &tz_data, sizeof(tz_data) );

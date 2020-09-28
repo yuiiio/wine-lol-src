@@ -28,7 +28,7 @@ struct ldt_copy;
 struct msghdr;
 
 /* increment this when you change the function table */
-#define NTDLL_UNIXLIB_VERSION 27
+#define NTDLL_UNIXLIB_VERSION 26
 
 struct unix_funcs
 {
@@ -45,9 +45,6 @@ struct unix_funcs
                                                 const OBJECT_ATTRIBUTES *attr, ULONG flags );
     NTSTATUS      (WINAPI *NtCreateMutant)( HANDLE *handle, ACCESS_MASK access,
                                             const OBJECT_ATTRIBUTES *attr, BOOLEAN owned );
-    NTSTATUS      (WINAPI *NtCreateSection)( HANDLE *handle, ACCESS_MASK access,
-                                             const OBJECT_ATTRIBUTES *attr, const LARGE_INTEGER *size,
-                                             ULONG protect, ULONG sec_flags, HANDLE file );
     NTSTATUS      (WINAPI *NtCreateSemaphore)( HANDLE *handle, ACCESS_MASK access,
                                                const OBJECT_ATTRIBUTES *attr, LONG initial, LONG max );
     NTSTATUS      (WINAPI *NtCreateTimer)( HANDLE *handle, ACCESS_MASK access,
@@ -75,8 +72,6 @@ struct unix_funcs
                                               const OBJECT_ATTRIBUTES *attr );
     NTSTATUS      (WINAPI *NtOpenMutant)( HANDLE *handle, ACCESS_MASK access,
                                           const OBJECT_ATTRIBUTES *attr );
-    NTSTATUS      (WINAPI *NtOpenSection)( HANDLE *handle, ACCESS_MASK access,
-                                           const OBJECT_ATTRIBUTES *attr );
     NTSTATUS      (WINAPI *NtOpenSemaphore)( HANDLE *handle, ACCESS_MASK access,
                                              const OBJECT_ATTRIBUTES *attr );
     NTSTATUS      (WINAPI *NtOpenTimer)( HANDLE *handle, ACCESS_MASK access,

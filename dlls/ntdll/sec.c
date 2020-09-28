@@ -1707,7 +1707,7 @@ NTSTATUS WINAPI RtlQueryInformationAcl(
     return status;
 }
 
-NTSTATUS WINAPI RtlConvertToAutoInheritSecurityObject(
+BOOL WINAPI RtlConvertToAutoInheritSecurityObject(
         PSECURITY_DESCRIPTOR pdesc,
         PSECURITY_DESCRIPTOR cdesc,
         PSECURITY_DESCRIPTOR* ndesc,
@@ -1717,5 +1717,5 @@ NTSTATUS WINAPI RtlConvertToAutoInheritSecurityObject(
 {
     FIXME("%p %p %p %p %d %p - stub\n", pdesc, cdesc, ndesc, objtype, isdir, genmap);
 
-    return STATUS_NOT_IMPLEMENTED;
+    return FALSE;
 }

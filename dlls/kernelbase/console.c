@@ -1503,6 +1503,9 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleInputA( HANDLE handle, const INPUT_REC
 BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleInputW( HANDLE handle, const INPUT_RECORD *buffer,
                                                   DWORD count, DWORD *written )
 {
+    DWORD events_written = 0;
+    BOOL ret;
+
     TRACE( "(%p,%p,%d,%p)\n", handle, buffer, count, written );
 
     if (count > 0 && !buffer)
@@ -1510,17 +1513,21 @@ BOOL WINAPI DECLSPEC_HOTPATCH WriteConsoleInputW( HANDLE handle, const INPUT_REC
         SetLastError( ERROR_INVALID_ACCESS );
         return FALSE;
     }
+    SERVER_START_REQ( write_console_input )
+    {
+        req->handle = console_handle_unmap( handle );
+        wine_server_add_data( req, buffer, count * sizeof(INPUT_RECORD) );
+        if ((ret = !wine_server_call_err( req ))) events_written = reply->written;
+    }
+    SERVER_END_REQ;
 
-    if (!DeviceIoControl( handle, IOCTL_CONDRV_WRITE_INPUT, (void *)buffer, count * sizeof(*buffer), NULL, 0, NULL, NULL ))
-        return FALSE;
-
-    if (!written)
+    if (written) *written = events_written;
+    else
     {
         SetLastError( ERROR_INVALID_ACCESS );
-        return FALSE;
+        ret = FALSE;
     }
-    *written = count;
-    return TRUE;
+    return ret;
 }
 
 

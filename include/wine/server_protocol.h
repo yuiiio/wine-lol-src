@@ -3197,6 +3197,8 @@ struct accept_hardware_message_request
 {
     struct request_header __header;
     unsigned int    hw_id;
+    int             remove;
+    char __pad_20[4];
 };
 struct accept_hardware_message_reply
 {
@@ -6669,7 +6671,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 617
+#define SERVER_PROTOCOL_VERSION 616
 
 /* ### protocol_version end ### */
 

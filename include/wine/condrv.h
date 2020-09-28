@@ -37,7 +37,6 @@
 #define IOCTL_CONDRV_SET_TITLE             CTL_CODE(FILE_DEVICE_CONSOLE, 16, METHOD_BUFFERED, FILE_WRITE_PROPERTIES)
 
 /* console output ioctls */
-#define IOCTL_CONDRV_READ_OUTPUT           CTL_CODE(FILE_DEVICE_CONSOLE, 30, METHOD_BUFFERED, FILE_READ_DATA)
 #define IOCTL_CONDRV_WRITE_OUTPUT          CTL_CODE(FILE_DEVICE_CONSOLE, 31, METHOD_BUFFERED, FILE_WRITE_DATA)
 #define IOCTL_CONDRV_GET_OUTPUT_INFO       CTL_CODE(FILE_DEVICE_CONSOLE, 32, METHOD_BUFFERED, FILE_READ_PROPERTIES)
 #define IOCTL_CONDRV_SET_OUTPUT_INFO       CTL_CODE(FILE_DEVICE_CONSOLE, 33, METHOD_BUFFERED, FILE_WRITE_PROPERTIES)
@@ -84,7 +83,7 @@ struct condrv_input_info_params
     struct condrv_input_info info;    /* input_info */
 };
 
-/* IOCTL_CONDRV_WRITE_OUTPUT and IOCTL_CONDRV_READ_OUTPUT params */
+/* IOCTL_CONDRV_WRITE_OUTPUT */
 struct condrv_output_params
 {
     unsigned int  x;                  /* destination position */

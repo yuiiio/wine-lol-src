@@ -4121,7 +4121,6 @@ START_TEST(console)
         DWORD mode;
 
         ret = GetConsoleMode(hConIn, &mode);
-        todo_wine
         ok(ret, "GetConsoleMode failed: %u\n", GetLastError());
         todo_wine
         ok(mode == (ENABLE_PROCESSED_INPUT | ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_MOUSE_INPUT |

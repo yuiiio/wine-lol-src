@@ -28,7 +28,7 @@ struct msghdr;
 struct _DISPATCHER_CONTEXT;
 
 /* increment this when you change the function table */
-#define NTDLL_UNIXLIB_VERSION 70
+#define NTDLL_UNIXLIB_VERSION 69
 
 struct unix_funcs
 {
@@ -303,7 +303,7 @@ struct unix_funcs
     void          (CDECL *get_initial_console)( HANDLE *handle, HANDLE *std_in,
                                                 HANDLE *std_out, HANDLE *std_err );
     void          (CDECL *get_initial_directory)( UNICODE_STRING *dir );
-    USHORT *      (CDECL *get_unix_codepage_data)(void);
+    void          (CDECL *get_unix_codepage)( CPTABLEINFO *table );
     void          (CDECL *get_locales)( WCHAR *sys, WCHAR *user );
     const char *  (CDECL *get_version)(void);
     const char *  (CDECL *get_build_id)(void);

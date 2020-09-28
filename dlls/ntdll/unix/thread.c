@@ -123,6 +123,7 @@ struct startup_info
 {
     PRTL_THREAD_START_ROUTINE entry;
     void                     *arg;
+    void                     *relay;
     HANDLE                    actctx;
 };
 
@@ -149,38 +150,17 @@ static void start_thread( TEB *teb )
         RtlActivateActivationContext( 0, info->actctx, &cookie );
         RtlReleaseActivationContext( info->actctx );
     }
-    signal_start_thread( info->entry, info->arg, suspend, RtlUserThreadStart, teb );
+    signal_start_thread( info->entry, info->arg, suspend, info->relay, teb );
 }
 
 
 /***********************************************************************
- *           update_attr_list
- *
- * Update the output attributes.
+ *           create_thread
  */
-static void update_attr_list( PS_ATTRIBUTE_LIST *attr, const CLIENT_ID *id )
-{
-    SIZE_T i, count = (attr->TotalLength - sizeof(attr->TotalLength)) / sizeof(PS_ATTRIBUTE);
-
-    for (i = 0; i < count; i++)
-    {
-        if (attr->Attributes[i].Attribute == PS_ATTRIBUTE_CLIENT_ID)
-        {
-            SIZE_T size = min( attr->Attributes[i].Size, sizeof(*id) );
-            memcpy( attr->Attributes[i].ValuePtr, id, size );
-            if (attr->Attributes[i].ReturnLength) *attr->Attributes[i].ReturnLength = size;
-        }
-    }
-}
-
-
-/***********************************************************************
- *              NtCreateThreadEx   (NTDLL.@)
- */
-NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
-                                  HANDLE process, PRTL_THREAD_START_ROUTINE start, void *param,
-                                  ULONG flags, SIZE_T zero_bits, SIZE_T stack_commit,
-                                  SIZE_T stack_reserve, PS_ATTRIBUTE_LIST *attr_list )
+NTSTATUS CDECL create_thread( HANDLE *handle, ACCESS_MASK access, OBJECT_ATTRIBUTES *attr,
+                              HANDLE process, PRTL_THREAD_START_ROUTINE start, void *param, void *relay,
+                              ULONG flags, SIZE_T stack_commit, SIZE_T stack_reserve,
+                              CLIENT_ID *id )
 {
     sigset_t sigset;
     pthread_t pthread_id;
@@ -192,7 +172,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     DWORD tid = 0;
     int request_pipe[2];
     SIZE_T extra_stack = PTHREAD_STACK_MIN;
-    CLIENT_ID client_id;
     HANDLE actctx;
     TEB *teb;
     INITIAL_TEB stack;
@@ -217,9 +196,11 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
         if (result.create_thread.status == STATUS_SUCCESS)
         {
             *handle = wine_server_ptr_handle( result.create_thread.handle );
-            client_id.UniqueProcess = ULongToHandle( result.create_thread.pid );
-            client_id.UniqueThread  = ULongToHandle( result.create_thread.tid );
-            if (attr_list) update_attr_list( attr_list, &client_id );
+            if (id)
+            {
+                id->UniqueProcess = ULongToHandle( result.create_thread.pid );
+                id->UniqueThread  = ULongToHandle( result.create_thread.tid );
+            }
         }
         return result.create_thread.status;
     }
@@ -232,8 +213,6 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
         return STATUS_TOO_MANY_OPENED_FILES;
     }
     server_send_fd( request_pipe[0] );
-
-    if (!access) access = THREAD_ALL_ACCESS;
 
     SERVER_START_REQ( new_thread )
     {
@@ -270,13 +249,14 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
         goto done;
     }
 
-    client_id.UniqueProcess = ULongToHandle( GetCurrentProcessId() );
-    client_id.UniqueThread  = ULongToHandle( tid );
-    teb->ClientId = client_id;
+    teb->ClientId.UniqueProcess = ULongToHandle( GetCurrentProcessId() );
+    teb->ClientId.UniqueThread  = ULongToHandle( tid );
+    if (id) *id = teb->ClientId;
 
     info = (struct startup_info *)(teb + 1);
     info->entry  = start;
     info->arg    = param;
+    info->relay  = relay;
     info->actctx = actctx;
 
     teb->Tib.StackBase = stack.StackBase;
@@ -306,15 +286,11 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
 
 done:
     pthread_sigmask( SIG_SETMASK, &sigset, NULL );
-    if (status)
-    {
-        NtClose( *handle );
-        RtlReleaseActivationContext( actctx );
-        close( request_pipe[1] );
-        return status;
-    }
-    if (attr_list) update_attr_list( attr_list, &client_id );
-    return STATUS_SUCCESS;
+    if (!status) return STATUS_SUCCESS;
+    NtClose( *handle );
+    RtlReleaseActivationContext( actctx );
+    close( request_pipe[1] );
+    return status;
 }
 
 

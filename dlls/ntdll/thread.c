@@ -256,10 +256,12 @@ void WINAPI RtlExitUserThread( ULONG status )
 
 
 /***********************************************************************
- *           RtlUserThreadStart (NTDLL.@)
+ *           call_thread_entry_point
  */
 #ifdef __i386__
-__ASM_STDCALL_FUNC( RtlUserThreadStart, 8,
+
+extern void call_thread_entry_point(void) DECLSPEC_HIDDEN;
+__ASM_GLOBAL_FUNC( call_thread_entry_point,
                    "pushl %ebp\n\t"
                    __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
                    __ASM_CFI(".cfi_rel_offset %ebp,0\n\t")
@@ -270,7 +272,7 @@ __ASM_STDCALL_FUNC( RtlUserThreadStart, 8,
                    "call " __ASM_NAME("call_thread_func") )
 
 /* wrapper for apps that don't declare the thread function correctly */
-extern DWORD call_thread_func_wrapper( PRTL_THREAD_START_ROUTINE entry, void *arg );
+extern DWORD call_thread_func_wrapper( LPTHREAD_START_ROUTINE entry, void *arg );
 __ASM_GLOBAL_FUNC(call_thread_func_wrapper,
                   "pushl %ebp\n\t"
                   __ASM_CFI(".cfi_adjust_cfa_offset 4\n\t")
@@ -285,7 +287,7 @@ __ASM_GLOBAL_FUNC(call_thread_func_wrapper,
                   __ASM_CFI(".cfi_same_value %ebp\n\t")
                   "ret" )
 
-void DECLSPEC_HIDDEN call_thread_func( PRTL_THREAD_START_ROUTINE entry, void *arg )
+void DECLSPEC_HIDDEN call_thread_func( LPTHREAD_START_ROUTINE entry, void *arg )
 {
     __TRY
     {
@@ -302,12 +304,12 @@ void DECLSPEC_HIDDEN call_thread_func( PRTL_THREAD_START_ROUTINE entry, void *ar
 
 #else  /* __i386__ */
 
-void WINAPI RtlUserThreadStart( PRTL_THREAD_START_ROUTINE entry, void *arg )
+static void WINAPI call_thread_entry_point( LPTHREAD_START_ROUTINE entry, void *arg )
 {
     __TRY
     {
         TRACE_(relay)( "\1Starting thread proc %p (arg=%p)\n", entry, arg );
-        RtlExitUserThread( ((LPTHREAD_START_ROUTINE)entry)( arg ));
+        RtlExitUserThread( entry( arg ));
     }
     __EXCEPT(call_unhandled_exception_filter)
     {
@@ -328,8 +330,29 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle_ptr, ACCESS_MASK access, OBJECT
                                   ULONG flags, SIZE_T zero_bits, SIZE_T stack_commit,
                                   SIZE_T stack_reserve, PS_ATTRIBUTE_LIST *attr_list )
 {
-    return unix_funcs->NtCreateThreadEx( handle_ptr, access, attr, process, start, param,
-                                         flags, zero_bits, stack_commit, stack_reserve, attr_list );
+    NTSTATUS status;
+    CLIENT_ID client_id;
+
+    if (!access) access = THREAD_ALL_ACCESS;
+
+    status = unix_funcs->create_thread( handle_ptr, access, attr, process,
+                                        start, param, call_thread_entry_point, flags,
+                                        stack_commit, stack_reserve, &client_id );
+    if (!status && attr_list)
+    {
+        SIZE_T i, count = (attr_list->TotalLength - sizeof(attr_list->TotalLength)) / sizeof(PS_ATTRIBUTE);
+        for (i = 0; i < count; i++)
+        {
+            if (attr_list->Attributes[i].Attribute == PS_ATTRIBUTE_CLIENT_ID)
+            {
+                SIZE_T size = min( attr_list->Attributes[i].Size, sizeof(client_id) );
+                memcpy( attr_list->Attributes[i].ValuePtr, &client_id, size );
+                if (attr_list->Attributes[i].ReturnLength) *attr_list->Attributes[i].ReturnLength = size;
+            }
+            else FIXME( "Unsupported attribute %08lx\n", attr_list->Attributes[i].Attribute );
+        }
+    }
+    return status;
 }
 
 

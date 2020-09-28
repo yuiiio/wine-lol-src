@@ -580,53 +580,6 @@ static BOOL WINECON_GetServerConfig(struct inner_data* data)
 }
 
 /******************************************************************
- *		WINECON_Spawn
- *
- * Spawn the child process when invoked with wineconsole foo bar
- */
-static BOOL WINECON_Spawn(struct inner_data* data, LPWSTR cmdLine)
-{
-    PROCESS_INFORMATION info;
-    STARTUPINFOW        startup;
-    BOOL                done;
-
-    /* we're in the case wineconsole <exe> <options>... spawn the new process */
-    memset(&startup, 0, sizeof(startup));
-    startup.cb          = sizeof(startup);
-    startup.dwFlags     = STARTF_USESTDHANDLES;
-
-    /* the attributes of wineconsole's handles are not adequate for inheritance, so
-     * get them with the correct attributes before process creation
-     */
-    if (!DuplicateHandle(GetCurrentProcess(), data->hConIn,  GetCurrentProcess(),
-			 &startup.hStdInput, GENERIC_READ|GENERIC_WRITE|SYNCHRONIZE, TRUE, 0) ||
-	!DuplicateHandle(GetCurrentProcess(), data->hConOut, GetCurrentProcess(),
-			 &startup.hStdOutput, GENERIC_READ|GENERIC_WRITE, TRUE, 0) ||
-	!DuplicateHandle(GetCurrentProcess(), data->hConOut, GetCurrentProcess(),
-                         &startup.hStdError, GENERIC_READ|GENERIC_WRITE, TRUE, 0))
-    {
-	WINE_ERR("Can't dup handles\n");
-	/* no need to delete handles, we're exiting the program anyway */
-	return FALSE;
-    }
-
-    done = CreateProcessW(NULL, cmdLine, NULL, NULL, TRUE, 0L, NULL, NULL, &startup, &info);
-    if (done)
-    {
-        data->hProcess = info.hProcess;
-        CloseHandle(info.hThread);
-    }
-    else printf_res(IDS_CMD_LAUNCH_FAILED, wine_dbgstr_w(cmdLine));
-
-    /* we no longer need the handles passed to the child for the console */
-    CloseHandle(startup.hStdInput);
-    CloseHandle(startup.hStdOutput);
-    CloseHandle(startup.hStdError);
-
-    return done;
-}
-
-/******************************************************************
  *		WINECON_Init
  *
  * Initialisation part I. Creation of server object (console input and
@@ -634,7 +587,7 @@ static BOOL WINECON_Spawn(struct inner_data* data, LPWSTR cmdLine)
  */
 static struct inner_data* WINECON_Init(HINSTANCE hInst, DWORD pid, LPCWSTR appname,
                                        enum init_return (*backend)(struct inner_data*),
-                                       INT nCmdShow, WCHAR *cmdline)
+                                       INT nCmdShow)
 {
     struct condrv_input_info_params input_params;
     OBJECT_ATTRIBUTES attr = {sizeof(attr)};
@@ -755,9 +708,7 @@ static struct inner_data* WINECON_Init(HINSTANCE hInst, DWORD pid, LPCWSTR appna
                               lstrlenW(appname) * sizeof(WCHAR), NULL, 0, NULL, NULL);
         if (!ret) goto error;
 
-        if (cmdline && !WINECON_Spawn(data, cmdline)) goto error;
         return data;
-
     case init_failed:
         break;
     }
@@ -767,6 +718,52 @@ static struct inner_data* WINECON_Init(HINSTANCE hInst, DWORD pid, LPCWSTR appna
 
     WINECON_Delete(data);
     return NULL;
+}
+
+/******************************************************************
+ *		WINECON_Spawn
+ *
+ * Spawn the child process when invoked with wineconsole foo bar
+ */
+static int WINECON_Spawn(struct inner_data* data, LPWSTR cmdLine)
+{
+    PROCESS_INFORMATION info;
+    STARTUPINFOW        startup;
+    BOOL                done;
+
+    /* we're in the case wineconsole <exe> <options>... spawn the new process */
+    memset(&startup, 0, sizeof(startup));
+    startup.cb          = sizeof(startup);
+    startup.dwFlags     = STARTF_USESTDHANDLES;
+
+    /* the attributes of wineconsole's handles are not adequate for inheritance, so
+     * get them with the correct attributes before process creation
+     */
+    if (!DuplicateHandle(GetCurrentProcess(), data->hConIn,  GetCurrentProcess(),
+			 &startup.hStdInput, GENERIC_READ|GENERIC_WRITE|SYNCHRONIZE, TRUE, 0) ||
+	!DuplicateHandle(GetCurrentProcess(), data->hConOut, GetCurrentProcess(),
+			 &startup.hStdOutput, GENERIC_READ|GENERIC_WRITE, TRUE, 0) ||
+	!DuplicateHandle(GetCurrentProcess(), data->hConOut, GetCurrentProcess(),
+                         &startup.hStdError, GENERIC_READ|GENERIC_WRITE, TRUE, 0))
+    {
+	WINE_ERR("Can't dup handles\n");
+	/* no need to delete handles, we're exiting the program anyway */
+	return 1;
+    }
+
+    done = CreateProcessW(NULL, cmdLine, NULL, NULL, TRUE, 0L, NULL, NULL, &startup, &info);
+    if (done)
+    {
+        data->hProcess = info.hProcess;
+        CloseHandle(info.hThread);
+    }
+
+    /* we no longer need the handles passed to the child for the console */
+    CloseHandle(startup.hStdInput);
+    CloseHandle(startup.hStdOutput);
+    CloseHandle(startup.hStdError);
+
+    return !done;
 }
 
 struct wc_init {
@@ -865,7 +862,7 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, INT nCmdSh
     {
     case from_event:
         /* case of wineconsole <evt>, signal process that created us that we're up and running */
-        if (!(data = WINECON_Init(hInst, 0, NULL, wci.backend, nCmdShow, NULL))) return 1;
+        if (!(data = WINECON_Init(hInst, 0, NULL, wci.backend, nCmdShow))) return 1;
         ret = !SetEvent(wci.event);
         if (ret != 0) WINE_ERR("SetEvent failed.\n");
         break;
@@ -882,9 +879,19 @@ int PASCAL WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, INT nCmdSh
 
             MultiByteToWideChar(CP_ACP, 0, wci.ptr, -1, buffer, len);
 
-            data = WINECON_Init(hInst, GetCurrentProcessId(), buffer, wci.backend, nCmdShow, buffer);
+            if (!(data = WINECON_Init(hInst, GetCurrentProcessId(), buffer, wci.backend, nCmdShow)))
+            {
+                HeapFree(GetProcessHeap(), 0, buffer);
+                return 1;
+            }
+            ret = WINECON_Spawn(data, buffer);
             HeapFree(GetProcessHeap(), 0, buffer);
-            if (!data) return 1;
+            if (ret != 0)
+            {
+                WINECON_Delete(data);
+                printf_res(IDS_CMD_LAUNCH_FAILED, wine_dbgstr_a(wci.ptr));
+                return ret;
+            }
         }
         break;
     default:

@@ -217,13 +217,6 @@ void *anon_mmap_fixed( void *start, size_t size, int prot, int flags )
     return mmap( start, size, prot, MAP_PRIVATE | MAP_ANON | MAP_FIXED | flags, -1, 0 );
 }
 
-/* allocate anonymous mmap() memory at any address */
-void *anon_mmap_alloc( size_t size, int prot )
-{
-    return mmap( NULL, size, prot, MAP_PRIVATE | MAP_ANON, -1, 0 );
-}
-
-
 static void mmap_add_reserved_area( void *addr, SIZE_T size )
 {
     struct reserved_area *area;
@@ -763,7 +756,7 @@ static BOOL alloc_pages_vprot( const void *addr, size_t size )
     for (i = idx >> pages_vprot_shift; i < (end + pages_vprot_mask) >> pages_vprot_shift; i++)
     {
         if (pages_vprot[i]) continue;
-        if ((ptr = anon_mmap_alloc( pages_vprot_mask + 1, PROT_READ | PROT_WRITE )) == MAP_FAILED)
+        if ((ptr = wine_anon_mmap( NULL, pages_vprot_mask + 1, PROT_READ | PROT_WRITE, 0 )) == (void *)-1)
             return FALSE;
         pages_vprot[i] = ptr;
     }
@@ -1306,8 +1299,8 @@ static struct file_view *alloc_view(void)
     }
     if (view_block_start == view_block_end)
     {
-        void *ptr = anon_mmap_alloc( view_block_size, PROT_READ | PROT_WRITE );
-        if (ptr == MAP_FAILED) return NULL;
+        void *ptr = wine_anon_mmap( NULL, view_block_size, PROT_READ | PROT_WRITE, 0 );
+        if (ptr == (void *)-1) return NULL;
         view_block_start = ptr;
         view_block_end = view_block_start + view_block_size / sizeof(*view_block_start);
     }
@@ -1753,7 +1746,7 @@ static NTSTATUS map_view( struct file_view **view_ret, void *base, size_t size,
 
         for (;;)
         {
-            if ((ptr = anon_mmap_alloc( view_size, get_unix_prot(vprot) )) == MAP_FAILED)
+            if ((ptr = wine_anon_mmap( NULL, view_size, get_unix_prot(vprot), 0 )) == (void *)-1)
             {
                 if (errno == ENOMEM) return STATUS_NO_MEMORY;
                 return STATUS_INVALID_PARAMETER;
@@ -2412,9 +2405,9 @@ void virtual_init(void)
     if (mmap_enum_reserved_areas( alloc_virtual_heap, &alloc_views, 1 ))
         mmap_remove_reserved_area( alloc_views.base, alloc_views.size );
     else
-        alloc_views.base = anon_mmap_alloc( alloc_views.size, PROT_READ | PROT_WRITE );
+        alloc_views.base = wine_anon_mmap( NULL, alloc_views.size, PROT_READ | PROT_WRITE, 0 );
 
-    assert( alloc_views.base != MAP_FAILED );
+    assert( alloc_views.base != (void *)-1 );
     view_block_start = alloc_views.base;
     view_block_end = view_block_start + view_block_size / sizeof(*view_block_start);
     free_ranges = (void *)((char *)alloc_views.base + view_block_size);

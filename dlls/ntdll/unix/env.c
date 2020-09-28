@@ -60,13 +60,18 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(environ);
 
+extern int __wine_main_argc;
+extern char **__wine_main_argv;
+extern char **__wine_main_environ;
+extern WCHAR **__wine_main_wargv;
+
 USHORT *uctable = NULL, *lctable = NULL;
 SIZE_T startup_info_size = 0;
 
 int main_argc = 0;
 char **main_argv = NULL;
 char **main_envp = NULL;
-WCHAR **main_wargv = NULL;
+static WCHAR **main_wargv;
 
 static LCID user_lcid, system_lcid;
 static LANGID user_ui_language, system_ui_language;
@@ -961,10 +966,10 @@ void init_environment( int argc, char *argv[], char *envp[] )
         uctable = case_table + 2;
         lctable = case_table + case_table[1] + 2;
     }
-    main_argc = argc;
-    main_argv = argv;
-    main_wargv = build_wargv( argv );
-    main_envp = envp;
+    __wine_main_argc = main_argc = argc;
+    __wine_main_argv = main_argv = argv;
+    __wine_main_wargv = main_wargv = build_wargv( argv );
+    __wine_main_environ = main_envp = envp;
 }
 
 

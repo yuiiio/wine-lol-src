@@ -1391,7 +1391,6 @@ BOOL WINAPI GetCurrentConsoleFont(HANDLE hConsole, BOOL maxwindow, CONSOLE_FONT_
 
 static COORD get_console_font_size(HANDLE hConsole, DWORD index)
 {
-    struct condrv_output_info info;
     COORD c = {0,0};
 
     if (index >= GetNumberOfConsoleFonts())
@@ -1400,12 +1399,16 @@ static COORD get_console_font_size(HANDLE hConsole, DWORD index)
         return c;
     }
 
-    if (DeviceIoControl( hConsole, IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL ))
+    SERVER_START_REQ(get_console_output_info)
     {
-        c.X = info.font_width;
-        c.Y = info.font_height;
+        req->handle = console_handle_unmap(hConsole);
+        if (!wine_server_call_err(req))
+        {
+            c.X = reply->font_width;
+            c.Y = reply->font_height;
+        }
     }
-    else SetLastError( ERROR_INVALID_HANDLE );
+    SERVER_END_REQ;
     return c;
 }
 

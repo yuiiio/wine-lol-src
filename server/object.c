@@ -67,21 +67,11 @@ void dump_objects(void)
 
 void close_objects(void)
 {
-    /* release the permanent objects */
-    for (;;)
-    {
-        struct object *obj;
-        int found = 0;
+    struct object *obj, *obj2;
 
-        LIST_FOR_EACH_ENTRY( obj, &object_list, struct object, obj_list )
-        {
-            if (!(found = obj->is_permanent)) continue;
-            obj->is_permanent = 0;
-            release_object( obj );
-            break;
-        }
-        if (!found) break;
-    }
+    /* release the permanent objects */
+    LIST_FOR_EACH_ENTRY_SAFE( obj, obj2, &object_list, struct object, obj_list )
+        if (obj->is_permanent) release_object( obj );
 
     dump_objects();  /* dump any remaining objects */
 }

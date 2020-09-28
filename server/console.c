@@ -258,7 +258,10 @@ static struct fd *console_input_get_fd( struct object* obj )
 {
     struct console_input *console_input = (struct console_input*)obj;
     assert( obj->ops == &console_input_ops );
-    return (struct fd *)grab_object( console_input->fd );
+    if (console_input->fd)
+        return (struct fd*)grab_object( console_input->fd );
+    set_error( STATUS_OBJECT_TYPE_MISMATCH );
+    return NULL;
 }
 
 static enum server_fd_type console_get_fd_type( struct fd *fd )
@@ -397,20 +400,15 @@ static struct object *create_console_input( struct thread* renderer, int fd )
     }
     if (fd != -1) /* bare console */
     {
-        console_input->fd = create_anonymous_fd( &console_fd_ops, fd, &console_input->obj,
-                                                 FILE_SYNCHRONOUS_IO_NONALERT );
+        if (!(console_input->fd = create_anonymous_fd( &console_fd_ops, fd, &console_input->obj,
+                                                       FILE_SYNCHRONOUS_IO_NONALERT )))
+        {
+            release_object( console_input );
+            return NULL;
+        }
+        allow_fd_caching( console_input->fd );
     }
-    else
-    {
-        console_input->fd = alloc_pseudo_fd( &console_fd_ops, &console_input->obj,
-                                             FILE_SYNCHRONOUS_IO_NONALERT );
-    }
-    if (!console_input->fd)
-    {
-        release_object( console_input );
-        return NULL;
-    }
-    allow_fd_caching( console_input->fd );
+
     return &console_input->obj;
 }
 

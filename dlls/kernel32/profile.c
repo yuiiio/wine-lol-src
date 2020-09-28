@@ -1290,7 +1290,7 @@ static BOOL delete_section( const WCHAR *filename, const WCHAR *section )
             {
                 if (!(path = get_key_value( subkey, entry )))
                 {
-                    HeapFree( GetProcessHeap(), 0, entry );
+                    HeapFree( GetProcessHeap(), 0, path );
                     continue;
                 }
 

@@ -121,9 +121,8 @@ struct stack_layout
 {
     CONTEXT           context;
     EXCEPTION_RECORD  rec;
-    void             *redzone[3];
+    void             *redzone[2];
 };
-C_ASSERT( !(sizeof(struct stack_layout) % 16) );
 
 struct arm64_thread_data
 {
@@ -541,13 +540,18 @@ NTSTATUS WINAPI NtGetContextThread( HANDLE handle, CONTEXT *context )
  */
 static struct stack_layout *setup_exception( ucontext_t *sigcontext )
 {
-    EXCEPTION_RECORD rec = { 0 };
-    void *stack_ptr = (void *)(SP_sig(sigcontext) & ~15);
     struct stack_layout *stack;
+    DWORD exception_code = 0;
 
-    rec.ExceptionAddress = (void *)PC_sig(sigcontext);
-    stack = virtual_setup_exception( stack_ptr, sizeof(*stack), &rec );
-    stack->rec = rec;
+    /* push the stack_layout structure */
+    stack = (struct stack_layout *)((SP_sig(sigcontext) - sizeof(*stack)) & ~15);
+
+    stack->rec.ExceptionRecord  = NULL;
+    stack->rec.ExceptionCode    = exception_code;
+    stack->rec.ExceptionFlags   = EXCEPTION_CONTINUABLE;
+    stack->rec.ExceptionAddress = (LPVOID)PC_sig(sigcontext);
+    stack->rec.NumberParameters = 0;
+
     save_context( &stack->context, sigcontext );
     save_fpu( &stack->context, sigcontext );
     return stack;

@@ -187,14 +187,18 @@ static BOOL restore_console_mode(HANDLE hin)
  *   Success: hwnd of the console window.
  *   Failure: NULL
  */
-HWND WINAPI GetConsoleWindow(void)
+HWND WINAPI GetConsoleWindow(VOID)
 {
-    struct condrv_input_info info;
-    BOOL ret;
+    HWND hWnd = NULL;
 
-    ret = DeviceIoControl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
-                           IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL );
-    return ret ? (HWND)info.win : NULL;
+    SERVER_START_REQ(get_console_input_info)
+    {
+        req->handle = 0;
+        if (!wine_server_call_err(req)) hWnd = wine_server_ptr_handle( reply->win );
+    }
+    SERVER_END_REQ;
+
+    return hWnd;
 }
 
 

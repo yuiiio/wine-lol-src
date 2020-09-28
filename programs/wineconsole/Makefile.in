@@ -4,6 +4,7 @@ IMPORTS   = advapi32
 DELAYIMPORTS = comctl32 user32 gdi32
 
 C_SRCS = \
+	curses.c \
 	dialog.c \
 	registry.c \
 	user.c \

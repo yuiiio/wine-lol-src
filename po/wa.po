@@ -87,7 +87,7 @@ msgstr "Informåcion"
 #: programs/regedit/regedit.rc:336 programs/regedit/regedit.rc:349
 #: programs/regedit/regedit.rc:362 programs/taskmgr/taskmgr.rc:442
 #: programs/taskmgr/taskmgr.rc:517 programs/winecfg/winecfg.rc:213
-#: programs/winecfg/winecfg.rc:223 programs/wineconsole/wineconsole.rc:133
+#: programs/winecfg/winecfg.rc:223 programs/wineconsole/wineconsole.rc:135
 #: programs/winefile/winefile.rc:127 programs/winefile/winefile.rc:150
 #: programs/winefile/winefile.rc:180 programs/winemine/winemine.rc:73
 #: programs/winemine/winemine.rc:84 programs/winemine/winemine.rc:98
@@ -190,7 +190,7 @@ msgstr "&Sicrîre..."
 #: programs/regedit/regedit.rc:363 programs/taskmgr/taskmgr.rc:443
 #: programs/taskmgr/taskmgr.rc:518 programs/wineboot/wineboot.rc:34
 #: programs/winecfg/winecfg.rc:214 programs/winecfg/winecfg.rc:224
-#: programs/wineconsole/wineconsole.rc:134 programs/winefile/winefile.rc:128
+#: programs/wineconsole/wineconsole.rc:136 programs/winefile/winefile.rc:128
 #: programs/winefile/winefile.rc:151 programs/winefile/winefile.rc:181
 #: programs/winemine/winemine.rc:99 programs/wordpad/wordpad.rc:216
 #: programs/wordpad/wordpad.rc:227 programs/wordpad/wordpad.rc:245
@@ -642,7 +642,7 @@ msgstr "&Grandeu"
 msgid "&Source"
 msgstr "Ali&mentåcion"
 
-#: dlls/comdlg32/comdlg32.rc:251 programs/wineconsole/wineconsole.rc:83
+#: dlls/comdlg32/comdlg32.rc:251 programs/wineconsole/wineconsole.rc:85
 msgid "Font"
 msgstr "Fontes"
 
@@ -3364,7 +3364,7 @@ msgstr ""
 msgid "Sync"
 msgstr ""
 
-#: dlls/hhctrl.ocx/hhctrl.rc:50 programs/wineconsole/wineconsole.rc:58
+#: dlls/hhctrl.ocx/hhctrl.rc:50 programs/wineconsole/wineconsole.rc:60
 #: programs/wordpad/wordpad.rc:166
 msgid "Options"
 msgstr ""
@@ -10716,7 +10716,7 @@ msgid "&Move"
 msgstr "&Bodjî"
 
 #: dlls/user32/user32.rc:32 dlls/user32/user32.rc:45
-#: programs/wineconsole/wineconsole.rc:91
+#: programs/wineconsole/wineconsole.rc:93
 msgid "&Size"
 msgstr "&Grandeu"
 
@@ -15959,60 +15959,60 @@ msgstr ""
 msgid "Menu Bar"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:61
+#: programs/wineconsole/wineconsole.rc:63
 msgid "Cursor size"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:62
+#: programs/wineconsole/wineconsole.rc:64
 msgid "&Small"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:63
+#: programs/wineconsole/wineconsole.rc:65
 msgid "&Medium"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:64
+#: programs/wineconsole/wineconsole.rc:66
 msgid "&Large"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:66
+#: programs/wineconsole/wineconsole.rc:68
 msgid "Command history"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:67
+#: programs/wineconsole/wineconsole.rc:69
 msgid "&Buffer size:"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:70
+#: programs/wineconsole/wineconsole.rc:72
 #, fuzzy
 msgid "&Remove duplicates"
 msgstr "&Sicrîre..."
 
-#: programs/wineconsole/wineconsole.rc:72
+#: programs/wineconsole/wineconsole.rc:74
 msgid "Popup menu"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:73
+#: programs/wineconsole/wineconsole.rc:75
 msgid "&Control"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:74
+#: programs/wineconsole/wineconsole.rc:76
 msgid "S&hift"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:76
+#: programs/wineconsole/wineconsole.rc:78
 msgid "Console"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:77
+#: programs/wineconsole/wineconsole.rc:79
 msgid "&Quick Edit mode"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:78
+#: programs/wineconsole/wineconsole.rc:80
 msgid "&Insert mode"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:86
+#: programs/wineconsole/wineconsole.rc:88
 #, fuzzy
 msgid "&Font"
 msgstr ""
@@ -16021,62 +16021,62 @@ msgstr ""
 "#-#-#-#-#  wa.po (Wine)  #-#-#-#-#\n"
 "&Font..."
 
-#: programs/wineconsole/wineconsole.rc:88
+#: programs/wineconsole/wineconsole.rc:90
 msgid "&Color"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:99
+#: programs/wineconsole/wineconsole.rc:101
 msgid "Configuration"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:102
+#: programs/wineconsole/wineconsole.rc:104
 msgid "Buffer zone"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:103
+#: programs/wineconsole/wineconsole.rc:105
 msgid "&Width:"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:106
+#: programs/wineconsole/wineconsole.rc:108
 #, fuzzy
 msgid "&Height:"
 msgstr "&Droete:"
 
-#: programs/wineconsole/wineconsole.rc:110
+#: programs/wineconsole/wineconsole.rc:112
 msgid "Window size"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:111
+#: programs/wineconsole/wineconsole.rc:113
 msgid "W&idth:"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:114
+#: programs/wineconsole/wineconsole.rc:116
 #, fuzzy
 msgid "H&eight:"
 msgstr "&Droete:"
 
-#: programs/wineconsole/wineconsole.rc:118
+#: programs/wineconsole/wineconsole.rc:120
 msgid "End of program"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:119
+#: programs/wineconsole/wineconsole.rc:121
 msgid "&Close console"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:121
+#: programs/wineconsole/wineconsole.rc:123
 #, fuzzy
 msgid "Edition"
 msgstr "&Candjî"
 
-#: programs/wineconsole/wineconsole.rc:127
+#: programs/wineconsole/wineconsole.rc:129
 msgid "Console parameters"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:130
+#: programs/wineconsole/wineconsole.rc:132
 msgid "Retain these settings for later sessions"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:131
+#: programs/wineconsole/wineconsole.rc:133
 msgid "Modify only current session"
 msgstr ""
 
@@ -16159,11 +16159,19 @@ msgid ""
 "Options:\n"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:51
+#: programs/wineconsole/wineconsole.rc:52
+msgid ""
+"  --backend={user|curses}  Choosing user will spawn a new window, curses "
+"will\n"
+"                           try to setup the current terminal as a Wine "
+"console.\n"
+msgstr ""
+
+#: programs/wineconsole/wineconsole.rc:53
 msgid "  <command>                The Wine program to launch in the console.\n"
 msgstr ""
 
-#: programs/wineconsole/wineconsole.rc:52
+#: programs/wineconsole/wineconsole.rc:54
 msgid ""
 "\n"
 "Example:\n"

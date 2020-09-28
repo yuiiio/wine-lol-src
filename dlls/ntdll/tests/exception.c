@@ -1747,7 +1747,6 @@ void CDECL hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *contex
 
 static void test_kiuserexceptiondispatcher(void)
 {
-    PVOID vectored_handler;
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
     static BYTE except_code[] =
     {
@@ -1875,7 +1874,7 @@ static void test_kiuserexceptiondispatcher(void)
     record.ExceptionAddress = NULL; /* does not matter, copied return address */
     record.NumberParameters = 0;
 
-    vectored_handler = AddVectoredExceptionHandler(TRUE, dbg_except_continue_vectored_handler);
+    AddVectoredExceptionHandler(TRUE, dbg_except_continue_vectored_handler);
 
     memcpy(pKiUserExceptionDispatcher, patched_KiUserExceptionDispatcher_bytes,
             sizeof(patched_KiUserExceptionDispatcher_bytes));
@@ -1887,7 +1886,7 @@ static void test_kiuserexceptiondispatcher(void)
     ok(got_exception, "Handler was not called.\n");
     ok(hook_called || broken(!hook_called) /* 2003 */, "Hook was not called.\n");
 
-    RemoveVectoredExceptionHandler(vectored_handler);
+    RemoveVectoredExceptionHandler(dbg_except_continue_vectored_handler);
     ret = VirtualProtect(pKiUserExceptionDispatcher, sizeof(saved_KiUserExceptionDispatcher_bytes),
             old_protect2, &old_protect2);
     ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
@@ -2972,7 +2971,6 @@ void WINAPI hook_KiUserExceptionDispatcher(EXCEPTION_RECORD *rec, CONTEXT *conte
 
 static void test_kiuserexceptiondispatcher(void)
 {
-    LPVOID vectored_handler;
     HMODULE hntdll = GetModuleHandleA("ntdll.dll");
     static BYTE except_code[] =
     {
@@ -3101,7 +3099,7 @@ static void test_kiuserexceptiondispatcher(void)
     record.ExceptionAddress = NULL;
     record.NumberParameters = 0;
 
-    vectored_handler = AddVectoredExceptionHandler(TRUE, dbg_except_continue_vectored_handler);
+    AddVectoredExceptionHandler(TRUE, dbg_except_continue_vectored_handler);
 
     memcpy(pKiUserExceptionDispatcher, patched_KiUserExceptionDispatcher_bytes,
             sizeof(patched_KiUserExceptionDispatcher_bytes));
@@ -3128,7 +3126,7 @@ static void test_kiuserexceptiondispatcher(void)
             || broken(!hook_exception_address) /* 2008 */, "Got unexpected addresses %p, %p.\n",
             hook_KiUserExceptionDispatcher_rip, hook_exception_address);
 
-    RemoveVectoredExceptionHandler(vectored_handler);
+    RemoveVectoredExceptionHandler(dbg_except_continue_vectored_handler);
 
     memcpy(pKiUserExceptionDispatcher, patched_KiUserExceptionDispatcher_bytes,
             sizeof(patched_KiUserExceptionDispatcher_bytes));

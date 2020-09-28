@@ -277,9 +277,7 @@ static BOOL is_builtin_path( UNICODE_STRING *path, BOOL *is_64bit )
     *is_64bit = is_win64;
     if (path->Length > sizeof(systemW) && !wcsnicmp( path->Buffer, systemW, ARRAY_SIZE(systemW) ))
     {
-#ifndef _WIN64
-        if (NtCurrentTeb64() && NtCurrentTeb64()->TlsSlots[WOW64_TLS_FILESYSREDIR]) *is_64bit = TRUE;
-#endif
+        if (is_wow64 && !ntdll_get_thread_data()->wow64_redir) *is_64bit = TRUE;
         return TRUE;
     }
     if ((is_win64 || is_wow64) && path->Length > sizeof(wow64W) &&

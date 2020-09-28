@@ -37,7 +37,6 @@ C_SRCS = \
 	msgbox.c \
 	nonclient.c \
 	painting.c \
-	png.c \
 	property.c \
 	rawinput.c \
 	resource.c \

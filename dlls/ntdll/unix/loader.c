@@ -1361,6 +1361,7 @@ static double CDECL ntdll_tan( double d )   { return tan( d ); }
 static struct unix_funcs unix_funcs =
 {
     NtCurrentTeb,
+    NtGetContextThread,
     DbgUiIssueRemoteBreakin,
     RtlGetSystemTimePrecise,
     RtlWaitOnAddress,

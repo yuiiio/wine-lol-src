@@ -23,18 +23,27 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdarg.h>
+#include "config.h"
+#include "wine/port.h"
 
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
 #include "ntstatus.h"
 #define NONAMELESSUNION
 #define NONAMELESSSTRUCT
 #define WIN32_NO_STATUS
-#include "winsock2.h"
+#define USE_WS_PREFIX
 #include "windef.h"
 #include "winternl.h"
 #include "wine/debug.h"
 #include "wine/exception.h"
 #include "ntdll_misc.h"
+#include "inaddr.h"
 #include "in6addr.h"
 #include "ddk/ntddk.h"
 
@@ -306,7 +315,7 @@ NTSTATUS WINAPIV DbgPrint(LPCSTR fmt, ...)
   __ms_va_list args;
 
   __ms_va_start(args, fmt);
-  _vsnprintf(buf, sizeof(buf), fmt, args);
+  NTDLL__vsnprintf(buf, sizeof(buf), fmt, args);
   __ms_va_end(args);
 
   MESSAGE("DbgPrint says: %s",buf);
@@ -344,7 +353,7 @@ NTSTATUS WINAPI vDbgPrintExWithPrefix( LPCSTR prefix, ULONG id, ULONG level, LPC
 {
     char buf[1024];
 
-    _vsnprintf(buf, sizeof(buf), fmt, args);
+    NTDLL__vsnprintf(buf, sizeof(buf), fmt, args);
 
     switch (level & DPFLTR_MASK)
     {

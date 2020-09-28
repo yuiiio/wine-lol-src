@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+
 #include <time.h>
 #include <math.h>
 
@@ -255,8 +257,8 @@ NTDLL_mergesort( void *arr, void *barr, size_t elemsize, int(__cdecl *compar)(co
 /*********************************************************************
  *                  qsort   (NTDLL.@)
  */
-void __cdecl qsort( void *base, size_t nmemb, size_t size,
-                    int (__cdecl *compar)(const void *, const void *) )
+void __cdecl NTDLL_qsort( void *base, size_t nmemb, size_t size,
+                          int(__cdecl *compar)(const void *, const void *) )
 {
     void *secondarr;
     if (nmemb < 2 || size == 0) return;
@@ -268,8 +270,9 @@ void __cdecl qsort( void *base, size_t nmemb, size_t size,
 /*********************************************************************
  *                  bsearch   (NTDLL.@)
  */
-void * __cdecl bsearch( const void *key, const void *base, size_t nmemb,
-                        size_t size, int (__cdecl *compar)(const void *, const void *) )
+void * __cdecl
+NTDLL_bsearch( const void *key, const void *base, size_t nmemb,
+               size_t size, int (__cdecl *compar)(const void *, const void *) )
 {
     ssize_t min = 0;
     ssize_t max = nmemb - 1;

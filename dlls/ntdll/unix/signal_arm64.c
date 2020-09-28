@@ -602,10 +602,9 @@ static void setup_raise_exception( ucontext_t *sigcontext, struct stack_layout *
     REGn_sig(18, sigcontext) = (ULONG_PTR)NtCurrentTeb();
 }
 
-void WINAPI call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context,
-                                            NTSTATUS (WINAPI *dispatcher)(EXCEPTION_RECORD*,CONTEXT*) )
+void WINAPI call_user_exception_dispatcher( EXCEPTION_RECORD *rec, CONTEXT *context )
 {
-    dispatcher( rec, context );
+    pKiUserExceptionDispatcher( rec, context );
 }
 
 /**********************************************************************

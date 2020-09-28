@@ -198,7 +198,7 @@ static NTSTATUS call_stack_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
 /*******************************************************************
  *		KiUserExceptionDispatcher (NTDLL.@)
  */
-NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *context )
 {
     NTSTATUS status;
     DWORD c;
@@ -243,11 +243,6 @@ NTSTATUS WINAPI dispatch_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
     return NtRaiseException( rec, context, FALSE );
 }
 
-__ASM_STDCALL_FUNC( KiUserExceptionDispatcher, 8,
-                    "pushl 4(%esp)\n\t"
-                    "pushl 4(%esp)\n\t"
-                    "call " __ASM_STDCALL("dispatch_exception", 8) "\n\t"
-                    "int3" )
 
 /***********************************************************************
  *           save_fpu

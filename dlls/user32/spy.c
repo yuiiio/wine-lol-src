@@ -27,6 +27,7 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winreg.h"
+#include "wine/unicode.h"
 #include "win.h"
 #include "user_private.h"
 #include "wine/debug.h"
@@ -2146,7 +2147,7 @@ static void SPY_GetClassName( SPY_INSTANCE *sp_e )
     /* special code to detect a property sheet dialog   */
     if ((GetClassLongW(sp_e->msg_hwnd, GCW_ATOM) == WC_DIALOG) &&
         (GetPropW(sp_e->msg_hwnd, PropSheetInfoStr))) {
-        lstrcpyW(sp_e->wnd_class, WC_PROPSHEETW);
+        strcpyW(sp_e->wnd_class, WC_PROPSHEETW);
     }
     else {
         GetClassNameW(sp_e->msg_hwnd, sp_e->wnd_class, ARRAY_SIZE(sp_e->wnd_class));
@@ -2184,7 +2185,7 @@ static void SPY_GetMsgStuff( SPY_INSTANCE *sp_e )
 #endif
 
         while (cc_array[i].classname &&
-               wcsicmp(cc_array[i].classname, sp_e->wnd_class) != 0) i++;
+               strcmpiW(cc_array[i].classname, sp_e->wnd_class) != 0) i++;
 
         if (cc_array[i].classname)
         {
@@ -2540,7 +2541,7 @@ static void SPY_DumpStructure(const SPY_INSTANCE *sp_e, BOOL enter)
                         save_error = GetLastError();
                         GetClassNameW(pnmh->hwndFrom, from_class, ARRAY_SIZE(from_class));
                         SetLastError(save_error);
-                        if (wcscmp(TOOLBARCLASSNAMEW, from_class) == 0)
+                        if (strcmpW(TOOLBARCLASSNAMEW, from_class) == 0)
                             dumplen = sizeof(NMTBCUSTOMDRAW)-sizeof(NMHDR);
                     } else if ( pnmh->code >= HDN_ENDDRAG
                                 && pnmh->code <= HDN_ITEMCHANGINGA ) {

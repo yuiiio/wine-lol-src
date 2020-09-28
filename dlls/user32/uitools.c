@@ -28,6 +28,7 @@
 #include "winuser.h"
 #include "user_private.h"
 #include "controls.h"
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(graphics);
@@ -1598,7 +1599,7 @@ static BOOL UITOOLS_DrawState(HDC hdc, HBRUSH hbr, DRAWSTATEPROC func, LPARAM lp
         if (!lp) return FALSE;
 
         if(unicode)
-            len = lstrlenW((LPWSTR)lp);
+            len = strlenW((LPWSTR)lp);
         else
             len = strlen((LPSTR)lp);
     }

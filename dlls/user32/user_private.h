@@ -29,6 +29,7 @@
 #include "winreg.h"
 #include "winternl.h"
 #include "wine/heap.h"
+#include "wine/unicode.h"
 
 #define GET_WORD(ptr)  (*(const WORD *)(ptr))
 #define GET_DWORD(ptr) (*(const DWORD *)(ptr))
@@ -380,7 +381,7 @@ static inline WCHAR *heap_strdupW(const WCHAR *src)
     WCHAR *dst;
     unsigned len;
     if (!src) return NULL;
-    len = (lstrlenW(src) + 1) * sizeof(WCHAR);
+    len = (strlenW(src) + 1) * sizeof(WCHAR);
     if ((dst = heap_alloc(len))) memcpy(dst, src, len);
     return dst;
 }

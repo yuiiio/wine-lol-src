@@ -29,6 +29,7 @@
 #include "controls.h"
 #include "user_private.h"
 #include "win.h"
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(graphics);
@@ -180,10 +181,10 @@ static const WCHAR *get_default_desktop(void)
 
     len = (GetModuleFileNameW( 0, buffer, MAX_PATH ));
     if (!len || len >= MAX_PATH) return defaultW;
-    if ((p = wcsrchr( appname, '/' ))) appname = p + 1;
-    if ((p = wcsrchr( appname, '\\' ))) appname = p + 1;
-    p = appname + lstrlenW(appname);
-    lstrcpyW( p, explorerW );
+    if ((p = strrchrW( appname, '/' ))) appname = p + 1;
+    if ((p = strrchrW( appname, '\\' ))) appname = p + 1;
+    p = appname + strlenW(appname);
+    strcpyW( p, explorerW );
 
     /* @@ Wine registry key: HKCU\Software\Wine\AppDefaults\app.exe\Explorer */
     if (!RegOpenKeyW( HKEY_CURRENT_USER, app_defaultsW, &tmpkey ))
@@ -201,7 +202,7 @@ static const WCHAR *get_default_desktop(void)
     }
 
     memcpy( buffer, app_defaultsW, 13 * sizeof(WCHAR) );  /* copy only software\\wine */
-    lstrcpyW( buffer + 13, explorerW );
+    strcpyW( buffer + 13, explorerW );
 
     /* @@ Wine registry key: HKCU\Software\Wine\Explorer */
     if (!RegOpenKeyW( HKEY_CURRENT_USER, buffer, &appkey ))
@@ -254,13 +255,13 @@ static void dpiaware_init(void)
         TRACE( "got dpiAwareness=%s\n", debugstr_w(buffer) );
         for (start = buffer; *start; start = end)
         {
-            start += wcsspn( start, spacesW );
-            if (!(end = wcschr( start, ',' ))) end = start + lstrlenW(start);
+            start += strspnW( start, spacesW );
+            if (!(end = strchrW( start, ',' ))) end = start + strlenW(start);
             else *end++ = 0;
-            if ((p = wcspbrk( start, spacesW ))) *p = 0;
+            if ((p = strpbrkW( start, spacesW ))) *p = 0;
             for (i = 0; i < ARRAY_SIZE(types); i++)
             {
-                if (wcsicmp( start, types[i] )) continue;
+                if (strcmpiW( start, types[i] )) continue;
                 SetProcessDpiAwarenessContext( (DPI_AWARENESS_CONTEXT)~i );
                 return;
             }
@@ -273,9 +274,9 @@ static void dpiaware_init(void)
         static const WCHAR permonW[] = {'p','e','r',' ','m','o','n','i','t','o','r',0};
 
         TRACE( "got dpiAware=%s\n", debugstr_w(buffer) );
-        if (!wcsicmp( buffer, trueW ))
+        if (!strcmpiW( buffer, trueW ))
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
-        else if (!wcsicmp( buffer, truepmW ) || !wcsicmp( buffer, permonW ))
+        else if (!strcmpiW( buffer, truepmW ) || !strcmpiW( buffer, permonW ))
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE );
         else
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_UNAWARE );
@@ -299,9 +300,9 @@ static void winstation_init(void)
     GetStartupInfoW( &info );
     if (info.lpDesktop && *info.lpDesktop)
     {
-        buffer = HeapAlloc( GetProcessHeap(), 0, (lstrlenW(info.lpDesktop) + 1) * sizeof(WCHAR) );
-        lstrcpyW( buffer, info.lpDesktop );
-        if ((desktop = wcschr( buffer, '\\' )))
+        buffer = HeapAlloc( GetProcessHeap(), 0, (strlenW(info.lpDesktop) + 1) * sizeof(WCHAR) );
+        strcpyW( buffer, info.lpDesktop );
+        if ((desktop = strchrW( buffer, '\\' )))
         {
             *desktop++ = 0;
             winstation = buffer;
@@ -317,7 +318,7 @@ static void winstation_init(void)
         {
             SetProcessWindowStation( handle );
             /* only WinSta0 is visible */
-            if (!winstation || !wcsicmp( winstation, WinSta0 ))
+            if (!winstation || !strcmpiW( winstation, WinSta0 ))
             {
                 USEROBJECTFLAGS flags;
                 flags.fInherit  = FALSE;
@@ -438,8 +439,8 @@ BOOL WINAPI ExitWindowsEx( UINT flags, DWORD reason )
     void *redir;
 
     GetSystemDirectoryW( app, MAX_PATH - ARRAY_SIZE( winebootW ));
-    lstrcatW( app, winebootW );
-    lstrcpyW( cmdline, app );
+    strcatW( app, winebootW );
+    strcpyW( cmdline, app );
 
     if (flags & EWX_FORCE) lstrcatW( cmdline, killW );
     else

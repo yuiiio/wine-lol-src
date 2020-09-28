@@ -1170,13 +1170,13 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
         {
             VM_COUNTERS pvmi;
 
-            /* older Windows versions don't have the PrivateUsage field */
-            if (size >= sizeof(VM_COUNTERS))
+            /* older Windows versions don't have the PrivatePageCount field */
+            if (size >= FIELD_OFFSET(VM_COUNTERS,PrivatePageCount))
             {
                 if (!info) ret = STATUS_ACCESS_VIOLATION;
                 else
                 {
-                    memset(&pvmi, 0, sizeof(pvmi));
+                    memset(&pvmi, 0 , sizeof(VM_COUNTERS));
                     if (handle == GetCurrentProcess()) fill_VM_COUNTERS(&pvmi);
                     else
                     {
@@ -1197,10 +1197,10 @@ NTSTATUS WINAPI NtQueryInformationProcess( HANDLE handle, PROCESSINFOCLASS class
                         if (ret) break;
                     }
                     len = size;
-                    if (len != sizeof(VM_COUNTERS)) len = sizeof(VM_COUNTERS_EX);
-                    memcpy(info, &pvmi, min(size, sizeof(pvmi)));
+                    if (len != FIELD_OFFSET(VM_COUNTERS,PrivatePageCount)) len = sizeof(VM_COUNTERS);
+                    memcpy(info, &pvmi, min(size,sizeof(VM_COUNTERS)));
                 }
-                if (size != sizeof(VM_COUNTERS) && size != sizeof(VM_COUNTERS_EX))
+                if (size != FIELD_OFFSET(VM_COUNTERS,PrivatePageCount) && size != sizeof(VM_COUNTERS))
                     ret = STATUS_INFO_LENGTH_MISMATCH;
             }
             else

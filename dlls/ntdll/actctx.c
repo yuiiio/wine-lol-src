@@ -5157,24 +5157,15 @@ NTSTATUS WINAPI RtlZombifyActivationContext( HANDLE handle )
  */
 NTSTATUS WINAPI RtlActivateActivationContext( ULONG unknown, HANDLE handle, PULONG_PTR cookie )
 {
-    return RtlActivateActivationContextEx( 0, NtCurrentTeb(), handle, cookie );
-}
-
-
-/******************************************************************
- *		RtlActivateActivationContextEx (NTDLL.@)
- */
-NTSTATUS WINAPI RtlActivateActivationContextEx( ULONG flags, TEB *teb, HANDLE handle, ULONG_PTR *cookie )
-{
     RTL_ACTIVATION_CONTEXT_STACK_FRAME *frame;
 
     if (!(frame = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*frame) )))
         return STATUS_NO_MEMORY;
 
-    frame->Previous = teb->ActivationContextStack.ActiveFrame;
+    frame->Previous = NtCurrentTeb()->ActivationContextStack.ActiveFrame;
     frame->ActivationContext = handle;
     frame->Flags = 0;
-    teb->ActivationContextStack.ActiveFrame = frame;
+    NtCurrentTeb()->ActivationContextStack.ActiveFrame = frame;
     RtlAddRefActivationContext( handle );
 
     *cookie = (ULONG_PTR)frame;

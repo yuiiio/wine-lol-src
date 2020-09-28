@@ -77,7 +77,15 @@ void CDECL NTDLL_wine_get_host_version( const char **sysname, const char **relea
  */
 int CDECL NTDLL_abs( int i )
 {
-    return i >= 0 ? i : -i;
+    return abs( i );
+}
+
+/*********************************************************************
+ *                  labs   (NTDLL.@)
+ */
+LONG CDECL NTDLL_labs( LONG i )
+{
+    return labs( i );
 }
 
 /*********************************************************************
@@ -85,7 +93,7 @@ int CDECL NTDLL_abs( int i )
  */
 double CDECL NTDLL_atan( double d )
 {
-    return unix_funcs->atan( d );
+    return atan( d );
 }
 
 /*********************************************************************
@@ -93,7 +101,7 @@ double CDECL NTDLL_atan( double d )
  */
 double CDECL NTDLL_ceil( double d )
 {
-    return unix_funcs->ceil( d );
+    return ceil( d );
 }
 
 /*********************************************************************
@@ -101,7 +109,7 @@ double CDECL NTDLL_ceil( double d )
  */
 double CDECL NTDLL_cos( double d )
 {
-    return unix_funcs->cos( d );
+    return cos( d );
 }
 
 /*********************************************************************
@@ -109,7 +117,7 @@ double CDECL NTDLL_cos( double d )
  */
 double CDECL NTDLL_fabs( double d )
 {
-    return unix_funcs->fabs( d );
+    return fabs( d );
 }
 
 /*********************************************************************
@@ -117,7 +125,7 @@ double CDECL NTDLL_fabs( double d )
  */
 double CDECL NTDLL_floor( double d )
 {
-    return unix_funcs->floor( d );
+    return floor( d );
 }
 
 /*********************************************************************
@@ -125,7 +133,7 @@ double CDECL NTDLL_floor( double d )
  */
 double CDECL NTDLL_log( double d )
 {
-    return unix_funcs->log( d );
+    return log( d );
 }
 
 /*********************************************************************
@@ -133,7 +141,7 @@ double CDECL NTDLL_log( double d )
  */
 double CDECL NTDLL_pow( double x, double y )
 {
-    return unix_funcs->pow( x, y );
+    return pow( x, y );
 }
 
 /*********************************************************************
@@ -141,7 +149,7 @@ double CDECL NTDLL_pow( double x, double y )
  */
 double CDECL NTDLL_sin( double d )
 {
-    return unix_funcs->sin( d );
+    return sin( d );
 }
 
 /*********************************************************************
@@ -149,7 +157,7 @@ double CDECL NTDLL_sin( double d )
  */
 double CDECL NTDLL_sqrt( double d )
 {
-    return unix_funcs->sqrt( d );
+    return sqrt( d );
 }
 
 /*********************************************************************
@@ -157,7 +165,7 @@ double CDECL NTDLL_sqrt( double d )
  */
 double CDECL NTDLL_tan( double d )
 {
-    return unix_funcs->tan( d );
+    return tan( d );
 }
 
 #if defined(__GNUC__) && defined(__i386__)

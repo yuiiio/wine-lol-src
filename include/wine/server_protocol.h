@@ -2416,7 +2416,6 @@ struct thread_info
 
 struct process_info
 {
-    timeout_t       start_time;
     data_size_t     name_len;
     int             thread_count;
     int             priority;
@@ -2424,7 +2423,6 @@ struct process_info
     process_id_t    parent_pid;
     int             handle_count;
     int             unix_pid;
-    int             __pad;
 
 
 };
@@ -6654,7 +6652,7 @@ union generic_reply
 
 /* ### protocol_version begin ### */
 
-#define SERVER_PROTOCOL_VERSION 619
+#define SERVER_PROTOCOL_VERSION 618
 
 /* ### protocol_version end ### */
 

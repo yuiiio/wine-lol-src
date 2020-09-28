@@ -487,13 +487,12 @@ struct x86_thread_data
     /* the ntdll_thread_data structure follows here */
 };
 
-C_ASSERT( sizeof(struct x86_thread_data) <= sizeof(((struct ntdll_thread_data *)0)->cpu_data) );
-C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct x86_thread_data, gs ) == 0x1d8 );
-C_ASSERT( offsetof( TEB, GdiTebBatch ) + offsetof( struct x86_thread_data, exit_frame ) == 0x1f4 );
+C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct x86_thread_data, gs ) == 0x1d8 );
+C_ASSERT( offsetof( TEB, SystemReserved2 ) + offsetof( struct x86_thread_data, exit_frame ) == 0x1f4 );
 
 static inline struct x86_thread_data *x86_thread_data(void)
 {
-    return (struct x86_thread_data *)ntdll_get_thread_data()->cpu_data;
+    return (struct x86_thread_data *)NtCurrentTeb()->SystemReserved2;
 }
 
 static inline WORD get_cs(void) { WORD res; __asm__( "movw %%cs,%0" : "=r" (res) ); return res; }
@@ -568,7 +567,7 @@ static void wine_sigacthandler( int signal, siginfo_t *siginfo, void *sigcontext
 
     __asm__ __volatile__("mov %ss,%ax; mov %ax,%ds; mov %ax,%es");
 
-    thread_data = (struct x86_thread_data *)get_current_teb()->GdiTebBatch;
+    thread_data = (struct x86_thread_data *)get_current_teb()->SystemReserved2;
     set_fs( thread_data->fs );
     set_gs( thread_data->gs );
 
@@ -616,7 +615,7 @@ static inline void *init_handler( const ucontext_t *sigcontext )
 
 #ifndef __sun  /* see above for Solaris handling */
     {
-        struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+        struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
         set_fs( thread_data->fs );
         set_gs( thread_data->gs );
     }
@@ -2045,7 +2044,7 @@ void signal_init_threading(void)
  */
 NTSTATUS signal_alloc_thread( TEB *teb )
 {
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
 
     if (!gdt_fs_sel)
     {
@@ -2087,7 +2086,7 @@ NTSTATUS signal_alloc_thread( TEB *teb )
  */
 void signal_free_thread( TEB *teb )
 {
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
     sigset_t sigset;
 
     if (gdt_fs_sel) return;
@@ -2104,7 +2103,7 @@ void signal_free_thread( TEB *teb )
 void signal_init_thread( TEB *teb )
 {
     const WORD fpu_cw = 0x27f;
-    struct x86_thread_data *thread_data = (struct x86_thread_data *)&teb->GdiTebBatch;
+    struct x86_thread_data *thread_data = (struct x86_thread_data *)teb->SystemReserved2;
 
     ldt_set_fs( thread_data->fs, teb );
     thread_data->gs = get_gs();

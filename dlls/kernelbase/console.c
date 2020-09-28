@@ -634,32 +634,33 @@ UINT WINAPI DECLSPEC_HOTPATCH GetConsoleOutputCP(void)
  */
 BOOL WINAPI DECLSPEC_HOTPATCH GetConsoleScreenBufferInfo( HANDLE handle, CONSOLE_SCREEN_BUFFER_INFO *info )
 {
-    struct condrv_output_info condrv_info;
+    BOOL ret;
 
-    if (!DeviceIoControl( handle , IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0,
-                          &condrv_info, sizeof(condrv_info), NULL, NULL ))
+    SERVER_START_REQ( get_console_output_info )
     {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return FALSE;
+        req->handle = console_handle_unmap( handle );
+        if ((ret = !wine_server_call_err( req )))
+        {
+            info->dwSize.X              = reply->width;
+            info->dwSize.Y              = reply->height;
+            info->dwCursorPosition.X    = reply->cursor_x;
+            info->dwCursorPosition.Y    = reply->cursor_y;
+            info->wAttributes           = reply->attr;
+            info->srWindow.Left         = reply->win_left;
+            info->srWindow.Right        = reply->win_right;
+            info->srWindow.Top          = reply->win_top;
+            info->srWindow.Bottom       = reply->win_bottom;
+            info->dwMaximumWindowSize.X = min(reply->width, reply->max_width);
+            info->dwMaximumWindowSize.Y = min(reply->height, reply->max_height);
+        }
     }
-
-    info->dwSize.X              = condrv_info.width;
-    info->dwSize.Y              = condrv_info.height;
-    info->dwCursorPosition.X    = condrv_info.cursor_x;
-    info->dwCursorPosition.Y    = condrv_info.cursor_y;
-    info->wAttributes           = condrv_info.attr;
-    info->srWindow.Left         = condrv_info.win_left;
-    info->srWindow.Right        = condrv_info.win_right;
-    info->srWindow.Top          = condrv_info.win_top;
-    info->srWindow.Bottom       = condrv_info.win_bottom;
-    info->dwMaximumWindowSize.X = min(condrv_info.width, condrv_info.max_width);
-    info->dwMaximumWindowSize.Y = min(condrv_info.height, condrv_info.max_height);
+    SERVER_END_REQ;
 
     TRACE( "(%p,(%d,%d) (%d,%d) %d (%d,%d-%d,%d) (%d,%d)\n", handle,
            info->dwSize.X, info->dwSize.Y, info->dwCursorPosition.X, info->dwCursorPosition.Y,
-           info->wAttributes, info->srWindow.Left, info->srWindow.Top, info->srWindow.Right,
+	  info->wAttributes, info->srWindow.Left, info->srWindow.Top, info->srWindow.Right,
            info->srWindow.Bottom, info->dwMaximumWindowSize.X, info->dwMaximumWindowSize.Y );
-    return TRUE;
+    return ret;
 }
 
 

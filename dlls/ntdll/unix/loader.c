@@ -1301,10 +1301,7 @@ static HMODULE load_ntdll(void)
 
     if ((fd = open( name, O_RDONLY )) != -1)
     {
-        struct stat st;
-        fstat( fd, &st );
-        if (!(status = virtual_map_ntdll( fd, &module )))
-            add_builtin_module( module, NULL, &st );
+        status = virtual_map_ntdll( fd, &module );
         close( fd );
     }
     else

@@ -1194,10 +1194,10 @@
 @ stdcall -import RaiseException(long long long ptr)
 # @ stub RaiseFailFastException
 @ stdcall ReadConsoleA(long ptr long ptr ptr)
-@ stdcall -import ReadConsoleInputA(long ptr long ptr)
+@ stdcall ReadConsoleInputA(long ptr long ptr)
 @ stub ReadConsoleInputExA
 @ stub ReadConsoleInputExW
-@ stdcall -import ReadConsoleInputW(long ptr long ptr)
+@ stdcall ReadConsoleInputW(long ptr long ptr)
 @ stdcall -import ReadConsoleOutputA(long ptr long long ptr)
 @ stdcall -import ReadConsoleOutputAttribute(long ptr long long ptr)
 @ stdcall -import ReadConsoleOutputCharacterA(long ptr long long ptr)

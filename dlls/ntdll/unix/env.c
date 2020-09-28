@@ -74,8 +74,8 @@ char **main_envp = NULL;
 static WCHAR **main_wargv;
 
 static CPTABLEINFO unix_table;
-static char system_locale[LOCALE_NAME_MAX_LENGTH];
-static char user_locale[LOCALE_NAME_MAX_LENGTH];
+static WCHAR system_locale[LOCALE_NAME_MAX_LENGTH];
+static WCHAR user_locale[LOCALE_NAME_MAX_LENGTH];
 
 static void *read_nls_file( const char *name )
 {
@@ -649,11 +649,18 @@ static WCHAR **build_wargv( char **argv )
 
 /* Unix format is: lang[_country][.charset][@modifier]
  * Windows format is: lang[-script][-country][_modifier] */
-static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
+static BOOL unix_to_win_locale( const char *unix_name, WCHAR *win_name )
 {
-    static const char sep[] = "_.@";
-    char buffer[LOCALE_NAME_MAX_LENGTH];
-    char *p, *country = NULL, *modifier = NULL;
+    static const WCHAR sepW[] = {'_','.','@',0};
+    static const WCHAR posixW[] = {'P','O','S','I','X',0};
+    static const WCHAR cW[] = {'C',0};
+    static const WCHAR euroW[] = {'e','u','r','o',0};
+    static const WCHAR latinW[] = {'l','a','t','i','n',0};
+    static const WCHAR latnW[] = {'-','L','a','t','n',0};
+    static const WCHAR enUSW[] = {'e','n','-','U','S',0};
+    WCHAR buffer[LOCALE_NAME_MAX_LENGTH];
+    WCHAR *p, *country = NULL, *modifier = NULL;
+    DWORD len;
 
     if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" ))
     {
@@ -661,12 +668,16 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
         if (!unix_name || !unix_name[0]) return FALSE;
     }
 
-    if (!(p = strpbrk( buffer, sep )))
+    len = ntdll_umbstowcs( unix_name, strlen(unix_name), buffer, ARRAY_SIZE(buffer) );
+    if (len == ARRAY_SIZE(buffer)) return FALSE;
+    buffer[len] = 0;
+
+    if (!(p = wcspbrk( buffer, sepW )))
     {
-        if (!strcmp( buffer, "POSIX" ) || !strcmp( buffer, "C" ))
-            strcpy( win_name, "en-US" );
+        if (!wcscmp( buffer, posixW ) || !wcscmp( buffer, cW ))
+            wcscpy( win_name, enUSW );
         else
-            strcpy( win_name, buffer );
+            wcscpy( win_name, buffer );
         return TRUE;
     }
 
@@ -674,13 +685,13 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
     {
         *p++ = 0;
         country = p;
-        p = strpbrk( p, sep + 1 );
+        p = wcspbrk( p, sepW + 1 );
     }
     if (p && *p == '.')
     {
         *p++ = 0;
         /* charset, ignore */
-        p = strchr( p, '@' );
+        p = wcschr( p, '@' );
     }
     if (p)
     {
@@ -690,18 +701,18 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
 
     /* rebuild a Windows name */
 
-    strcpy( win_name, buffer );
+    wcscpy( win_name, buffer );
     if (modifier)
     {
-        if (!strcmp( modifier, "latin" )) strcat( win_name, "-Latn" );
-        else if (!strcmp( modifier, "euro" )) {} /* ignore */
+        if (!wcscmp( modifier, latinW )) wcscat( win_name, latnW );
+        else if (!wcscmp( modifier, euroW )) {} /* ignore */
         else return FALSE;
     }
     if (country)
     {
-        p = win_name + strlen(win_name);
+        p = win_name + wcslen(win_name);
         *p++ = '-';
-        strcpy( p, country );
+        wcscpy( p, country );
     }
     return TRUE;
 }
@@ -1072,6 +1083,6 @@ void CDECL get_unix_codepage( CPTABLEINFO *table )
  */
 void CDECL get_locales( WCHAR *sys, WCHAR *user )
 {
-    ntdll_umbstowcs( system_locale, ARRAY_SIZE(system_locale), sys, LOCALE_NAME_MAX_LENGTH * sizeof(WCHAR) );
-    ntdll_umbstowcs( user_locale, ARRAY_SIZE(user_locale), user, LOCALE_NAME_MAX_LENGTH * sizeof(WCHAR) );
+    wcscpy( sys, system_locale );
+    wcscpy( user, user_locale );
 }

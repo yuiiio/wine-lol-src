@@ -23,6 +23,7 @@
 #include "config.h"
 #include "wine/port.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -30,41 +31,7 @@
 #include <string.h>
 
 #include "windef.h"
-#include "winbase.h"
-#include "winnls.h"
 #include "winternl.h"
-
-
-/* same as wctypes except for TAB, which doesn't have C1_BLANK for some reason... */
-static const unsigned short ctypes[257] =
-{
-    /* -1 */
-    0x0000,
-    /* 00 */
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x0020, 0x0028, 0x0028, 0x0028, 0x0028, 0x0028, 0x0020, 0x0020,
-    /* 10 */
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    /* 20 */
-    0x0048, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010,
-    0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010,
-    /* 30 */
-    0x0084, 0x0084, 0x0084, 0x0084, 0x0084, 0x0084, 0x0084, 0x0084,
-    0x0084, 0x0084, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010,
-    /* 40 */
-    0x0010, 0x0181, 0x0181, 0x0181, 0x0181, 0x0181, 0x0181, 0x0101,
-    0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101,
-    /* 50 */
-    0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101, 0x0101,
-    0x0101, 0x0101, 0x0101, 0x0010, 0x0010, 0x0010, 0x0010, 0x0010,
-    /* 60 */
-    0x0010, 0x0182, 0x0182, 0x0182, 0x0182, 0x0182, 0x0182, 0x0102,
-    0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102,
-    /* 70 */
-    0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102, 0x0102,
-    0x0102, 0x0102, 0x0102, 0x0010, 0x0010, 0x0010, 0x0010, 0x0020
-};
 
 
 /*********************************************************************
@@ -190,7 +157,6 @@ int __cdecl NTDLL_strncmp( const char *str1, const char *str2, size_t len )
 /*********************************************************************
  *                  strncpy   (NTDLL.@)
  */
-#undef strncpy
 char * __cdecl NTDLL_strncpy( char *dst, const char *src, size_t len )
 {
     return strncpy( dst, src, len );
@@ -389,7 +355,7 @@ int __cdecl NTDLL_toupper( int c )
  */
 int __cdecl NTDLL_isalnum( int c )
 {
-    return ctypes[c + 1] & (C1_LOWER | C1_UPPER | C1_DIGIT);
+    return isalnum( c );
 }
 
 
@@ -398,7 +364,7 @@ int __cdecl NTDLL_isalnum( int c )
  */
 int __cdecl NTDLL_isalpha( int c )
 {
-    return ctypes[c + 1] & (C1_LOWER | C1_UPPER);
+    return isalpha( c );
 }
 
 
@@ -407,7 +373,7 @@ int __cdecl NTDLL_isalpha( int c )
  */
 int __cdecl NTDLL_iscntrl( int c )
 {
-    return ctypes[c + 1] & C1_CNTRL;
+    return iscntrl( c );
 }
 
 
@@ -416,7 +382,7 @@ int __cdecl NTDLL_iscntrl( int c )
  */
 int __cdecl NTDLL_isdigit( int c )
 {
-    return ctypes[c + 1] & C1_DIGIT;
+    return isdigit( c );
 }
 
 
@@ -425,7 +391,7 @@ int __cdecl NTDLL_isdigit( int c )
  */
 int __cdecl NTDLL_isgraph( int c )
 {
-    return ctypes[c + 1] & (C1_LOWER | C1_UPPER | C1_DIGIT | C1_PUNCT);
+    return isgraph( c );
 }
 
 
@@ -434,7 +400,7 @@ int __cdecl NTDLL_isgraph( int c )
  */
 int __cdecl NTDLL_islower( int c )
 {
-    return ctypes[c + 1] & C1_LOWER;
+    return islower( c );
 }
 
 
@@ -443,7 +409,7 @@ int __cdecl NTDLL_islower( int c )
  */
 int __cdecl NTDLL_isprint( int c )
 {
-    return ctypes[c + 1] & (C1_LOWER | C1_UPPER | C1_DIGIT | C1_PUNCT | C1_BLANK);
+    return isprint( c );
 }
 
 
@@ -452,7 +418,7 @@ int __cdecl NTDLL_isprint( int c )
  */
 int __cdecl NTDLL_ispunct( int c )
 {
-    return ctypes[c + 1] & C1_PUNCT;
+    return ispunct( c );
 }
 
 
@@ -461,7 +427,7 @@ int __cdecl NTDLL_ispunct( int c )
  */
 int __cdecl NTDLL_isspace( int c )
 {
-    return ctypes[c + 1] & C1_SPACE;
+    return isspace( c );
 }
 
 
@@ -470,7 +436,7 @@ int __cdecl NTDLL_isspace( int c )
  */
 int __cdecl NTDLL_isupper( int c )
 {
-    return ctypes[c + 1] & C1_UPPER;
+    return isupper( c );
 }
 
 
@@ -479,7 +445,7 @@ int __cdecl NTDLL_isupper( int c )
  */
 int __cdecl NTDLL_isxdigit( int c )
 {
-    return ctypes[c + 1] & C1_XDIGIT;
+    return isxdigit( c );
 }
 
 
@@ -506,7 +472,7 @@ int CDECL NTDLL___toascii(int c)
  */
 int CDECL NTDLL___iscsym(int c)
 {
-    return (c < 127 && (NTDLL_isalnum(c) || c == '_'));
+    return (c < 127 && (isalnum(c) || c == '_'));
 }
 
 
@@ -515,7 +481,7 @@ int CDECL NTDLL___iscsym(int c)
  */
 int CDECL NTDLL___iscsymf(int c)
 {
-    return (c < 127 && (NTDLL_isalpha(c) || c == '_'));
+    return (c < 127 && (isalpha(c) || c == '_'));
 }
 
 
@@ -868,10 +834,10 @@ static int NTDLL_vsscanf( const char *str, const char *format, __ms_va_list ap)
 
     while (*format)
     {
-        if (NTDLL_isspace( *format ))
+        if (isspace( *format ))
         {
             /* skip whitespace */
-            while ((nch != '\0') && NTDLL_isspace( nch ))
+            while ((nch != '\0') && isspace( nch ))
                 nch = (consumed++, *str++);
         }
         else if (*format == '%')
@@ -956,7 +922,7 @@ static int NTDLL_vsscanf( const char *str, const char *format, __ms_va_list ap)
                     BOOLEAN negative = FALSE;
                     BOOLEAN seendigit = FALSE;
                     /* skip initial whitespace */
-                    while ((nch != '\0') && NTDLL_isspace( nch ))
+                    while ((nch != '\0') && isspace( nch ))
                         nch = (consumed++, *str++);
                     /* get sign */
                     if (nch == '-' || nch == '+')
@@ -1042,10 +1008,10 @@ static int NTDLL_vsscanf( const char *str, const char *format, __ms_va_list ap)
                     char *sptr_beg = sptr;
                     unsigned size = UINT_MAX;
                     /* skip initial whitespace */
-                    while (nch != '\0' && NTDLL_isspace( nch ))
+                    while (nch != '\0' && isspace( nch ))
                         nch = (consumed++, *str++);
                     /* read until whitespace */
-                    while (width != 0 && nch != '\0' && !NTDLL_isspace( nch ))
+                    while (width != 0 && nch != '\0' && !isspace( nch ))
                     {
                         if (!suppress)
                         {
@@ -1071,10 +1037,10 @@ static int NTDLL_vsscanf( const char *str, const char *format, __ms_va_list ap)
                     WCHAR *sptr_beg = sptr;
                     unsigned size = UINT_MAX;
                     /* skip initial whitespace */
-                    while (nch != '\0' && NTDLL_isspace( nch ))
+                    while (nch != '\0' && isspace( nch ))
                         nch = (consumed++, *str++);
                     /* read until whitespace */
-                    while (width != 0 && nch != '\0' && !NTDLL_isspace( nch ))
+                    while (width != 0 && nch != '\0' && !isspace( nch ))
                     {
                         if (!suppress)
                         {
@@ -1256,7 +1222,7 @@ static int NTDLL_vsscanf( const char *str, const char *format, __ms_va_list ap)
                  * of characters that must match the input.  For example,
                  * to specify that a percent-sign character is to be input,
                  * use %%." */
-                while (nch != '\0' && NTDLL_isspace( nch ))
+                while (nch != '\0' && isspace( nch ))
                     nch = (consumed++, *str++);
                 if (nch == *format)
                 {

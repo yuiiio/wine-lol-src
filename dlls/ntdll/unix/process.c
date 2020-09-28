@@ -481,26 +481,18 @@ static ULONG get_env_size( const RTL_USER_PROCESS_PARAMETERS *params, char **win
 /***********************************************************************
  *           get_unix_curdir
  */
-static int get_unix_curdir( const RTL_USER_PROCESS_PARAMETERS *params )
+static char *get_unix_curdir( const RTL_USER_PROCESS_PARAMETERS *params )
 {
     UNICODE_STRING nt_name;
-    OBJECT_ATTRIBUTES attr;
-    IO_STATUS_BLOCK io;
+    ANSI_STRING unix_name;
     NTSTATUS status;
-    HANDLE handle;
-    int fd = -1;
 
     if (!RtlDosPathNameToNtPathName_U( params->CurrentDirectory.DosPath.Buffer, &nt_name, NULL, NULL ))
-        return -1;
-    InitializeObjectAttributes( &attr, &nt_name, OBJ_CASE_INSENSITIVE, 0, NULL );
-    status = NtOpenFile( &handle, FILE_TRAVERSE | SYNCHRONIZE, &attr, &io,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE,
-                         FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT );
+        return NULL;
+    status = nt_to_unix_file_name( &nt_name, &unix_name, FILE_OPEN_IF, FALSE );
     RtlFreeUnicodeString( &nt_name );
-    if (status) return -1;
-    server_handle_to_fd( handle, FILE_TRAVERSE, &fd, NULL );
-    NtClose( handle );
-    return fd;
+    if (status && status != STATUS_NO_SUCH_FILE) return NULL;
+    return unix_name.Buffer;
 }
 
 
@@ -527,8 +519,8 @@ static void set_stdio_fd( int stdin_fd, int stdout_fd )
 /***********************************************************************
  *           spawn_process
  */
-static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int socketfd,
-                               int unixdir, char *winedebug, const pe_image_info_t *pe_info )
+NTSTATUS CDECL spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int socketfd,
+                              const char *unixdir, char *winedebug, const pe_image_info_t *pe_info )
 {
     const int is_child_64bit = (pe_info->cpu == CPU_x86_64 || pe_info->cpu == CPU_ARM64);
     NTSTATUS status = STATUS_SUCCESS;
@@ -556,11 +548,8 @@ static NTSTATUS spawn_process( const RTL_USER_PROCESS_PARAMETERS *params, int so
             if (stdout_fd != -1) close( stdout_fd );
 
             if (winedebug) putenv( winedebug );
-            if (unixdir != -1)
-            {
-                fchdir( unixdir );
-                close( unixdir );
-            }
+            if (unixdir) chdir( unixdir );
+
             argv = build_argv( &params->CommandLine, 2 );
 
             exec_wineloader( argv, socketfd, is_child_64bit,
@@ -641,7 +630,7 @@ NTSTATUS CDECL exec_process( const UNICODE_STRING *cmdline, const pe_image_info_
  *
  * Fork and exec a new Unix binary, checking for errors.
  */
-static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
+static NTSTATUS fork_and_exec( UNICODE_STRING *path, const char *unix_dir,
                                const RTL_USER_PROCESS_PARAMETERS *params )
 {
     pid_t pid;
@@ -692,11 +681,8 @@ static NTSTATUS fork_and_exec( UNICODE_STRING *path, int unixdir,
 
             argv = build_argv( &params->CommandLine, 0 );
             envp = build_envp( params->Environment );
-            if (unixdir != -1)
-            {
-                fchdir( unixdir );
-                close( unixdir );
-            }
+            if (unix_dir) chdir( unix_dir );
+
             execve( unix_name.Buffer, argv, envp );
         }
 
@@ -755,10 +741,10 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     HANDLE file_handle, process_info = 0, process_handle = 0, thread_handle = 0;
     struct object_attributes *objattr;
     data_size_t attr_len;
-    char *winedebug = NULL;
+    char *unixdir = NULL, *winedebug = NULL;
     startup_info_t *startup_info = NULL;
     ULONG startup_info_size, env_size;
-    int unixdir, socketfd[2] = { -1, -1 };
+    int socketfd[2] = { -1, -1 };
     pe_image_info_t pe_info;
     CLIENT_ID id;
     HANDLE parent = 0, debug = 0, token = 0;
@@ -957,9 +943,9 @@ done:
     if (process_handle) NtClose( process_handle );
     if (thread_handle) NtClose( thread_handle );
     if (socketfd[0] != -1) close( socketfd[0] );
-    if (unixdir != -1) close( unixdir );
     RtlFreeHeap( GetProcessHeap(), 0, startup_info );
     RtlFreeHeap( GetProcessHeap(), 0, winedebug );
+    RtlFreeHeap( GetProcessHeap(), 0, unixdir );
     return status;
 }
 

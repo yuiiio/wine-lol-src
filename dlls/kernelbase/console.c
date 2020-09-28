@@ -1732,7 +1732,6 @@ HRESULT WINAPI CreatePseudoConsole( COORD size, HANDLE input, HANDLE output, DWO
 {
     SECURITY_ATTRIBUTES inherit_attr = { sizeof(inherit_attr), NULL, TRUE };
     struct pseudo_console *pseudo_console;
-    HANDLE tty_input = NULL, tty_output;
     HANDLE signal = NULL;
     WCHAR pipe_name[64];
 
@@ -1752,15 +1751,9 @@ HRESULT WINAPI CreatePseudoConsole( COORD size, HANDLE input, HANDLE output, DWO
         return HRESULT_FROM_WIN32( GetLastError() );
     }
     pseudo_console->signal = CreateFileW( pipe_name, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL );
-    if (pseudo_console->signal != INVALID_HANDLE_VALUE &&
-        DuplicateHandle( GetCurrentProcess(), input,  GetCurrentProcess(), &tty_input, 0, TRUE,  DUPLICATE_SAME_ACCESS) &&
-        DuplicateHandle( GetCurrentProcess(), output, GetCurrentProcess(), &tty_output, 0, TRUE, DUPLICATE_SAME_ACCESS))
-    {
-        pseudo_console->reference = create_pseudo_console( size, tty_input, tty_output, signal, flags,
+    if (pseudo_console->signal != INVALID_HANDLE_VALUE)
+        pseudo_console->reference = create_pseudo_console( size, input, output, signal, flags,
                                                            &pseudo_console->process );
-        NtClose( tty_output );
-    }
-    NtClose( tty_input );
     NtClose( signal );
     if (!pseudo_console->reference)
     {

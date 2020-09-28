@@ -91,7 +91,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(text);
 #define FORWARD_SLASH '/'
 #define BACK_SLASH '\\'
 
-static const WCHAR ELLIPSISW[] = L"...";
+static const WCHAR ELLIPSISW[] = {'.','.','.', 0};
 
 typedef struct tag_ellipsis_data
 {

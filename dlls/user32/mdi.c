@@ -182,9 +182,10 @@ static void MDI_PostUpdate(HWND hwnd, MDICLIENTINFO* ci, WORD recalc)
 /*********************************************************************
  * MDIClient class descriptor
  */
+static const WCHAR mdiclientW[] = {'M','D','I','C','l','i','e','n','t',0};
 const struct builtin_class_descr MDICLIENT_builtin_class =
 {
-    L"MDIClient",           /* name */
+    mdiclientW,             /* name */
     0,                      /* style */
     WINPROC_MDICLIENT,      /* proc */
     sizeof(MDICLIENTINFO),  /* extra */
@@ -992,16 +993,19 @@ static void MDI_UpdateFrameText( HWND frame, HWND hClient, BOOL repaint, LPCWSTR
 	if (ci->hwndChildMaximized)
 	{
 	    /* combine frame title and child title if possible */
+
+	    static const WCHAR lpBracket[]  = {' ','-',' ','[',0};
+	    static const WCHAR lpBracket2[]  = {']',0};
 	    int	i_frame_text_length = lstrlenW(ci->frameTitle);
 
 	    lstrcpynW( lpBuffer, ci->frameTitle, MDI_MAXTITLELENGTH);
 
 	    if( i_frame_text_length + 6 < MDI_MAXTITLELENGTH )
             {
-		lstrcatW( lpBuffer, L" - [" );
+		lstrcatW( lpBuffer, lpBracket );
                 if (GetWindowTextW( ci->hwndActiveChild, lpBuffer + i_frame_text_length + 4,
                                     MDI_MAXTITLELENGTH - i_frame_text_length - 5 ))
-                    lstrcatW( lpBuffer, L"]" );
+                    lstrcatW( lpBuffer, lpBracket2 );
                 else
                     lpBuffer[i_frame_text_length] = 0;  /* remove bracket */
             }

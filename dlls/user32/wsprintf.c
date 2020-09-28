@@ -75,6 +75,9 @@ typedef union {
     LONGLONG int_view;
 } WPRINTF_DATA;
 
+static const CHAR null_stringA[] = "(null)";
+static const WCHAR null_stringW[] = { '(', 'n', 'u', 'l', 'l', ')', 0 };
+
 /***********************************************************************
  *           WPRINTF_ParseFormatA
  *
@@ -258,7 +261,7 @@ static UINT WPRINTF_GetLen( WPRINTF_FORMAT *format, WPRINTF_DATA *arg,
         else len = WideCharToMultiByte( CP_ACP, 0, &arg->wchar_view, 1, NULL, 0, NULL, NULL );
         return (format->precision = len);
     case WPR_STRING:
-        if (!arg->lpcstr_view) arg->lpcstr_view = "(null)";
+        if (!arg->lpcstr_view) arg->lpcstr_view = null_stringA;
         if (dst_is_wide)
         {
             LPCSTR p = arg->lpcstr_view;
@@ -278,7 +281,7 @@ static UINT WPRINTF_GetLen( WPRINTF_FORMAT *format, WPRINTF_DATA *arg,
         if (len > maxlen) len = maxlen;
         return (format->precision = len);
     case WPR_WSTRING:
-        if (!arg->lpcwstr_view) arg->lpcwstr_view = L"(null)";
+        if (!arg->lpcwstr_view) arg->lpcwstr_view = null_stringW;
         if (dst_is_wide)
         {
             for (len = 0; !format->precision || (len < format->precision); len++)

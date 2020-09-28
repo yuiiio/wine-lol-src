@@ -123,6 +123,7 @@ static LRESULT DEFWND_SetTextA( HWND hwnd, LPCSTR text )
  */
 static LRESULT DEFWND_SetTextW( HWND hwnd, LPCWSTR text )
 {
+    static const WCHAR empty_string[] = {0};
     WND *wndPtr;
     int count;
 
@@ -131,7 +132,7 @@ static LRESULT DEFWND_SetTextW( HWND hwnd, LPCWSTR text )
     if (text && IS_INTRESOURCE(text))
         return 0;
 
-    if (!text) text = L"";
+    if (!text) text = empty_string;
     count = lstrlenW(text) + 1;
 
     if (!(wndPtr = WIN_GetPtr( hwnd ))) return 0;

@@ -3416,7 +3416,7 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknow
     WINE_MODREF *wm;
     LPCWSTR load_path = NtCurrentTeb()->Peb->ProcessParameters->DllPath.Buffer;
 
-    if (process_detaching) NtTerminateThread( GetCurrentThread(), 0 );
+    if (process_detaching) return;
 
     RtlEnterCriticalSection( &loader_section );
 
@@ -3486,7 +3486,6 @@ void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknow
     }
 
     RtlLeaveCriticalSection( &loader_section );
-    signal_start_thread( context );
 }
 
 

@@ -376,7 +376,18 @@ ULONG WINAPI RtlGetNtGlobalFlags(void)
 NTSTATUS WINAPI NtOpenThread( HANDLE *handle, ACCESS_MASK access,
                               const OBJECT_ATTRIBUTES *attr, const CLIENT_ID *id )
 {
-    return unix_funcs->NtOpenThread( handle, access, attr, id );
+    NTSTATUS ret;
+
+    SERVER_START_REQ( open_thread )
+    {
+        req->tid        = HandleToULong(id->UniqueThread);
+        req->access     = access;
+        req->attributes = attr ? attr->Attributes : 0;
+        ret = wine_server_call( req );
+        *handle = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 
@@ -386,7 +397,18 @@ NTSTATUS WINAPI NtOpenThread( HANDLE *handle, ACCESS_MASK access,
  */
 NTSTATUS WINAPI NtSuspendThread( HANDLE handle, PULONG count )
 {
-    return unix_funcs->NtSuspendThread( handle, count );
+    NTSTATUS ret;
+
+    SERVER_START_REQ( suspend_thread )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        if (!(ret = wine_server_call( req )))
+        {
+            if (count) *count = reply->count;
+        }
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 
@@ -396,7 +418,18 @@ NTSTATUS WINAPI NtSuspendThread( HANDLE handle, PULONG count )
  */
 NTSTATUS WINAPI NtResumeThread( HANDLE handle, PULONG count )
 {
-    return unix_funcs->NtResumeThread( handle, count );
+    NTSTATUS ret;
+
+    SERVER_START_REQ( resume_thread )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        if (!(ret = wine_server_call( req )))
+        {
+            if (count) *count = reply->count;
+        }
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 
@@ -406,7 +439,8 @@ NTSTATUS WINAPI NtResumeThread( HANDLE handle, PULONG count )
  */
 NTSTATUS WINAPI NtAlertResumeThread( HANDLE handle, PULONG count )
 {
-    return unix_funcs->NtAlertResumeThread( handle, count );
+    FIXME( "stub: should alert thread %p\n", handle );
+    return NtResumeThread( handle, count );
 }
 
 
@@ -416,7 +450,8 @@ NTSTATUS WINAPI NtAlertResumeThread( HANDLE handle, PULONG count )
  */
 NTSTATUS WINAPI NtAlertThread( HANDLE handle )
 {
-    return unix_funcs->NtAlertThread( handle );
+    FIXME( "stub: %p\n", handle );
+    return STATUS_NOT_IMPLEMENTED;
 }
 
 
@@ -426,7 +461,22 @@ NTSTATUS WINAPI NtAlertThread( HANDLE handle )
  */
 NTSTATUS WINAPI NtTerminateThread( HANDLE handle, LONG exit_code )
 {
-    return unix_funcs->NtTerminateThread( handle, exit_code );
+    NTSTATUS ret;
+    BOOL self = (handle == GetCurrentThread());
+
+    if (!self || exit_code)
+    {
+        SERVER_START_REQ( terminate_thread )
+        {
+            req->handle    = wine_server_obj_handle( handle );
+            req->exit_code = exit_code;
+            ret = wine_server_call( req );
+            self = !ret && reply->self;
+        }
+        SERVER_END_REQ;
+    }
+    if (self) unix_funcs->abort_thread( exit_code );
+    return ret;
 }
 
 
@@ -436,7 +486,23 @@ NTSTATUS WINAPI NtTerminateThread( HANDLE handle, LONG exit_code )
 NTSTATUS WINAPI NtQueueApcThread( HANDLE handle, PNTAPCFUNC func, ULONG_PTR arg1,
                                   ULONG_PTR arg2, ULONG_PTR arg3 )
 {
-    return unix_funcs->NtQueueApcThread( handle, func, arg1, arg2, arg3 );
+    NTSTATUS ret;
+    SERVER_START_REQ( queue_apc )
+    {
+        req->handle = wine_server_obj_handle( handle );
+        if (func)
+        {
+            req->call.type              = APC_USER;
+            req->call.user.user.func    = wine_server_client_ptr( func );
+            req->call.user.user.args[0] = arg1;
+            req->call.user.user.args[1] = arg2;
+            req->call.user.user.args[2] = arg3;
+        }
+        else req->call.type = APC_NONE;  /* wake up only */
+        ret = wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 

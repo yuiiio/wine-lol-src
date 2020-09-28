@@ -175,9 +175,6 @@ static struct list teb_list = LIST_INIT( teb_list );
 #ifndef MAP_TRYFIXED
 #define MAP_TRYFIXED 0
 #endif
-#ifndef MAP_FIXED_NOREPLACE
-#define MAP_FIXED_NOREPLACE 0
-#endif
 
 #ifdef _WIN64  /* on 64-bit the page protection bytes use a 2-level table */
 static const size_t pages_vprot_shift = 20;
@@ -1008,19 +1005,18 @@ static void* try_map_free_area( void *base, void *end, ptrdiff_t step,
 
     while (start && base <= start && (char*)start + size <= (char*)end)
     {
-        if ((ptr = wine_anon_mmap( start, size, unix_prot, MAP_FIXED_NOREPLACE )) == start)
+        if ((ptr = wine_anon_mmap( start, size, unix_prot, 0 )) == start)
             return start;
         TRACE( "Found free area is already mapped, start %p.\n", start );
 
-        if (ptr == (void *)-1 && errno != EEXIST)
+        if (ptr == (void *)-1)
         {
             ERR( "wine_anon_mmap() error %s, range %p-%p, unix_prot %#x.\n",
                     strerror(errno), start, (char *)start + size, unix_prot );
             return NULL;
         }
 
-        if (ptr != (void *)-1)
-            munmap( ptr, size );
+        munmap( ptr, size );
 
         if ((step > 0 && (char *)end - (char *)start < step) ||
             (step < 0 && (char *)start - (char *)base < -step) ||

@@ -30,8 +30,7 @@
 #define IOCTL_CONDRV_GET_INPUT_INFO        CTL_CODE(FILE_DEVICE_CONSOLE, 13, METHOD_BUFFERED, FILE_READ_PROPERTIES)
 
 /* console output ioctls */
-#define IOCTL_CONDRV_GET_OUTPUT_INFO       CTL_CODE(FILE_DEVICE_CONSOLE, 32, METHOD_BUFFERED, FILE_READ_PROPERTIES)
-#define IOCTL_CONDRV_SET_OUTPUT_INFO       CTL_CODE(FILE_DEVICE_CONSOLE, 33, METHOD_BUFFERED, FILE_WRITE_PROPERTIES)
+#define IOCTL_CONDRV_GET_OUTPUT_INFO       CTL_CODE(FILE_DEVICE_CONSOLE, 32, METHOD_BUFFERED, FILE_WRITE_PROPERTIES)
 
 /* console renderer ioctls */
 #define IOCTL_CONDRV_GET_RENDERER_EVENTS   CTL_CODE(FILE_DEVICE_CONSOLE, 70, METHOD_BUFFERED, FILE_READ_PROPERTIES)
@@ -67,13 +66,6 @@ struct condrv_output_info
     short int     font_weight;        /* font weight */
     short int     font_pitch_family;  /* font pitch & family */
     unsigned int  color_map[16];      /* color table */
-};
-
-/* IOCTL_CONDRV_SET_OUTPUT_INFO params */
-struct condrv_output_info_params
-{
-    unsigned int  mask;               /* setting mask */
-    struct condrv_output_info info;   /* output info */
 };
 
 /* IOCTL_CONDRV_GET_RENDERER_EVENTS result */

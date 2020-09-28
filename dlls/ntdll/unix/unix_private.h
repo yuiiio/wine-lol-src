@@ -22,7 +22,6 @@
 #define __NTDLL_UNIX_PRIVATE_H
 
 #include <pthread.h>
-#include <signal.h>
 #include "unixlib.h"
 #include "wine/list.h"
 

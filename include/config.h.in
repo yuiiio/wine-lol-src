@@ -79,6 +79,9 @@
 /* Define to 1 if you have the <CL/cl.h> header file. */
 #undef HAVE_CL_CL_H
 
+/* Define to 1 if you have the <CL/opencl.h> header file. */
+#undef HAVE_CL_OPENCL_H
+
 /* Define to 1 if you have the <CommonCrypto/CommonCryptor.h> header file. */
 #undef HAVE_COMMONCRYPTO_COMMONCRYPTOR_H
 
@@ -227,6 +230,9 @@
 
 /* Define to 1 if you have the `futimesat' function. */
 #undef HAVE_FUTIMESAT
+
+/* Define to 1 if you have the <gcrypt.h> header file. */
+#undef HAVE_GCRYPT_H
 
 /* Define to 1 if you have the `getaddrinfo' function. */
 #undef HAVE_GETADDRINFO
@@ -665,9 +671,6 @@
 
 /* Define to 1 if you have the <OpenAL/al.h> header file. */
 #undef HAVE_OPENAL_AL_H
-
-/* Define to 1 if you have the <OpenCL/opencl.h> header file. */
-#undef HAVE_OPENCL_OPENCL_H
 
 /* Define to 1 if `numaudioengines' is a member of `oss_sysinfo'. */
 #undef HAVE_OSS_SYSINFO_NUMAUDIOENGINES
@@ -1336,6 +1339,9 @@
 
 /* Define to the soname of the libfreetype library. */
 #undef SONAME_LIBFREETYPE
+
+/* Define to the soname of the libgcrypt library. */
+#undef SONAME_LIBGCRYPT
 
 /* Define to the soname of the libGL library. */
 #undef SONAME_LIBGL

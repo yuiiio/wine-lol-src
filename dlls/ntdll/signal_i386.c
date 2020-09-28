@@ -757,10 +757,10 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
     if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Eip--;
 
     if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION)
-        NtContinue( context, FALSE );
+        NtSetContextThread( GetCurrentThread(), context );
 
     if ((status = call_stack_handlers( rec, context )) == STATUS_SUCCESS)
-        NtContinue( context, FALSE );
+        NtSetContextThread( GetCurrentThread(), context );
 
     if (status != STATUS_UNHANDLED_EXCEPTION) RtlRaiseStatus( status );
     return NtRaiseException( rec, context, FALSE );
@@ -1978,7 +1978,8 @@ void WINAPI DECLSPEC_HIDDEN __regs_RtlUnwind( EXCEPTION_REGISTRATION_RECORD* pEn
         }
         frame = __wine_pop_frame( frame );
     }
-    NtContinue( context, FALSE );
+
+    NtSetContextThread( GetCurrentThread(), context );
 }
 __ASM_STDCALL_FUNC( RtlUnwind, 16,
                     "pushl %ebp\n\t"

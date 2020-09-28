@@ -2264,10 +2264,10 @@ NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *conte
     if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Rip--;
 
     if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION)
-        NtContinue( context, FALSE );
+        NtSetContextThread( GetCurrentThread(), context );
 
     if ((status = call_stack_handlers( rec, context )) == STATUS_SUCCESS)
-        NtContinue( context, FALSE );
+        NtSetContextThread( GetCurrentThread(), context );
 
     if (status != STATUS_UNHANDLED_EXCEPTION) RtlRaiseStatus( status );
     return NtRaiseException( rec, context, FALSE );

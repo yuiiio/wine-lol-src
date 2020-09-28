@@ -26,7 +26,6 @@
 #include "wine/port.h"
 
 #include <assert.h>
-#include <signal.h>
 #include <stdarg.h>
 #ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
@@ -63,20 +62,9 @@ struct reserved_area
 
 static struct list reserved_areas = LIST_INIT(reserved_areas);
 
-static const UINT page_shift = 12;
-static const UINT_PTR page_mask = 0xfff;
-
 static const unsigned int granularity_mask = 0xffff;  /* reserved areas have 64k granularity */
 
-SIZE_T signal_stack_size = 0;
-SIZE_T signal_stack_mask = 0;
-static SIZE_T signal_stack_align;
-
-#define ROUND_ADDR(addr,mask) \
-   ((void *)((UINT_PTR)(addr) & ~(UINT_PTR)(mask)))
-
-#define ROUND_SIZE(addr,size) \
-   (((SIZE_T)(size) + ((UINT_PTR)(addr) & page_mask) + page_mask) & ~page_mask)
+extern IMAGE_NT_HEADERS __wine_spec_nt_header;
 
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
@@ -379,7 +367,6 @@ int CDECL mmap_enum_reserved_areas( int (CDECL *enum_func)(void *base, SIZE_T si
 void virtual_init(void)
 {
     const struct preload_info **preload_info = dlsym( RTLD_DEFAULT, "wine_main_preload_info" );
-    size_t size;
     int i;
 
     if (preload_info && *preload_info)
@@ -387,11 +374,4 @@ void virtual_init(void)
             mmap_add_reserved_area( (*preload_info)[i].addr, (*preload_info)[i].size );
 
     mmap_init( preload_info ? *preload_info : NULL );
-
-    size = ROUND_SIZE( 0, sizeof(TEB) ) + max( MINSIGSTKSZ, 8192 );
-    /* find the first power of two not smaller than size */
-    signal_stack_align = page_shift;
-    while ((1u << signal_stack_align) < size) signal_stack_align++;
-    signal_stack_mask = (1 << signal_stack_align) - 1;
-    signal_stack_size = (1 << signal_stack_align) - ROUND_SIZE( 0, sizeof(TEB) );
 }

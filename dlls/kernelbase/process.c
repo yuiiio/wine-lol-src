@@ -263,14 +263,14 @@ struct _PROC_THREAD_ATTRIBUTE_LIST
 /***********************************************************************
  *           create_nt_process
  */
-static NTSTATUS create_nt_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
+static NTSTATUS create_nt_process( SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
                                    BOOL inherit, DWORD flags, RTL_USER_PROCESS_PARAMETERS *params,
                                    RTL_USER_PROCESS_INFORMATION *info, HANDLE parent,
                                    const struct proc_thread_attr *handle_list )
 {
     OBJECT_ATTRIBUTES process_attr, thread_attr;
     PS_CREATE_INFO create_info;
-    ULONG_PTR buffer[offsetof( PS_ATTRIBUTE_LIST, Attributes[6] ) / sizeof(ULONG_PTR)];
+    ULONG_PTR buffer[offsetof( PS_ATTRIBUTE_LIST, Attributes[5] ) / sizeof(ULONG_PTR)];
     PS_ATTRIBUTE_LIST *attr = (PS_ATTRIBUTE_LIST *)buffer;
     UNICODE_STRING nameW;
     NTSTATUS status;
@@ -315,14 +315,6 @@ static NTSTATUS create_nt_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECUR
             attr->Attributes[pos].ReturnLength = NULL;
             pos++;
         }
-        if (token)
-        {
-            attr->Attributes[pos].Attribute    = PS_ATTRIBUTE_TOKEN;
-            attr->Attributes[pos].Size         = sizeof(token);
-            attr->Attributes[pos].ValuePtr     = token;
-            attr->Attributes[pos].ReturnLength = NULL;
-            pos++;
-        }
         attr->TotalLength = offsetof( PS_ATTRIBUTE_LIST, Attributes[pos] );
 
         InitializeObjectAttributes( &process_attr, NULL, 0, NULL, psa ? psa->lpSecurityDescriptor : NULL );
@@ -343,7 +335,7 @@ static NTSTATUS create_nt_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECUR
 /***********************************************************************
  *           create_vdm_process
  */
-static NTSTATUS create_vdm_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
+static NTSTATUS create_vdm_process( SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
                                     BOOL inherit, DWORD flags, RTL_USER_PROCESS_PARAMETERS *params,
                                     RTL_USER_PROCESS_INFORMATION *info )
 {
@@ -364,7 +356,7 @@ static NTSTATUS create_vdm_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECU
               winevdm, params->ImagePathName.Buffer, params->CommandLine.Buffer );
     RtlInitUnicodeString( &params->ImagePathName, winevdm );
     RtlInitUnicodeString( &params->CommandLine, newcmdline );
-    status = create_nt_process( token, psa, tsa, inherit, flags, params, info, NULL, NULL );
+    status = create_nt_process( psa, tsa, inherit, flags, params, info, NULL, NULL );
     HeapFree( GetProcessHeap(), 0, newcmdline );
     return status;
 }
@@ -373,7 +365,7 @@ static NTSTATUS create_vdm_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECU
 /***********************************************************************
  *           create_cmd_process
  */
-static NTSTATUS create_cmd_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
+static NTSTATUS create_cmd_process( SECURITY_ATTRIBUTES *psa, SECURITY_ATTRIBUTES *tsa,
                                     BOOL inherit, DWORD flags, RTL_USER_PROCESS_PARAMETERS *params,
                                     RTL_USER_PROCESS_INFORMATION *info )
 {
@@ -392,7 +384,7 @@ static NTSTATUS create_cmd_process( HANDLE token, SECURITY_ATTRIBUTES *psa, SECU
     swprintf( newcmdline, len, L"%s /s/c \"%s\"", comspec, params->CommandLine.Buffer );
     RtlInitUnicodeString( &params->ImagePathName, comspec );
     RtlInitUnicodeString( &params->CommandLine, newcmdline );
-    status = create_nt_process( token, psa, tsa, inherit, flags, params, info, NULL, NULL );
+    status = create_nt_process( psa, tsa, inherit, flags, params, info, NULL, NULL );
     RtlFreeHeap( GetProcessHeap(), 0, newcmdline );
     return status;
 }
@@ -508,6 +500,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR 
 
     TRACE( "app %s cmdline %s\n", debugstr_w(app_name), debugstr_w(cmd_line) );
 
+    if (token) FIXME( "Creating a process with a token is not yet implemented\n" );
     if (new_token) FIXME( "No support for returning created process token\n" );
 
     if (app_name)
@@ -592,8 +585,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR 
         }
     }
 
-    status = create_nt_process( token, process_attr, thread_attr, inherit,
-                                flags, params, &rtl_info, parent, handle_list );
+    status = create_nt_process( process_attr, thread_attr, inherit, flags, params, &rtl_info, parent, handle_list );
     switch (status)
     {
     case STATUS_SUCCESS:
@@ -602,7 +594,7 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR 
     case STATUS_INVALID_IMAGE_NE_FORMAT:
     case STATUS_INVALID_IMAGE_PROTECT:
         TRACE( "starting %s as Win16/DOS binary\n", debugstr_w(app_name) );
-        status = create_vdm_process( token, process_attr, thread_attr, inherit, flags, params, &rtl_info );
+        status = create_vdm_process( process_attr, thread_attr, inherit, flags, params, &rtl_info );
         break;
     case STATUS_INVALID_IMAGE_NOT_MZ:
         /* check for .com or .bat extension */
@@ -610,12 +602,12 @@ BOOL WINAPI DECLSPEC_HOTPATCH CreateProcessInternalW( HANDLE token, const WCHAR 
         if (!wcsicmp( p, L".com" ) || !wcsicmp( p, L".pif" ))
         {
             TRACE( "starting %s as DOS binary\n", debugstr_w(app_name) );
-            status = create_vdm_process( token, process_attr, thread_attr, inherit, flags, params, &rtl_info );
+            status = create_vdm_process( process_attr, thread_attr, inherit, flags, params, &rtl_info );
         }
         else if (!wcsicmp( p, L".bat" ) || !wcsicmp( p, L".cmd" ))
         {
             TRACE( "starting %s as batch binary\n", debugstr_w(app_name) );
-            status = create_cmd_process( token, process_attr, thread_attr, inherit, flags, params, &rtl_info );
+            status = create_cmd_process( process_attr, thread_attr, inherit, flags, params, &rtl_info );
         }
         break;
     }

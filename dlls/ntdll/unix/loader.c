@@ -794,7 +794,6 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
     const IMAGE_IMPORT_DESCRIPTOR *descr;
     const IMAGE_THUNK_DATA *import_list;
     IMAGE_THUNK_DATA *thunk_list;
-    void **ptr;
 
     assert( ntdll_exports );
 
@@ -837,16 +836,14 @@ static void fixup_ntdll_imports( const IMAGE_NT_HEADERS *nt )
     GET_FUNC( LdrInitializeThunk );
     GET_FUNC( RtlUserThreadStart );
     GET_FUNC( __wine_set_unix_funcs );
-#undef GET_FUNC
-#define SET_PTR(name,val) \
-    if ((ptr = (void *)find_named_export( ntdll_module, ntdll_exports, #name ))) *ptr = val; \
-    else ERR( "%s not found\n", #name )
-
-    SET_PTR( __wine_syscall_dispatcher, __wine_syscall_dispatcher );
 #ifdef __i386__
-    SET_PTR( __wine_ldt_copy, &__wine_ldt_copy );
+    {
+        struct ldt_copy **p__wine_ldt_copy;
+        GET_FUNC( __wine_ldt_copy );
+        *p__wine_ldt_copy = &__wine_ldt_copy;
+    }
 #endif
-#undef SET_PTR
+#undef GET_FUNC
 }
 
 
@@ -1379,6 +1376,7 @@ static struct unix_funcs unix_funcs =
     NtClose,
     NtContinue,
     NtCreateEvent,
+    NtCreateFile,
     NtCreateIoCompletion,
     NtCreateJobObject,
     NtCreateKeyedEvent,
@@ -1409,6 +1407,7 @@ static struct unix_funcs unix_funcs =
     NtMapViewOfSection,
     NtNotifyChangeDirectoryFile,
     NtOpenEvent,
+    NtOpenFile,
     NtOpenIoCompletion,
     NtOpenJobObject,
     NtOpenKeyedEvent,

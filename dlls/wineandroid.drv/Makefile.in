@@ -18,5 +18,5 @@ SVG_SRCS = \
 EXTRA_TARGETS = wine-debug.apk
 
 wine-debug.apk: build.gradle $(srcdir)/AndroidManifest.xml $(srcdir)/WineActivity.java $(srcdir)/wine.svg
-	gradle -q -Psrcdir=$(srcdir) assembleDebug
+	gradle -q assembleDebug
 	mv build/outputs/apk/wine-debug.apk $@

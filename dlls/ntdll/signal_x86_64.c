@@ -1244,9 +1244,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
             {
                 ULONG64 frame;
 
-                new_context = *dispatch.ContextRecord;
-                new_context.ContextFlags &= ~0x40;
-                *context = new_context;
+                *context = new_context = *dispatch.ContextRecord;
                 dispatch.ContextRecord = context;
                 RtlVirtualUnwind( UNW_FLAG_NHANDLER, dispatch.ImageBase,
                         dispatch.ControlPc, dispatch.FunctionEntry,
@@ -1269,9 +1267,7 @@ void WINAPI RtlUnwindEx( PVOID end_frame, PVOID target_ip, EXCEPTION_RECORD *rec
 
                     teb_frame = __wine_pop_frame( teb_frame );
 
-                    new_context = *dispatch.ContextRecord;
-                    new_context.ContextFlags &= ~0x40;
-                    *context = new_context;
+                    *context = new_context = *dispatch.ContextRecord;
                     dispatch.ContextRecord = context;
                     RtlVirtualUnwind( UNW_FLAG_NHANDLER, dispatch.ImageBase,
                             dispatch.ControlPc, dispatch.FunctionEntry,

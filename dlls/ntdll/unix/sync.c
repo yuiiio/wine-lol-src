@@ -2490,12 +2490,29 @@ NTSTATUS CDECL fast_RtlReleaseSRWLockShared( RTL_SRWLOCK *lock )
     return STATUS_SUCCESS;
 }
 
-NTSTATUS CDECL fast_wait_cv( RTL_CONDITION_VARIABLE *variable, const void *value, const LARGE_INTEGER *timeout )
+static NTSTATUS wait_cv( int *futex, int val, const LARGE_INTEGER *timeout )
 {
-    const char *value_ptr;
-    int aligned_value, *futex;
     struct timespec timespec;
     int ret;
+
+    if (timeout && timeout->QuadPart != TIMEOUT_INFINITE)
+    {
+        timespec_from_timeout( &timespec, timeout );
+        ret = futex_wait( futex, val, &timespec );
+    }
+    else
+        ret = futex_wait( futex, val, NULL );
+
+    if (ret == -1 && errno == ETIMEDOUT)
+        return STATUS_TIMEOUT;
+    return STATUS_WAIT_0;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable,
+                                                 RTL_CRITICAL_SECTION *cs, const LARGE_INTEGER *timeout )
+{
+    NTSTATUS status;
+    int val, *futex;
 
     if (!use_futexes())
         return STATUS_NOT_IMPLEMENTED;
@@ -2503,21 +2520,51 @@ NTSTATUS CDECL fast_wait_cv( RTL_CONDITION_VARIABLE *variable, const void *value
     if (!(futex = get_futex( &variable->Ptr )))
         return STATUS_NOT_IMPLEMENTED;
 
-    value_ptr = (const char *)&value;
-    value_ptr += ((ULONG_PTR)futex) - ((ULONG_PTR)&variable->Ptr);
-    aligned_value = *(int *)value_ptr;
+    val = *futex;
 
-    if (timeout && timeout->QuadPart != TIMEOUT_INFINITE)
+    if (cs->RecursionCount == 1)
     {
-        timespec_from_timeout( &timespec, timeout );
-        ret = futex_wait( futex, aligned_value, &timespec );
-    }
-    else
-        ret = futex_wait( futex, aligned_value, NULL );
+        /* FIXME: simplified version of RtlLeaveCriticalSection/RtlEnterCriticalSection to avoid imports */
+        cs->RecursionCount = 0;
+        cs->OwningThread   = 0;
+        if (InterlockedDecrement( &cs->LockCount ) >= 0) fast_RtlpUnWaitCriticalSection( cs );
 
-    if (ret == -1 && errno == ETIMEDOUT)
-        return STATUS_TIMEOUT;
-    return STATUS_WAIT_0;
+        status = wait_cv( futex, val, timeout );
+
+        if (InterlockedIncrement( &cs->LockCount )) fast_RtlpWaitForCriticalSection( cs, INT_MAX );
+        cs->OwningThread   = ULongToHandle( GetCurrentThreadId() );
+        cs->RecursionCount = 1;
+    }
+    else status = wait_cv( futex, val, timeout );
+    return status;
+}
+
+NTSTATUS CDECL fast_RtlSleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRWLOCK *lock,
+                                                  const LARGE_INTEGER *timeout, ULONG flags )
+{
+    NTSTATUS status;
+    int val, *futex;
+
+    if (!use_futexes())
+        return STATUS_NOT_IMPLEMENTED;
+
+    if (!(futex = get_futex( &variable->Ptr )) || !get_futex( &lock->Ptr ))
+        return STATUS_NOT_IMPLEMENTED;
+
+    val = *futex;
+
+    if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
+        fast_RtlReleaseSRWLockShared( lock );
+    else
+        fast_RtlReleaseSRWLockExclusive( lock );
+
+    status = wait_cv( futex, val, timeout );
+
+    if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
+        fast_RtlAcquireSRWLockShared( lock );
+    else
+        fast_RtlAcquireSRWLockExclusive( lock );
+    return status;
 }
 
 NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count )
@@ -2631,12 +2678,19 @@ NTSTATUS CDECL fast_RtlReleaseSRWLockShared( RTL_SRWLOCK *lock )
     return STATUS_NOT_IMPLEMENTED;
 }
 
-NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count )
+NTSTATUS CDECL fast_RtlSleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRWLOCK *lock,
+                                                  const LARGE_INTEGER *timeout, ULONG flags )
 {
     return STATUS_NOT_IMPLEMENTED;
 }
 
-NTSTATUS CDECL fast_wait_cv( RTL_CONDITION_VARIABLE *variable, const void *value, const LARGE_INTEGER *timeout )
+NTSTATUS CDECL fast_RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable,
+                                                 RTL_CRITICAL_SECTION *cs, const LARGE_INTEGER *timeout )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS CDECL fast_RtlWakeConditionVariable( RTL_CONDITION_VARIABLE *variable, int count )
 {
     return STATUS_NOT_IMPLEMENTED;
 }

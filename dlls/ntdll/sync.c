@@ -481,12 +481,16 @@ void WINAPI RtlWakeAllConditionVariable( RTL_CONDITION_VARIABLE *variable )
 NTSTATUS WINAPI RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable, RTL_CRITICAL_SECTION *crit,
                                              const LARGE_INTEGER *timeout )
 {
-    const void *value = variable->Ptr;
     NTSTATUS status;
+    int val;
 
+    if ((status = unix_funcs->fast_RtlSleepConditionVariableCS( variable, crit,
+                                                                timeout )) != STATUS_NOT_IMPLEMENTED)
+        return status;
+
+    val = *(int *)&variable->Ptr;
     RtlLeaveCriticalSection( crit );
-    if ((status = unix_funcs->fast_wait_cv( variable, value, timeout )) == STATUS_NOT_IMPLEMENTED)
-        status = RtlWaitOnAddress( &variable->Ptr, &value, sizeof(value), timeout );
+    status = RtlWaitOnAddress( &variable->Ptr, &val, sizeof(int), timeout );
     RtlEnterCriticalSection( crit );
     return status;
 }
@@ -513,16 +517,21 @@ NTSTATUS WINAPI RtlSleepConditionVariableCS( RTL_CONDITION_VARIABLE *variable, R
 NTSTATUS WINAPI RtlSleepConditionVariableSRW( RTL_CONDITION_VARIABLE *variable, RTL_SRWLOCK *lock,
                                               const LARGE_INTEGER *timeout, ULONG flags )
 {
-    const void *value = variable->Ptr;
     NTSTATUS status;
+    int val;
+
+    if ((status = unix_funcs->fast_RtlSleepConditionVariableSRW( variable, lock, timeout,
+                                                                 flags )) != STATUS_NOT_IMPLEMENTED)
+        return status;
+
+    val = *(int *)&variable->Ptr;
 
     if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
         RtlReleaseSRWLockShared( lock );
     else
         RtlReleaseSRWLockExclusive( lock );
 
-    if ((status = unix_funcs->fast_wait_cv( variable, value, timeout )) == STATUS_NOT_IMPLEMENTED)
-        status = RtlWaitOnAddress( variable, &value, sizeof(value), timeout );
+    status = RtlWaitOnAddress( &variable->Ptr, &val, sizeof(int), timeout );
 
     if (flags & RTL_CONDITION_VARIABLE_LOCKMODE_SHARED)
         RtlAcquireSRWLockShared( lock );

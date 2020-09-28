@@ -212,6 +212,7 @@ void DECLSPEC_HIDDEN call_thread_func( PRTL_THREAD_START_ROUTINE entry, void *ar
         NtTerminateThread( GetCurrentThread(), GetExceptionCode() );
     }
     __ENDTRY
+    abort();  /* should not be reached */
 }
 
 #else  /* __i386__ */
@@ -228,6 +229,7 @@ void WINAPI RtlUserThreadStart( PRTL_THREAD_START_ROUTINE entry, void *arg )
         NtTerminateThread( GetCurrentThread(), GetExceptionCode() );
     }
     __ENDTRY
+    abort();  /* should not be reached */
 }
 
 #endif  /* __i386__ */

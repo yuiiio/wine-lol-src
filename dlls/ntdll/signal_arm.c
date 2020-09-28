@@ -24,8 +24,14 @@
 #include "config.h"
 #include "wine/port.h"
 
+#include <assert.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdio.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #define NONAMELESSUNION
 #define NONAMELESSSTRUCT
@@ -263,12 +269,18 @@ USHORT WINAPI RtlCaptureStackBackTrace( ULONG skip, ULONG count, PVOID *buffer, 
 /**********************************************************************
  *              DbgBreakPoint   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( DbgBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
+void WINAPI DbgBreakPoint(void)
+{
+     kill(getpid(), SIGTRAP);
+}
 
 /**********************************************************************
  *              DbgUserBreakPoint   (NTDLL.@)
  */
-__ASM_STDCALL_FUNC( DbgUserBreakPoint, 0, "bkpt #0; bx lr; nop; nop; nop; nop" );
+void WINAPI DbgUserBreakPoint(void)
+{
+     kill(getpid(), SIGTRAP);
+}
 
 /**********************************************************************
  *           NtCurrentTeb   (NTDLL.@)

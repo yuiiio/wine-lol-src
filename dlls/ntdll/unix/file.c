@@ -1777,7 +1777,8 @@ static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
 
     for (;;)
     {
-        if (!(name = malloc( size + 1 ))) return STATUS_NO_MEMORY;
+        name = RtlAllocateHeap( GetProcessHeap(), 0, size + 1 );
+        if (!name) return STATUS_NO_MEMORY;
 
         SERVER_START_REQ( get_handle_unix_name )
         {
@@ -1794,7 +1795,7 @@ static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
             *unix_name = name;
             break;
         }
-        free( name );
+        RtlFreeHeap( GetProcessHeap(), 0, name );
         if (ret != STATUS_BUFFER_OVERFLOW) break;
     }
     return ret;
@@ -1961,7 +1962,7 @@ static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_uni
     if ((status = server_get_unix_name( handle, &unix_name ))) return status;
 
     letter = find_dos_device( unix_name );
-    free( unix_name );
+    RtlFreeHeap( GetProcessHeap(), 0, unix_name );
 
     if (letter == -1)
     {
@@ -3984,7 +3985,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 info->AlignmentInformation.AlignmentRequirement = 1;  /* FIXME */
 
                 io->u.Status = fill_name_info( unix_name, &info->NameInformation, &name_len );
-                free( unix_name );
+                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
                 io->Information = FIELD_OFFSET(FILE_ALL_INFORMATION, NameInformation.FileName) + name_len;
             }
         }
@@ -4036,7 +4037,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
             {
                 LONG name_len = len - FIELD_OFFSET(FILE_NAME_INFORMATION, FileName);
                 io->u.Status = fill_name_info( unix_name, info, &name_len );
-                free( unix_name );
+                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
                 io->Information = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName) + name_len;
             }
         }
@@ -4071,7 +4072,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                     info->EndOfFile      = std.EndOfFile;
                     info->FileAttributes = basic.FileAttributes;
                 }
-                free( unix_name );
+                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
             }
         }
         break;
@@ -6394,7 +6395,7 @@ NTSTATUS WINAPI NtQueryObject( HANDLE handle, OBJECT_INFORMATION_CLASS info_clas
                 if (used_len) *used_len = sizeof(*p) + size;
                 free( nt_name );
             }
-            free( unix_name );
+            RtlFreeHeap( GetProcessHeap(), 0, unix_name );
             break;
         }
         else if (status != STATUS_OBJECT_TYPE_MISMATCH) break;

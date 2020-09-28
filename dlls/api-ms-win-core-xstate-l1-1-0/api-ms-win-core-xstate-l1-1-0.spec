@@ -4,5 +4,5 @@
 @ stub RtlGetExtendedFeaturesMask
 @ stdcall RtlInitializeExtendedContext(ptr long ptr) ntdll.RtlInitializeExtendedContext
 @ stdcall RtlLocateExtendedFeature(ptr long ptr) ntdll.RtlLocateExtendedFeature
-@ stdcall RtlLocateLegacyContext(ptr ptr) ntdll.RtlLocateLegacyContext
+@ stub RtlLocateLegacyContext
 @ stub RtlSetExtendedFeaturesMask

@@ -792,7 +792,6 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
     ULONG64 frame, off;
     struct UNWIND_INFO *info;
     unsigned int i, prolog_offset;
-    BOOL mach_frame = FALSE;
 
     TRACE( "type %x rip %lx rsp %lx\n", type, pc, context->Rsp );
     if (TRACE_ON(seh)) dump_unwind_info( base, function );
@@ -865,23 +864,7 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
                 set_float_reg( context, ctx_ptr, info->opcodes[i].info, (M128A *)off );
                 break;
             case UWOP_PUSH_MACHFRAME:
-                if (info->flags & UNW_FLAG_CHAININFO)
-                {
-                    FIXME("PUSH_MACHFRAME with chained unwind info.\n");
-                    break;
-                }
-                if (i + get_opcode_size(info->opcodes[i]) < info->count )
-                {
-                    FIXME("PUSH_MACHFRAME is not the last opcode.\n");
-                    break;
-                }
-
-                if (info->opcodes[i].info)
-                    context->Rsp += 0x8;
-
-                context->Rip = *(ULONG64 *)context->Rsp;
-                context->Rsp = *(ULONG64 *)(context->Rsp + 24);
-                mach_frame = TRUE;
+                FIXME( "PUSH_MACHFRAME %u\n", info->opcodes[i].info );
                 break;
             case UWOP_EPILOG:
                 if (info->version == 2)
@@ -896,12 +879,9 @@ PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
         function = &handler_data->chain;  /* restart with the chained info */
     }
 
-    if (!mach_frame)
-    {
-        /* now pop return address */
-        context->Rip = *(ULONG64 *)context->Rsp;
-        context->Rsp += sizeof(ULONG64);
-    }
+    /* now pop return address */
+    context->Rip = *(ULONG64 *)context->Rsp;
+    context->Rsp += sizeof(ULONG64);
 
     if (!(info->flags & type)) return NULL;  /* no matching handler */
     if (prolog_offset != ~0) return NULL;  /* inside prolog */

@@ -1629,7 +1629,6 @@ NTSTATUS WINAPI NtDuplicateObject( HANDLE source_process, HANDLE source, HANDLE 
  */
 NTSTATUS WINAPI NtClose( HANDLE handle )
 {
-    HANDLE port;
     NTSTATUS ret;
     int fd = remove_fd_from_cache( handle );
 
@@ -1640,13 +1639,5 @@ NTSTATUS WINAPI NtClose( HANDLE handle )
     }
     SERVER_END_REQ;
     if (fd != -1) close( fd );
-
-    if (ret != STATUS_INVALID_HANDLE || !handle) return ret;
-    if (!NtCurrentTeb()->Peb->BeingDebugged) return ret;
-    if (!NtQueryInformationProcess( NtCurrentProcess(), ProcessDebugPort, &port, sizeof(port), NULL) && port)
-    {
-        NtCurrentTeb()->ExceptionCode = ret;
-        pKiRaiseUserExceptionDispatcher();
-    }
     return ret;
 }

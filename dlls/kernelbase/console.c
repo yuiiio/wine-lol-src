@@ -400,7 +400,7 @@ DWORD WINAPI CtrlRoutine( void *arg )
 BOOL WINAPI DECLSPEC_HOTPATCH FillConsoleOutputAttribute( HANDLE handle, WORD attr, DWORD length,
                                                            COORD coord, DWORD *written )
 {
-    struct condrv_fill_output_params params;
+    BOOL ret;
 
     TRACE( "(%p,%d,%d,(%dx%d),%p)\n", handle, attr, length, coord.X, coord.Y, written );
 
@@ -411,16 +411,19 @@ BOOL WINAPI DECLSPEC_HOTPATCH FillConsoleOutputAttribute( HANDLE handle, WORD at
     }
 
     *written = 0;
-
-    params.mode  = CHAR_INFO_MODE_ATTR;
-    params.x     = coord.X;
-    params.y     = coord.Y;
-    params.count = length;
-    params.wrap  = TRUE;
-    params.ch    = 0;
-    params.attr  = attr;
-    return console_ioctl( handle, IOCTL_CONDRV_FILL_OUTPUT, &params, sizeof(params),
-                          written, sizeof(written), NULL );
+    SERVER_START_REQ( fill_console_output )
+    {
+        req->handle    = console_handle_unmap( handle );
+        req->x         = coord.X;
+        req->y         = coord.Y;
+        req->mode      = CHAR_INFO_MODE_ATTR;
+        req->wrap      = TRUE;
+        req->data.attr = attr;
+        req->count     = length;
+        if ((ret = !wine_server_call_err( req ))) *written = reply->written;
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 

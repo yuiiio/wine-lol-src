@@ -542,8 +542,6 @@ static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
 
     assert( sock->obj.ops == &sock_ops );
 
-    if (get_unix_fd( fd ) == -1) return 0;
-
     switch(code)
     {
     case WS_SIO_ADDRESS_LIST_CHANGE:
@@ -633,19 +631,14 @@ static void sock_destroy( struct object *obj )
     }
 }
 
-static struct sock *create_socket(void)
+static void init_sock(struct sock *sock)
 {
-    struct sock *sock;
-
-    if (!(sock = alloc_object( &sock_ops ))) return NULL;
-    sock->fd      = NULL;
-    sock->state   = 0;
+    sock->state = 0;
     sock->mask    = 0;
     sock->hmask   = 0;
     sock->pmask   = 0;
     sock->polling = 0;
     sock->flags   = 0;
-    sock->proto   = 0;
     sock->type    = 0;
     sock->family  = 0;
     sock->event   = NULL;
@@ -659,11 +652,12 @@ static struct sock *create_socket(void)
     init_async_queue( &sock->write_q );
     init_async_queue( &sock->ifchange_q );
     memset( sock->errors, 0, sizeof(sock->errors) );
-    return sock;
 }
 
-static int init_socket( struct sock *sock, int family, int type, int protocol, unsigned int flags )
+/* create a new and unconnected socket */
+static struct object *create_socket( int family, int type, int protocol, unsigned int flags )
 {
+    struct sock *sock;
     int sockfd;
 
     sockfd = socket( family, type, protocol );
@@ -671,9 +665,15 @@ static int init_socket( struct sock *sock, int family, int type, int protocol, u
     {
         if (errno == EINVAL) set_win32_error( WSAESOCKTNOSUPPORT );
         else set_win32_error( sock_get_error( errno ));
-        return -1;
+        return NULL;
     }
     fcntl(sockfd, F_SETFL, O_NONBLOCK); /* make socket nonblocking */
+    if (!(sock = alloc_object( &sock_ops )))
+    {
+        close( sockfd );
+        return NULL;
+    }
+    init_sock( sock );
     sock->state  = (type != SOCK_STREAM) ? (FD_READ|FD_WRITE) : 0;
     sock->flags  = flags;
     sock->proto  = protocol;
@@ -683,11 +683,12 @@ static int init_socket( struct sock *sock, int family, int type, int protocol, u
     if (!(sock->fd = create_anonymous_fd( &sock_fd_ops, sockfd, &sock->obj,
                             (flags & WSA_FLAG_OVERLAPPED) ? 0 : FILE_SYNCHRONOUS_IO_NONALERT )))
     {
-        return -1;
+        release_object( sock );
+        return NULL;
     }
     sock_reselect( sock );
     clear_error();
-    return 0;
+    return &sock->obj;
 }
 
 /* accepts a socket and inits it */
@@ -719,8 +720,6 @@ static struct sock *accept_socket( obj_handle_t handle )
     if (!sock)
         return NULL;
 
-    if (get_unix_fd( sock->fd ) == -1) return NULL;
-
     if ( sock->deferred )
     {
         acceptsock = sock->deferred;
@@ -733,13 +732,14 @@ static struct sock *accept_socket( obj_handle_t handle )
             release_object( sock );
             return NULL;
         }
-        if (!(acceptsock = create_socket()))
+        if (!(acceptsock = alloc_object( &sock_ops )))
         {
             close( acceptfd );
             release_object( sock );
             return NULL;
         }
 
+        init_sock( acceptsock );
         /* newly created socket gets the same properties of the listening socket */
         acceptsock->state  = FD_WINE_CONNECTED|FD_READ|FD_WRITE;
         if (sock->state & FD_WINE_NONBLOCKING)
@@ -773,9 +773,6 @@ static int accept_into_socket( struct sock *sock, struct sock *acceptsock )
 {
     int acceptfd;
     struct fd *newfd;
-
-    if (get_unix_fd( sock->fd ) == -1) return FALSE;
-
     if ( sock->deferred )
     {
         newfd = dup_fd_object( sock->deferred->fd, 0, 0,
@@ -1216,15 +1213,8 @@ static struct object *socket_device_lookup_name( struct object *obj, struct unic
 static struct object *socket_device_open_file( struct object *obj, unsigned int access,
                                                unsigned int sharing, unsigned int options )
 {
-    struct sock *sock;
-
-    if (!(sock = create_socket())) return NULL;
-    if (!(sock->fd = alloc_pseudo_fd( &sock_fd_ops, &sock->obj, options )))
-    {
-        release_object( sock );
-        return NULL;
-    }
-    return &sock->obj;
+    set_error( STATUS_NOT_IMPLEMENTED );
+    return NULL;
 }
 
 struct object *create_socket_device( struct object *root, const struct unicode_str *name )
@@ -1235,14 +1225,13 @@ struct object *create_socket_device( struct object *root, const struct unicode_s
 /* create a socket */
 DECL_HANDLER(create_socket)
 {
-    struct sock *sock;
+    struct object *obj;
 
     reply->handle = 0;
-    if ((sock = create_socket()) != NULL)
+    if ((obj = create_socket( req->family, req->type, req->protocol, req->flags )) != NULL)
     {
-        if (!init_socket( sock, req->family, req->type, req->protocol, req->flags ))
-            reply->handle = alloc_handle( current->process, &sock->obj, req->access, req->attributes );
-        release_object( sock );
+        reply->handle = alloc_handle( current->process, obj, req->access, req->attributes );
+        release_object( obj );
     }
 }
 
@@ -1295,7 +1284,6 @@ DECL_HANDLER(set_socket_event)
 
     if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
                                                 FILE_WRITE_ATTRIBUTES, &sock_ops))) return;
-    if (get_unix_fd( sock->fd ) == -1) return;
     old_event = sock->event;
     sock->mask    = req->mask;
     sock->hmask   &= ~req->mask; /* re-enable held events */
@@ -1328,7 +1316,6 @@ DECL_HANDLER(get_socket_event)
 
     if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
                                                 FILE_READ_ATTRIBUTES, &sock_ops ))) return;
-    if (get_unix_fd( sock->fd ) == -1) return;
     reply->mask  = sock->mask;
     reply->pmask = sock->pmask;
     reply->state = sock->state;
@@ -1360,8 +1347,6 @@ DECL_HANDLER(enable_socket_event)
     if (!(sock = (struct sock*)get_handle_obj( current->process, req->handle,
                                                FILE_WRITE_ATTRIBUTES, &sock_ops)))
         return;
-
-    if (get_unix_fd( sock->fd ) == -1) return;
 
     /* for event-based notification, windows erases stale events */
     sock->pmask &= ~req->mask;
@@ -1400,8 +1385,6 @@ DECL_HANDLER(get_socket_info)
 
     sock = (struct sock *)get_handle_obj( current->process, req->handle, FILE_READ_ATTRIBUTES, &sock_ops );
     if (!sock) return;
-
-    if (get_unix_fd( sock->fd ) == -1) return;
 
     reply->family   = sock->family;
     reply->type     = sock->type;

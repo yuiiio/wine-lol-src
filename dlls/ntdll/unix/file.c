@@ -1924,6 +1924,7 @@ static int find_dos_device( const char *path )
             {
                 if ((info[drive].dev == st.st_dev) && (info[drive].ino == st.st_ino))
                 {
+                    if (len == 1) len = 0;  /* preserve root slash in returned path */
                     TRACE( "%s -> drive %c:, root=%s, name=%s\n",
                            debugstr_a(path), 'A' + drive, debugstr_a(buffer), debugstr_a(path + len));
                     free( buffer );
@@ -1932,8 +1933,8 @@ static int find_dos_device( const char *path )
             }
         }
         if (len <= 1) break;  /* reached root */
-        while (len > 1 && path[len - 1] != '/') len--;
-        while (len > 1 && path[len - 1] == '/') len--;
+        while (path[len - 1] != '/') len--;
+        while (path[len - 1] == '/') len--;
         buffer[len] = 0;
     }
     free( buffer );
@@ -1951,6 +1952,7 @@ static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_uni
     int letter;
 
     if ((status = server_get_unix_name( handle, &unix_name ))) return status;
+
     letter = find_dos_device( unix_name );
     free( unix_name );
 

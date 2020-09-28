@@ -3961,12 +3961,6 @@ static void output_sources( struct makefile *make )
         add_install_rule( make, make->scripts.str[i], make->scripts.str[i],
                           strmake( "S$(bindir)/%s", make->scripts.str[i] ));
 
-    for (i = 0; i < make->extra_targets.count; i++)
-        if (strarray_exists( &make->dependencies, obj_dir_path( make, make->extra_targets.str[i] )))
-            strarray_add( &make->clean_files, make->extra_targets.str[i] );
-        else
-            strarray_add( &make->all_targets, make->extra_targets.str[i] );
-
     if (!make->src_dir) strarray_add( &make->distclean_files, ".gitignore" );
     strarray_add( &make->distclean_files, "Makefile" );
     if (make->testdll) strarray_add( &make->distclean_files, "testlist.c" );
@@ -4006,6 +4000,7 @@ static void output_sources( struct makefile *make )
     strarray_addall( &make->clean_files, make->pot_files );
     strarray_addall( &make->clean_files, make->debug_files );
     strarray_addall( &make->clean_files, make->all_targets );
+    strarray_addall( &make->clean_files, make->extra_targets );
 
     if (make->clean_files.count)
     {

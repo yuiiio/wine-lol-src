@@ -40,6 +40,29 @@ WINE_DEFAULT_DEBUG_CHANNEL(ntdll);
  */
 
 /******************************************************************************
+ * NtQueryObject [NTDLL.@]
+ * ZwQueryObject [NTDLL.@]
+ */
+NTSTATUS WINAPI NtQueryObject(IN HANDLE handle,
+                              IN OBJECT_INFORMATION_CLASS info_class,
+                              OUT PVOID ptr, IN ULONG len, OUT PULONG used_len)
+{
+    return unix_funcs->NtQueryObject( handle, info_class, ptr, len, used_len );
+}
+
+/******************************************************************
+ *		NtSetInformationObject [NTDLL.@]
+ *		ZwSetInformationObject [NTDLL.@]
+ *
+ */
+NTSTATUS WINAPI NtSetInformationObject(IN HANDLE handle,
+                                       IN OBJECT_INFORMATION_CLASS info_class,
+                                       IN PVOID ptr, IN ULONG len)
+{
+    return unix_funcs->NtSetInformationObject( handle, info_class, ptr, len );
+}
+
+/******************************************************************************
  *  NtQuerySecurityObject	[NTDLL.@]
  *
  * An ntdll analogue to GetKernelObjectSecurity().
@@ -126,6 +149,18 @@ NtQuerySecurityObject(
     return status;
 }
 
+
+/******************************************************************************
+ *  NtDuplicateObject		[NTDLL.@]
+ *  ZwDuplicateObject		[NTDLL.@]
+ */
+NTSTATUS WINAPI NtDuplicateObject( HANDLE source_process, HANDLE source,
+                                   HANDLE dest_process, PHANDLE dest,
+                                   ACCESS_MASK access, ULONG attributes, ULONG options )
+{
+    return unix_funcs->NtDuplicateObject( source_process, source, dest_process,
+                                          dest, access, attributes, options );
+}
 
 static LONG WINAPI invalid_handle_exception_handler( EXCEPTION_POINTERS *eptr )
 {

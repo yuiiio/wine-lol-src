@@ -902,7 +902,6 @@ static struct unix_funcs unix_funcs =
     get_paths,
     get_dll_path,
     get_unix_codepage,
-    get_locales,
     get_version,
     get_build_id,
     get_host_version,

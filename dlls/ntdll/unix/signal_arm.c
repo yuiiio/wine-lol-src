@@ -524,8 +524,7 @@ extern void raise_func_trampoline_thumb( EXCEPTION_RECORD *rec, CONTEXT *context
 __ASM_GLOBAL_FUNC( raise_func_trampoline_thumb,
                    ".thumb\n\t"
                    "bx r2\n\t"
-                   "bkpt\n\t"
-                   ".arm")
+                   "bkpt")
 
 extern void raise_func_trampoline_arm( EXCEPTION_RECORD *rec, CONTEXT *context, void *func );
 __ASM_GLOBAL_FUNC( raise_func_trampoline_arm,

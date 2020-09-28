@@ -129,8 +129,7 @@ static HMODULE ntdll_module;
 
 struct file_id
 {
-    dev_t dev;
-    ino_t ino;
+    BYTE ObjectId[16];
 };
 
 struct builtin_module
@@ -143,17 +142,13 @@ struct builtin_module
 
 static struct list builtin_modules = LIST_INIT( builtin_modules );
 
-static NTSTATUS add_builtin_module( void *module, void *handle, const struct stat *st )
+static NTSTATUS add_builtin_module( void *module, void *handle, const FILE_OBJECTID_BUFFER *id )
 {
     struct builtin_module *builtin;
     if (!(builtin = malloc( sizeof(*builtin) ))) return STATUS_NO_MEMORY;
     builtin->handle = handle;
     builtin->module = module;
-    if (st)
-    {
-        builtin->id.dev = st->st_dev;
-        builtin->id.ino = st->st_ino;
-    }
+    if (id) memcpy( &builtin->id, id->ObjectId, sizeof(builtin->id) );
     else memset( &builtin->id, 0, sizeof(builtin->id) );
     list_add_tail( &builtin_modules, &builtin->entry );
     return STATUS_SUCCESS;
@@ -1001,7 +996,9 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
 {
     struct builtin_module *builtin;
     OBJECT_ATTRIBUTES attr = { sizeof(attr) };
+    IO_STATUS_BLOCK io;
     LARGE_INTEGER size;
+    FILE_OBJECTID_BUFFER id;
     struct stat st;
     SIZE_T len = 0;
     NTSTATUS status;
@@ -1020,11 +1017,11 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
         return STATUS_DLL_NOT_FOUND;
     }
 
-    if (!stat( name, &st ))
+    if (!NtFsControlFile( handle, 0, NULL, NULL, &io, FSCTL_GET_OBJECT_ID, NULL, 0, &id, sizeof(id) ))
     {
         LIST_FOR_EACH_ENTRY( builtin, &builtin_modules, struct builtin_module, entry )
         {
-            if (builtin->id.dev == st.st_dev && builtin->id.ino == st.st_ino)
+            if (!memcmp( &builtin->id, id.ObjectId, sizeof(builtin->id) ))
             {
                 TRACE( "%s is the same file as existing module %p\n", debugstr_a(name),
                        builtin->module );
@@ -1035,7 +1032,7 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
             }
         }
     }
-    else memset( &st, 0, sizeof(st) );
+    else memset( id.ObjectId, 0, sizeof(id.ObjectId) );
 
     size.QuadPart = 0;
     status = NtCreateSection( &mapping, STANDARD_RIGHTS_REQUIRED | SECTION_QUERY |
@@ -1066,7 +1063,7 @@ static NTSTATUS open_dll_file( const char *name, void **module, pe_image_info_t 
         status = STATUS_IMAGE_MACHINE_TYPE_MISMATCH;
     }
 
-    if (!status) status = add_builtin_module( *module, NULL, &st );
+    if (!status) status = add_builtin_module( *module, NULL, &id );
 
     if (status)
     {

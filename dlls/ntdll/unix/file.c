@@ -1503,7 +1503,7 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
         /* is a symbolic link and a directory, consider these "reparse points" */
         if (S_ISDIR( st->st_mode )) *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
     }
-    else if (S_ISDIR( st->st_mode ) && (parent_path = malloc( strlen(path) + 4 )))
+    else if (S_ISDIR( st->st_mode ) && (parent_path = RtlAllocateHeap( GetProcessHeap(), 0, strlen(path) + 4 )))
     {
         struct stat parent_st;
 
@@ -1514,7 +1514,7 @@ static int get_file_info( const char *path, struct stat *st, ULONG *attr )
                 && (st->st_dev != parent_st.st_dev || st->st_ino == parent_st.st_ino))
             *attr |= FILE_ATTRIBUTE_REPARSE_POINT;
 
-        free( parent_path );
+        RtlFreeHeap( GetProcessHeap(), 0, parent_path );
     }
     *attr |= get_file_attributes( st );
     return ret;
@@ -1858,7 +1858,8 @@ static unsigned int get_drives_info( struct file_identity info[MAX_DOS_DRIVES] )
         struct stat st;
         unsigned int i;
 
-        if ((buffer = malloc( strlen(config_dir) + sizeof("/dosdevices/a:") )))
+        if ((buffer = RtlAllocateHeap( GetProcessHeap(), 0,
+                                       strlen(config_dir) + sizeof("/dosdevices/a:") )))
         {
             strcpy( buffer, config_dir );
             strcat( buffer, "/dosdevices/a:" );
@@ -1879,7 +1880,7 @@ static unsigned int get_drives_info( struct file_identity info[MAX_DOS_DRIVES] )
                     cache[i].ino = 0;
                 }
             }
-            free( buffer );
+            RtlFreeHeap( GetProcessHeap(), 0, buffer );
         }
         last_update = now;
     }
@@ -1910,7 +1911,7 @@ static int find_dos_device( const char *path )
     while (len > 1 && path[len - 1] == '/') len--;
 
     /* make a copy of the path */
-    if (!(buffer = malloc( len + 1 ))) return -1;
+    if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, len + 1 ))) return -1;
     memcpy( buffer, path, len );
     buffer[len] = 0;
 
@@ -1927,7 +1928,7 @@ static int find_dos_device( const char *path )
                     if (len == 1) len = 0;  /* preserve root slash in returned path */
                     TRACE( "%s -> drive %c:, root=%s, name=%s\n",
                            debugstr_a(path), 'A' + drive, debugstr_a(buffer), debugstr_a(path + len));
-                    free( buffer );
+                    RtlFreeHeap( GetProcessHeap(), 0, buffer );
                     return drive;
                 }
             }
@@ -1937,7 +1938,7 @@ static int find_dos_device( const char *path )
         while (path[len - 1] == '/') len--;
         buffer[len] = 0;
     }
-    free( buffer );
+    RtlFreeHeap( GetProcessHeap(), 0, buffer );
     return -1;
 }
 
@@ -3466,13 +3467,13 @@ static NTSTATUS unmount_device( HANDLE handle )
 #else
                 static const char umount[] = "umount >/dev/null 2>&1 ";
 #endif
-                char *cmd = malloc( strlen(mount_point)+sizeof(umount));
+                char *cmd = RtlAllocateHeap( GetProcessHeap(), 0, strlen(mount_point)+sizeof(umount));
                 if (cmd)
                 {
                     strcpy( cmd, umount );
                     strcat( cmd, mount_point );
                     system( cmd );
-                    free( cmd );
+                    RtlFreeHeap( GetProcessHeap(), 0, cmd );
 #ifdef linux
                     /* umount will fail to release the loop device since we still have
                        a handle to it, so we release it here */
@@ -3992,7 +3993,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 char *tmpbuf;
                 ULONG size = info->MaximumMessageSize ? info->MaximumMessageSize : 0x10000;
                 if (size > 0x10000) size = 0x10000;
-                if ((tmpbuf = malloc( size )))
+                if ((tmpbuf = RtlAllocateHeap( GetProcessHeap(), 0, size )))
                 {
                     if (!server_get_unix_fd( handle, FILE_READ_DATA, &fd, &needs_close, NULL, NULL ))
                     {
@@ -4001,7 +4002,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                         info->NextMessageSize = (res >= 0) ? res : MAILSLOT_NO_MESSAGE;
                         if (needs_close) close( fd );
                     }
-                    free( tmpbuf );
+                    RtlFreeHeap( GetProcessHeap(), 0, tmpbuf );
                 }
             }
         }

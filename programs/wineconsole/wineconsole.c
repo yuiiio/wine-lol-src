@@ -128,9 +128,17 @@ static BOOL WINECON_SetHistorySize(HANDLE hConIn, int size)
  */
 static BOOL WINECON_SetHistoryMode(HANDLE hConIn, int mode)
 {
-    struct condrv_input_info_params params = { SET_CONSOLE_INPUT_INFO_HISTORY_MODE };
-    params.info.history_mode = mode;
-    return DeviceIoControl(hConIn, IOCTL_CONDRV_SET_INPUT_INFO, &params, sizeof(params), NULL, 0, NULL, NULL);
+    BOOL	ret;
+
+    SERVER_START_REQ(set_console_input_info)
+    {
+	req->handle = wine_server_obj_handle( hConIn );
+	req->mask = SET_CONSOLE_INPUT_INFO_HISTORY_MODE;
+	req->history_mode = mode;
+	ret = !wine_server_call_err( req );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************

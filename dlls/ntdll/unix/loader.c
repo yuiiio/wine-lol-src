@@ -988,7 +988,6 @@ static struct unix_funcs unix_funcs =
     NtCancelTimer,
     NtClearEvent,
     NtClose,
-    NtContinue,
     NtCreateEvent,
     NtCreateKeyedEvent,
     NtCreateMutant,

@@ -189,7 +189,6 @@ void *alloc_object( const struct object_ops *ops )
     {
         obj->refcount     = 1;
         obj->handle_count = 0;
-        obj->is_permanent = 0;
         obj->ops          = ops;
         obj->name         = NULL;
         obj->sd           = NULL;

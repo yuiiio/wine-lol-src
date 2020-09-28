@@ -739,6 +739,7 @@ SOURCES = \
 	wine/exception.h \
 	wine/fil_data.idl \
 	wine/itss.idl \
+	wine/library.h \
 	wine/orpc.idl \
 	wine/svcctl.idl \
 	wine/winedxgi.idl \

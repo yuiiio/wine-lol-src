@@ -41,6 +41,7 @@
 #endif
 #endif
 #include "wine/asm.h"
+#include "wine/library.h"
 
 static char *bindir;
 static char *dlldir;

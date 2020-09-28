@@ -364,12 +364,9 @@ static LONG WINAPI invalid_handle_exception_handler( EXCEPTION_POINTERS *eptr )
 /* Everquest 2 / Pirates of the Burning Sea hooks NtClose, so we need a wrapper */
 NTSTATUS close_handle( HANDLE handle )
 {
-    DWORD_PTR debug_port;
     NTSTATUS ret = unix_funcs->NtClose( handle );
 
-    if (ret == STATUS_INVALID_HANDLE && handle && NtCurrentTeb()->Peb->BeingDebugged &&
-        !NtQueryInformationProcess( NtCurrentProcess(), ProcessDebugPort, &debug_port,
-                                    sizeof(debug_port), NULL) && debug_port)
+    if (ret == STATUS_INVALID_HANDLE && handle && NtCurrentTeb()->Peb->BeingDebugged)
     {
         __TRY
         {

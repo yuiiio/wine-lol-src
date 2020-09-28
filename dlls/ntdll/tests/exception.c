@@ -3708,12 +3708,6 @@ START_TEST(exception)
     test_suspend_process();
     test_unload_trace();
 
-    /* Call of Duty WWII writes to BeingDebugged then closes an invalid handle,
-     * crashing the game if an exception is raised. */
-    NtCurrentTeb()->Peb->BeingDebugged = 0x98;
-    test_closehandle(0, (HANDLE)0xdeadbeef);
-    NtCurrentTeb()->Peb->BeingDebugged = 0;
-
 #elif defined(__x86_64__)
 
 #define X(f) p##f = (void*)GetProcAddress(hntdll, #f)
@@ -3757,12 +3751,6 @@ START_TEST(exception)
       test_dynamic_unwind();
     else
       skip( "Dynamic unwind functions not found\n" );
-
-    /* Call of Duty WWII writes to BeingDebugged then closes an invalid handle,
-     * crashing the game if an exception is raised. */
-    NtCurrentTeb()->Peb->BeingDebugged = 0x98;
-    test_closehandle(0, (HANDLE)0xdeadbeef);
-    NtCurrentTeb()->Peb->BeingDebugged = 0;
 
 #endif
 

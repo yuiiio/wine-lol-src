@@ -312,38 +312,36 @@ char * CDECL wine_get_unix_file_name( LPCWSTR dosW )
 WCHAR * CDECL wine_get_dos_file_name( LPCSTR str )
 {
     UNICODE_STRING nt_name;
+    ANSI_STRING unix_name;
     NTSTATUS status;
     WCHAR *buffer;
-    SIZE_T len = strlen(str) + 1;
+    DWORD len;
 
     if (str[0] != '/')  /* relative path name */
     {
+        len = strlen( str ) + 1;
         if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, len * sizeof(WCHAR) ))) return NULL;
         MultiByteToWideChar( CP_UNIXCP, 0, str, len, buffer, len );
         status = RtlDosPathNameToNtPathName_U_WithStatus( buffer, &nt_name, NULL, NULL );
         RtlFreeHeap( GetProcessHeap(), 0, buffer );
-        if (!set_ntstatus( status )) return NULL;
-        buffer = nt_name.Buffer;
-        len = nt_name.Length / sizeof(WCHAR) + 1;
     }
     else
     {
-        len += 8;  /* \??\unix prefix */
-        if (!(buffer = HeapAlloc( GetProcessHeap(), 0, len * sizeof(WCHAR) ))) return NULL;
-        if (!set_ntstatus( wine_unix_to_nt_file_name( str, buffer, &len )))
-        {
-            HeapFree( GetProcessHeap(), 0, buffer );
-            return NULL;
-        }
+        RtlInitAnsiString( &unix_name, str );
+        status = wine_unix_to_nt_file_name( &unix_name, &nt_name );
     }
-    if (buffer[5] == ':')
+    if (!set_ntstatus( status )) return NULL;
+    if (nt_name.Buffer[5] == ':')
     {
         /* get rid of the \??\ prefix */
         /* FIXME: should implement RtlNtPathNameToDosPathName and use that instead */
-        memmove( buffer, buffer + 4, (len - 4) * sizeof(WCHAR) );
+        len = nt_name.Length - 4 * sizeof(WCHAR);
+        memmove( nt_name.Buffer, nt_name.Buffer + 4, len );
+        nt_name.Buffer[len / sizeof(WCHAR)] = 0;
     }
-    else buffer[1] = '\\';
-    return buffer;
+    else
+        nt_name.Buffer[1] = '\\';
+    return nt_name.Buffer;
 }
 
 /*************************************************************************

@@ -643,8 +643,7 @@ static void test_query_interrupt(void)
     sii = HeapAlloc(GetProcessHeap(), 0, NeededLength);
 
     status = pNtQuerySystemInformation(SystemInterruptInformation, sii, 0, &ReturnLength);
-    ok(status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
-    ok(ReturnLength == NeededLength, "got %u\n", ReturnLength);
+    ok( status == STATUS_INFO_LENGTH_MISMATCH, "Expected STATUS_INFO_LENGTH_MISMATCH, got %08x\n", status);
 
     /* Try it for all processors */
     status = pNtQuerySystemInformation(SystemInterruptInformation, sii, NeededLength, &ReturnLength);

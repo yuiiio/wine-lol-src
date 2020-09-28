@@ -514,7 +514,6 @@ AC_CHECK_HEADERS(\
 	sys/protosw.h \
 	sys/ptrace.h \
 	sys/queue.h \
-	sys/random.h \
 	sys/resource.h \
 	sys/scsiio.h \
 	sys/shm.h \
@@ -2184,7 +2183,6 @@ AC_CHECK_FUNCS(\
 	getauxval \
 	getifaddrs \
 	getopt_long_only \
-	getrandom \
 	kqueue \
 	lstat \
 	mach_continuous_time \

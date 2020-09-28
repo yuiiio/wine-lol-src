@@ -182,7 +182,7 @@
 @ stub BaseProcessInitPostImport
 # @ stub BaseQueryModuleData
 # @ stub BaseSetLastNTError
-@ stdcall -fastcall BaseThreadInitThunk(long ptr ptr)
+# @ stub BaseThreadInitThunk
 @ stub BaseUpdateAppcompatCache
 # @ stub BaseVerifyUnicodeString
 # @ stub Basep8BitStringToDynamicUnicodeString

@@ -947,7 +947,8 @@ static char *get_device_mount_point( dev_t dev )
 
             if (device && !stat( device, &st ) && S_ISBLK(st.st_mode) && st.st_rdev == dev)
             {
-                ret = strdup( entry->mnt_dir );
+                ret = RtlAllocateHeap( GetProcessHeap(), 0, strlen(entry->mnt_dir) + 1 );
+                if (ret) strcpy( ret, entry->mnt_dir );
                 break;
             }
         }
@@ -967,7 +968,8 @@ static char *get_device_mount_point( dev_t dev )
         if (stat( entry[i].f_mntfromname, &st ) == -1) continue;
         if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
         {
-            ret = strdup( entry[i].f_mntonname );
+            ret = RtlAllocateHeap( GetProcessHeap(), 0, strlen(entry[i].f_mntonname) + 1 );
+            if (ret) strcpy( ret, entry[i].f_mntonname );
             break;
         }
     }
@@ -1087,11 +1089,11 @@ static int get_dir_case_sensitivity_attr( const char *dir )
     attr.volattr = ATTR_VOL_INFO|ATTR_VOL_CAPABILITIES;
     if (getattrlist( mntpoint, &attr, &caps, sizeof(caps), 0 ) < 0)
     {
-        free( mntpoint );
+        RtlFreeHeap( GetProcessHeap(), 0, mntpoint );
         add_fs_cache( get_fsid.dev, get_fsid.fsid, TRUE );
         return TRUE;
     }
-    free( mntpoint );
+    RtlFreeHeap( GetProcessHeap(), 0, mntpoint );
     if (caps.size == sizeof(caps) &&
         (caps.caps.valid[VOL_CAPABILITIES_FORMAT] &
          (VOL_CAP_FMT_CASE_SENSITIVE | VOL_CAP_FMT_CASE_PRESERVING)) ==
@@ -3498,7 +3500,7 @@ static NTSTATUS unmount_device( HANDLE handle )
                     if (major(st.st_rdev) == LOOP_MAJOR) ioctl( unix_fd, 0x4c01 /*LOOP_CLR_FD*/, 0 );
 #endif
                 }
-                free( mount_point );
+                RtlFreeHeap( GetProcessHeap(), 0, mount_point );
             }
         }
         if (needs_close) close( unix_fd );

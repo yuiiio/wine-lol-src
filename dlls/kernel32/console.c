@@ -689,24 +689,25 @@ LONG CALLBACK CONSOLE_HandleCtrlC( EXCEPTION_POINTERS *eptr )
  * WriteConsoleOutput helper: hides server call semantics
  * writes a string at a given pos with standard attribute
  */
-static int CONSOLE_WriteChars(HANDLE handle, const WCHAR *str, size_t length, COORD *coord)
+static int CONSOLE_WriteChars(HANDLE hCon, LPCWSTR lpBuffer, int nc, COORD* pos)
 {
-    struct condrv_write_output_params *params;
-    DWORD written = 0, size;
+    int written = -1;
 
-    if (!length) return 0;
+    if (!nc) return 0;
 
-    size = sizeof(*params) + length * sizeof(WCHAR);
-    if (!(params = HeapAlloc( GetProcessHeap(), 0, size ))) return FALSE;
-    params->mode   = CHAR_INFO_MODE_TEXTSTDATTR;
-    params->x      = coord->X;
-    params->y      = coord->Y;
-    params->width  = 0;
-    memcpy( params + 1, str, length * sizeof(*str) );
-    if (DeviceIoControl( handle, IOCTL_CONDRV_WRITE_OUTPUT, params, size,
-                         &written, sizeof(written), NULL, NULL ))
-        coord->X += written;
-    HeapFree( GetProcessHeap(), 0, params );
+    SERVER_START_REQ( write_console_output )
+    {
+        req->handle = console_handle_unmap(hCon);
+        req->x      = pos->X;
+        req->y      = pos->Y;
+        req->mode   = CHAR_INFO_MODE_TEXTSTDATTR;
+        req->wrap   = FALSE;
+        wine_server_add_data( req, lpBuffer, nc * sizeof(WCHAR) );
+        if (!wine_server_call_err( req )) written = reply->written;
+    }
+    SERVER_END_REQ;
+
+    if (written > 0) pos->X += written;
     return written;
 }
 

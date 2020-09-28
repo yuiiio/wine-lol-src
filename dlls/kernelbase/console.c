@@ -1359,13 +1359,19 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleScreenBufferInfoEx( HANDLE handle,
  */
 BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleScreenBufferSize( HANDLE handle, COORD size )
 {
-    struct condrv_output_info_params params = { SET_CONSOLE_OUTPUT_INFO_SIZE };
+    BOOL ret;
 
     TRACE( "(%p,(%d,%d))\n", handle, size.X, size.Y );
-
-    params.info.width  = size.X;
-    params.info.height = size.Y;
-    return console_ioctl( handle, IOCTL_CONDRV_SET_OUTPUT_INFO, &params, sizeof(params), NULL, 0, NULL );
+    SERVER_START_REQ( set_console_output_info )
+    {
+        req->handle = console_handle_unmap( handle );
+        req->width  = size.X;
+        req->height = size.Y;
+        req->mask   = SET_CONSOLE_OUTPUT_INFO_SIZE;
+        ret = !wine_server_call_err( req );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 

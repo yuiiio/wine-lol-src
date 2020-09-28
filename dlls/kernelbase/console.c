@@ -1269,8 +1269,18 @@ BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleInputExeNameW( LPCWSTR name )
  */
 BOOL WINAPI DECLSPEC_HOTPATCH SetConsoleMode( HANDLE handle, DWORD mode )
 {
-    TRACE( "(%p,%x)\n", handle, mode );
-    return console_ioctl( handle, IOCTL_CONDRV_SET_MODE, &mode, sizeof(mode), NULL, 0, NULL );
+    BOOL ret;
+
+    SERVER_START_REQ(set_console_mode)
+    {
+	req->handle = console_handle_unmap( handle );
+	req->mode = mode;
+	ret = !wine_server_call_err( req );
+    }
+    SERVER_END_REQ;
+
+    TRACE( "(%p,%x) retval == %d\n", handle, mode, ret );
+    return ret;
 }
 
 

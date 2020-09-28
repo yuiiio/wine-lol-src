@@ -2073,7 +2073,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         char *buffer = NULL;
         unsigned int pos = 0;
 
-        if (size && !(buffer = malloc( size )))
+        if (size && !(buffer = RtlAllocateHeap( GetProcessHeap(), 0, size )))
         {
             ret = STATUS_NO_MEMORY;
             break;
@@ -2090,7 +2090,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
 
         if (ret)
         {
-            free( buffer );
+            RtlFreeHeap( GetProcessHeap(), 0, buffer );
             break;
         }
 
@@ -2166,7 +2166,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
 
         if (len > size) ret = STATUS_INFO_LENGTH_MISMATCH;
-        free( buffer );
+        RtlFreeHeap( GetProcessHeap(), 0, buffer );
         break;
     }
 
@@ -2327,7 +2327,8 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
 
         num_handles = (size - FIELD_OFFSET( SYSTEM_HANDLE_INFORMATION, Handle )) / sizeof(SYSTEM_HANDLE_ENTRY);
-        if (!(handle_info = malloc( sizeof(*handle_info) * num_handles ))) return STATUS_NO_MEMORY;
+        if (!(handle_info = RtlAllocateHeap( GetProcessHeap(), 0, sizeof(*handle_info) * num_handles )))
+            return STATUS_NO_MEMORY;
 
         SERVER_START_REQ( get_system_handles )
         {
@@ -2354,7 +2355,7 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
         }
         SERVER_END_REQ;
 
-        free( handle_info );
+        RtlFreeHeap( GetProcessHeap(), 0, handle_info );
         break;
     }
 

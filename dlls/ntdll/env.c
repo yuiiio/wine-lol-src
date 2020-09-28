@@ -513,7 +513,7 @@ done:
 
 failed:
     MESSAGE( "wine: cannot find %s\n", debugstr_w(name) );
-    RtlExitUserProcess( STATUS_DLL_NOT_FOUND );
+    RtlExitUserProcess( GetLastError() );
 }
 
 

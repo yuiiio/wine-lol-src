@@ -58,8 +58,6 @@ WINE_DECLARE_DEBUG_CHANNEL(imports);
 typedef DWORD (CALLBACK *DLLENTRYPROC)(HMODULE,DWORD,LPVOID);
 typedef void  (CALLBACK *LDRENUMPROC)(LDR_DATA_TABLE_ENTRY *, void *, BOOLEAN *);
 
-static void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void *);
-
 const struct unix_funcs *unix_funcs = NULL;
 
 /* windows directory */
@@ -3411,29 +3409,14 @@ PIMAGE_NT_HEADERS WINAPI RtlImageNtHeader(HMODULE hModule)
  * Attach to all the loaded dlls.
  * If this is the first time, perform the full process initialization.
  */
-void WINAPI LdrInitializeThunk( CONTEXT *context, ULONG_PTR unknown2, ULONG_PTR unknown3, ULONG_PTR unknown4 )
+void WINAPI LdrInitializeThunk( CONTEXT *context, void **entry, ULONG_PTR unknown3, ULONG_PTR unknown4 )
 {
     static int attach_done;
     int i;
     NTSTATUS status;
     ULONG_PTR cookie;
     WINE_MODREF *wm;
-    void **entry;
     LPCWSTR load_path = NtCurrentTeb()->Peb->ProcessParameters->DllPath.Buffer;
-
-#ifdef __i386__
-    entry = (void **)&context->Eax;
-    if (!context->Eip) context->Eip = (DWORD_PTR)kernel32_start_process;
-#elif defined(__x86_64__)
-    entry = (void **)&context->Rcx;
-    if (!context->Rip) context->Rip = (DWORD_PTR)kernel32_start_process;
-#elif defined(__arm__)
-    entry = (void **)&context->R0;
-    if (!context->Pc) context->Pc = (DWORD_PTR)kernel32_start_process;
-#elif defined(__aarch64__)
-    entry = (void **)&context->X0;
-    if (!context->Pc) context->Pc = (DWORD_PTR)kernel32_start_process;
-#endif
 
     if (process_detaching) NtTerminateThread( GetCurrentThread(), 0 );
 
@@ -3908,9 +3891,9 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 
 
 /***********************************************************************
- *           process_init
+ *           __wine_process_init
  */
-static void process_init(void)
+void __wine_process_init(void)
 {
     static const WCHAR ntdllW[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                                    's','y','s','t','e','m','3','2','\\',
@@ -3918,6 +3901,7 @@ static void process_init(void)
     static const WCHAR kernel32W[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
                                       's','y','s','t','e','m','3','2','\\',
                                       'k','e','r','n','e','l','3','2','.','d','l','l',0};
+    void (WINAPI *kernel32_start_process)(LPTHREAD_START_ROUTINE,void*) = NULL;
     RTL_USER_PROCESS_PARAMETERS *params;
     WINE_MODREF *wm;
     NTSTATUS status;
@@ -3967,7 +3951,7 @@ static void process_init(void)
 
     /* setup the load callback and create ntdll modref */
     RtlInitUnicodeString( &nt_name, ntdllW );
-    NtQueryVirtualMemory( GetCurrentProcess(), process_init, MemoryBasicInformation,
+    NtQueryVirtualMemory( GetCurrentProcess(), __wine_process_init, MemoryBasicInformation,
                           &meminfo, sizeof(meminfo), NULL );
     status = build_builtin_module( params->DllPath.Buffer, &nt_name, meminfo.AllocationBase, 0, &wm );
     assert( !status );
@@ -4050,6 +4034,8 @@ static void process_init(void)
     teb->Tib.StackBase = stack.StackBase;
     teb->Tib.StackLimit = stack.StackLimit;
     teb->DeallocationStack = stack.DeallocationStack;
+
+    unix_funcs->server_init_process_done( kernel32_start_process );
 }
 
 /***********************************************************************
@@ -4059,5 +4045,5 @@ void CDECL __wine_set_unix_funcs( int version, const struct unix_funcs *funcs )
 {
     assert( version == NTDLL_UNIXLIB_VERSION );
     unix_funcs = funcs;
-    process_init();
+    __wine_process_init();
 }

@@ -1946,8 +1946,9 @@ static int find_dos_device( const char *path )
     return -1;
 }
 
-static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_unix_drive *drive, ULONG size )
+static struct mountmgr_unix_drive *get_mountmgr_fs_info( HANDLE handle, int fd )
 {
+    struct mountmgr_unix_drive *drive;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING string;
     char *unix_name;
@@ -1956,16 +1957,25 @@ static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_uni
     NTSTATUS status;
     int letter;
 
-    if ((status = server_get_unix_name( handle, &unix_name ))) return status;
+    if (server_get_unix_name( handle, &unix_name ))
+        return NULL;
 
     letter = find_dos_device( unix_name );
     RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+
+    if (!(drive = RtlAllocateHeap( GetProcessHeap(), 0, 1024 )))
+        return NULL;
 
     if (letter == -1)
     {
         struct stat st;
 
-        fstat( fd, &st );
+        if (fstat( fd, &st ) == -1)
+        {
+            RtlFreeHeap( GetProcessHeap(), 0, drive );
+            return NULL;
+        }
+
         drive->unix_dev = st.st_dev;
         drive->letter = 0;
     }
@@ -1974,16 +1984,36 @@ static NTSTATUS get_mountmgr_fs_info( HANDLE handle, int fd, struct mountmgr_uni
 
     RtlInitUnicodeString( &string, MOUNTMGR_DEVICE_NAME );
     InitializeObjectAttributes( &attr, &string, 0, NULL, NULL );
-    status = NtOpenFile( &mountmgr, GENERIC_READ | SYNCHRONIZE, &attr, &io,
-                         FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT );
-    if (status) return status;
+    if (NtOpenFile( &mountmgr, GENERIC_READ | SYNCHRONIZE, &attr, &io,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_SYNCHRONOUS_IO_NONALERT ))
+    {
+        RtlFreeHeap( GetProcessHeap(), 0, drive );
+        return NULL;
+    }
 
     status = NtDeviceIoControlFile( mountmgr, NULL, NULL, NULL, &io, IOCTL_MOUNTMGR_QUERY_UNIX_DRIVE,
-                                    drive, sizeof(*drive), drive, size );
+                                    drive, sizeof(*drive), drive, 1024 );
+    if (status == STATUS_BUFFER_OVERFLOW)
+    {
+        if (!(drive = RtlReAllocateHeap( GetProcessHeap(), 0, drive, drive->size )))
+        {
+            RtlFreeHeap( GetProcessHeap(), 0, drive );
+            NtClose( mountmgr );
+            return NULL;
+        }
+        status = NtDeviceIoControlFile( mountmgr, NULL, NULL, NULL, &io, IOCTL_MOUNTMGR_QUERY_UNIX_DRIVE,
+                                        drive, sizeof(*drive), drive, drive->size );
+    }
     NtClose( mountmgr );
-    if (status == STATUS_BUFFER_OVERFLOW) status = STATUS_SUCCESS;
-    else if (status) WARN("failed to retrieve filesystem type from mountmgr, status %#x\n", status);
-    return status;
+
+    if (status)
+    {
+        WARN("failed to retrieve filesystem type from mountmgr, status %#x\n", status);
+        RtlFreeHeap( GetProcessHeap(), 0, drive );
+        return NULL;
+    }
+
+    return drive;
 }
 
 
@@ -4076,12 +4106,15 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
         if (fd_get_file_info( fd, options, &st, &attr ) == -1) io->u.Status = errno_to_status( errno );
         else
         {
-            struct mountmgr_unix_drive drive;
+            struct mountmgr_unix_drive *drive;
             FILE_ID_INFORMATION *info = ptr;
 
             info->VolumeSerialNumber = 0;
-            if (!(io->u.Status = get_mountmgr_fs_info( handle, fd, &drive, sizeof(drive) )))
-                info->VolumeSerialNumber = drive.serial;
+            if ((drive = get_mountmgr_fs_info( handle, fd )))
+            {
+                info->VolumeSerialNumber = drive->serial;
+                RtlFreeHeap( GetProcessHeap(), 0, drive );
+            }
             memset( &info->FileId, 0, sizeof(info->FileId) );
             *(ULONGLONG *)&info->FileId = st.st_ino;
         }
@@ -6179,7 +6212,7 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
         static const WCHAR udfW[] = {'U','D','F'};
 
         FILE_FS_ATTRIBUTE_INFORMATION *info = buffer;
-        struct mountmgr_unix_drive drive;
+        struct mountmgr_unix_drive *drive;
         enum mountmgr_fs_type fs_type = MOUNTMGR_FS_TYPE_NTFS;
 
         if (length < sizeof(FILE_FS_ATTRIBUTE_INFORMATION))
@@ -6188,7 +6221,11 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
             break;
         }
 
-        if (!get_mountmgr_fs_info( handle, fd, &drive, sizeof(drive) )) fs_type = drive.fs_type;
+        if ((drive = get_mountmgr_fs_info( handle, fd )))
+        {
+            fs_type = drive->fs_type;
+            RtlFreeHeap( GetProcessHeap(), 0, drive );
+        }
         else
         {
             struct statfs stfs;
@@ -6261,8 +6298,7 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
     case FileFsVolumeInformation:
     {
         FILE_FS_VOLUME_INFORMATION *info = buffer;
-        ULONGLONG data[64];
-        struct mountmgr_unix_drive *drive = (struct mountmgr_unix_drive *)data;
+        struct mountmgr_unix_drive *drive;
         const WCHAR *label;
 
         if (length < sizeof(FILE_FS_VOLUME_INFORMATION))
@@ -6271,7 +6307,7 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
             break;
         }
 
-        if (get_mountmgr_fs_info( handle, fd, drive, sizeof(data) ))
+        if (!(drive = get_mountmgr_fs_info( handle, fd )))
         {
             io->u.Status = STATUS_NOT_IMPLEMENTED;
             break;
@@ -6284,6 +6320,8 @@ NTSTATUS WINAPI NtQueryVolumeInformationFile( HANDLE handle, IO_STATUS_BLOCK *io
                                        length - offsetof( FILE_FS_VOLUME_INFORMATION, VolumeLabel ) );
         info->SupportsObjects = (drive->fs_type == MOUNTMGR_FS_TYPE_NTFS);
         memcpy( info->VolumeLabel, label, info->VolumeLabelLength );
+        RtlFreeHeap( GetProcessHeap(), 0, drive );
+
         io->Information = offsetof( FILE_FS_VOLUME_INFORMATION, VolumeLabel ) + info->VolumeLabelLength;
         io->u.Status = STATUS_SUCCESS;
         break;

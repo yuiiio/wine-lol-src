@@ -3960,7 +3960,7 @@ void __wine_process_init(void)
 
     init_unix_codepage();
     init_directories();
-    init_user_process_params();
+    init_user_process_params( info_size );
     params = peb->ProcessParameters;
 
     load_global_options();
@@ -4000,7 +4000,7 @@ void __wine_process_init(void)
     }
     else
     {
-        status = restart_process( params, status );
+        if (!info_size) status = restart_process( params, status );
         switch (status)
         {
         case STATUS_INVALID_IMAGE_WIN_64:

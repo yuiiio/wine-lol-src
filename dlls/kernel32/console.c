@@ -23,10 +23,21 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/* Reference applications:
+ * -  IDA (interactive disassembler) full version 3.75. Works.
+ * -  LYNX/W32. Works mostly, some keys crash it.
+ */
+
+#include "config.h"
+#include "wine/port.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #define NONAMELESSUNION
 #include "ntstatus.h"
@@ -73,9 +84,9 @@ HWND WINAPI GetConsoleWindow(void)
  */
 BOOL WINAPI Beep( DWORD dwFreq, DWORD dwDur )
 {
-    /* FIXME: we should not require a console to be attached */
-    DeviceIoControl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
-                     IOCTL_CONDRV_BEEP, NULL, 0, NULL, 0, NULL, NULL );
+    static const char beep = '\a';
+    /* dwFreq and dwDur are ignored by Win95 */
+    if (isatty(2)) write( 2, &beep, 1 );
     return TRUE;
 }
 

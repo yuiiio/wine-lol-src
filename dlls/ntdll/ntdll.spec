@@ -69,7 +69,7 @@
 @ stub KiRaiseUserExceptionDispatcher
 @ stub KiUserApcDispatcher
 @ stub KiUserCallbackDispatcher
-@ stdcall -norelay KiUserExceptionDispatcher(ptr ptr)
+@ stub KiUserExceptionDispatcher
 # @ stub LdrAccessOutOfProcessResource
 @ stdcall LdrAccessResource(long ptr ptr ptr)
 @ stdcall LdrAddDllDirectory(ptr ptr)

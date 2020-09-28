@@ -719,51 +719,69 @@ static NTSTATUS call_stack_handlers( EXCEPTION_RECORD *rec, CONTEXT *context )
 
 
 /*******************************************************************
- *		KiUserExceptionDispatcher (NTDLL.@)
+ *		raise_exception
+ *
+ * Implementation of NtRaiseException.
  */
-NTSTATUS WINAPI KiUserExceptionDispatcher( EXCEPTION_RECORD *rec, CONTEXT *context )
+static NTSTATUS raise_exception( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
 {
     NTSTATUS status;
-    DWORD c;
 
-    TRACE( "code=%x flags=%x addr=%p ip=%08x tid=%04x\n",
-           rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
-           context->Eip, GetCurrentThreadId() );
-    for (c = 0; c < rec->NumberParameters; c++)
-        TRACE( " info[%d]=%08lx\n", c, rec->ExceptionInformation[c] );
-
-    if (rec->ExceptionCode == EXCEPTION_WINE_STUB)
+    if (first_chance)
     {
-        if (rec->ExceptionInformation[1] >> 16)
-            MESSAGE( "wine: Call from %p to unimplemented function %s.%s, aborting\n",
-                     rec->ExceptionAddress,
-                     (char*)rec->ExceptionInformation[0], (char*)rec->ExceptionInformation[1] );
+        DWORD c;
+
+        TRACE( "code=%x flags=%x addr=%p ip=%08x tid=%04x\n",
+               rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress,
+               context->Eip, GetCurrentThreadId() );
+        for (c = 0; c < rec->NumberParameters; c++)
+            TRACE( " info[%d]=%08lx\n", c, rec->ExceptionInformation[c] );
+        if (rec->ExceptionCode == EXCEPTION_WINE_STUB)
+        {
+            if (rec->ExceptionInformation[1] >> 16)
+                MESSAGE( "wine: Call from %p to unimplemented function %s.%s, aborting\n",
+                         rec->ExceptionAddress,
+                         (char*)rec->ExceptionInformation[0], (char*)rec->ExceptionInformation[1] );
+            else
+                MESSAGE( "wine: Call from %p to unimplemented function %s.%ld, aborting\n",
+                         rec->ExceptionAddress,
+                         (char*)rec->ExceptionInformation[0], rec->ExceptionInformation[1] );
+        }
         else
-            MESSAGE( "wine: Call from %p to unimplemented function %s.%ld, aborting\n",
-                     rec->ExceptionAddress,
-                     (char*)rec->ExceptionInformation[0], rec->ExceptionInformation[1] );
+        {
+            TRACE(" eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x\n",
+                  context->Eax, context->Ebx, context->Ecx,
+                  context->Edx, context->Esi, context->Edi );
+            TRACE(" ebp=%08x esp=%08x cs=%04x ds=%04x es=%04x fs=%04x gs=%04x flags=%08x\n",
+                  context->Ebp, context->Esp, context->SegCs, context->SegDs,
+                  context->SegEs, context->SegFs, context->SegGs, context->EFlags );
+        }
+
+        /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
+        if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Eip--;
+
+        if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION) goto done;
+
+        if ((status = call_stack_handlers( rec, context )) == STATUS_SUCCESS) goto done;
+        if (status != STATUS_UNHANDLED_EXCEPTION) return status;
     }
-    else
+
+    /* last chance exception */
+
+    status = send_debug_event( rec, FALSE, context );
+    if (status != DBG_CONTINUE)
     {
-        TRACE(" eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x\n",
-              context->Eax, context->Ebx, context->Ecx,
-              context->Edx, context->Esi, context->Edi );
-        TRACE(" ebp=%08x esp=%08x cs=%04x ds=%04x es=%04x fs=%04x gs=%04x flags=%08x\n",
-              context->Ebp, context->Esp, context->SegCs, context->SegDs,
-              context->SegEs, context->SegFs, context->SegGs, context->EFlags );
+        if (rec->ExceptionFlags & EH_STACK_INVALID)
+            WINE_ERR("Exception frame is not in stack limits => unable to dispatch exception.\n");
+        else if (rec->ExceptionCode == STATUS_NONCONTINUABLE_EXCEPTION)
+            WINE_ERR("Process attempted to continue execution after noncontinuable exception.\n");
+        else
+            WINE_ERR("Unhandled exception code %x flags %x addr %p\n",
+                     rec->ExceptionCode, rec->ExceptionFlags, rec->ExceptionAddress );
+        NtTerminateProcess( NtCurrentProcess(), rec->ExceptionCode );
     }
-
-    /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
-    if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Eip--;
-
-    if (call_vectored_handlers( rec, context ) == EXCEPTION_CONTINUE_EXECUTION)
-        NtSetContextThread( GetCurrentThread(), context );
-
-    if ((status = call_stack_handlers( rec, context )) == STATUS_SUCCESS)
-        NtSetContextThread( GetCurrentThread(), context );
-
-    if (status != STATUS_UNHANDLED_EXCEPTION) RtlRaiseStatus( status );
-    return NtRaiseException( rec, context, FALSE );
+done:
+    return NtSetContextThread( GetCurrentThread(), context );
 }
 
 
@@ -1495,6 +1513,20 @@ static struct stack_layout *setup_exception( ucontext_t *sigcontext )
 }
 
 
+/**********************************************************************
+ *		raise_generic_exception
+ *
+ * Generic raise function for exceptions that don't need special treatment.
+ */
+static void WINAPI raise_generic_exception( EXCEPTION_RECORD *rec, CONTEXT *context )
+{
+    NTSTATUS status;
+
+    status = raise_exception( rec, context, TRUE );
+    raise_status( status, rec );
+}
+
+
 /***********************************************************************
  *           setup_raise_exception
  *
@@ -1510,7 +1542,7 @@ static void setup_raise_exception( ucontext_t *sigcontext, struct stack_layout *
         return;
     }
     ESP_sig(sigcontext) = (DWORD)stack;
-    EIP_sig(sigcontext) = (DWORD)KiUserExceptionDispatcher;
+    EIP_sig(sigcontext) = (DWORD)raise_generic_exception;
     /* clear single-step, direction, and align check flag */
     EFL_sig(sigcontext) &= ~(0x100|0x400|0x40000);
     CS_sig(sigcontext)  = get_cs();
@@ -1519,8 +1551,8 @@ static void setup_raise_exception( ucontext_t *sigcontext, struct stack_layout *
     FS_sig(sigcontext)  = get_fs();
     GS_sig(sigcontext)  = get_gs();
     SS_sig(sigcontext)  = get_ds();
-    stack->ret_addr     = (void *)0xdeadbabe;  /* KiUserExceptionDispatcher must not return */
-    stack->rec_ptr      = &stack->rec;         /* arguments for KiUserExceptionDispatcher */
+    stack->ret_addr     = (void *)0xdeadbabe;  /* raise_generic_exception must not return */
+    stack->rec_ptr      = &stack->rec;         /* arguments for raise_generic_exception */
     stack->context_ptr  = &stack->context;
 }
 
@@ -2004,6 +2036,21 @@ __ASM_STDCALL_FUNC( RtlUnwind, 16,
                     __ASM_CFI(".cfi_def_cfa %esp,4\n\t")
                     __ASM_CFI(".cfi_same_value %ebp\n\t")
                     "ret $16" )  /* actually never returns */
+
+
+/*******************************************************************
+ *		NtRaiseException (NTDLL.@)
+ */
+NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
+{
+    if (first_chance)
+    {
+        NTSTATUS status = send_debug_event( rec, TRUE, context );
+        if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
+            NtSetContextThread( GetCurrentThread(), context );
+    }
+    return raise_exception( rec, context, first_chance );
+}
 
 
 /*******************************************************************

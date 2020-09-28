@@ -541,22 +541,26 @@ UINT WINAPI DECLSPEC_HOTPATCH GetConsoleCP(void)
  */
 BOOL WINAPI DECLSPEC_HOTPATCH GetConsoleCursorInfo( HANDLE handle, CONSOLE_CURSOR_INFO *info )
 {
-    struct condrv_output_info condrv_info;
+    BOOL ret;
 
-    if (!DeviceIoControl( handle, IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0, &condrv_info, sizeof(condrv_info), NULL, NULL ))
+    SERVER_START_REQ( get_console_output_info )
     {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return FALSE;
+        req->handle = console_handle_unmap( handle );
+        ret = !wine_server_call_err( req );
+        if (ret && info)
+        {
+            info->dwSize = reply->cursor_size;
+            info->bVisible = reply->cursor_visible;
+        }
     }
+    SERVER_END_REQ;
 
+    if (!ret) return FALSE;
     if (!info)
     {
         SetLastError( ERROR_INVALID_ACCESS );
         return FALSE;
     }
-
-    info->dwSize   = condrv_info.cursor_size;
-    info->bVisible = condrv_info.cursor_visible;
     TRACE("(%p) returning (%d,%d)\n", handle, info->dwSize, info->bVisible);
     return TRUE;
 }

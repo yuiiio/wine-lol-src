@@ -218,15 +218,20 @@ static BOOL WINECON_SetEditionMode(HANDLE hConIn, int edition_mode)
  */
 static void WINECON_SetColors(struct inner_data *data, const struct config_data* cfg)
 {
-    struct condrv_output_info_params params =
-        { SET_CONSOLE_OUTPUT_INFO_COLORTABLE | SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR };
+    size_t color_map_size = sizeof(data->curcfg.color_map);
 
-    memcpy(data->curcfg.color_map, cfg->color_map, sizeof(data->curcfg.color_map));
+    memcpy(data->curcfg.color_map, cfg->color_map, color_map_size);
     data->curcfg.popup_attr = cfg->popup_attr;
 
-    params.info.popup_attr = cfg->popup_attr;
-    memcpy(params.info.color_map, cfg->color_map, sizeof(cfg->color_map));
-    DeviceIoControl(data->hConOut, IOCTL_CONDRV_SET_OUTPUT_INFO, &params, sizeof(params), NULL, 0, NULL, NULL);
+    SERVER_START_REQ( set_console_output_info )
+    {
+        req->handle = wine_server_obj_handle( data->hConOut );
+        req->mask = SET_CONSOLE_OUTPUT_INFO_COLORTABLE | SET_CONSOLE_OUTPUT_INFO_POPUP_ATTR;
+        req->popup_attr = cfg->popup_attr;
+        wine_server_add_data( req, cfg->color_map, color_map_size );
+        wine_server_call( req );
+    }
+    SERVER_END_REQ;
 }
 
 /******************************************************************

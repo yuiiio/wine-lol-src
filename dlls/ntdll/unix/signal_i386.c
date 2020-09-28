@@ -33,7 +33,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/types.h>
-#include <assert.h>
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
 #endif
@@ -57,8 +56,6 @@
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
 #include "windef.h"
-#include "winternl.h"
-#include "ddk/wdm.h"
 #include "wine/asm.h"
 #include "wine/exception.h"
 #include "unix_private.h"
@@ -125,10 +122,6 @@ typedef struct ucontext
 } ucontext_t;
 #endif /* HAVE_SYS_UCONTEXT_H */
 
-#ifndef FP_XSTATE_MAGIC1
-#define FP_XSTATE_MAGIC1 0x46505853
-#endif
-
 #define EAX_sig(context)     ((context)->uc_mcontext.gregs[REG_EAX])
 #define EBX_sig(context)     ((context)->uc_mcontext.gregs[REG_EBX])
 #define ECX_sig(context)     ((context)->uc_mcontext.gregs[REG_ECX])
@@ -152,7 +145,6 @@ typedef struct ucontext
 
 #define FPU_sig(context)     ((FLOATING_SAVE_AREA*)((context)->uc_mcontext.fpregs))
 #define FPUX_sig(context)    (FPU_sig(context) && !((context)->uc_mcontext.fpregs->status >> 16) ? (XSAVE_FORMAT *)(FPU_sig(context) + 1) : NULL)
-#define XState_sig(fpu)      (((unsigned int *)fpu->Reserved4)[12] == FP_XSTATE_MAGIC1 ? (XSTATE *)(fpu + 1) : NULL)
 
 #ifdef __ANDROID__
 /* custom signal restorer since we may have unmapped the one in vdso, and bionic doesn't check for that */
@@ -216,7 +208,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 
 #define FPU_sig(context)     NULL  /* FIXME */
 #define FPUX_sig(context)    NULL  /* FIXME */
-#define XState_sig(context)  NULL  /* FIXME */
 
 #elif defined (__OpenBSD__)
 
@@ -247,7 +238,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 
 #define FPU_sig(context)     NULL  /* FIXME */
 #define FPUX_sig(context)    NULL  /* FIXME */
-#define XState_sig(context)  NULL  /* FIXME */
 
 #define T_MCHK T_MACHK
 #define T_XMMFLT T_XFTRAP
@@ -293,7 +283,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 
 #define FPU_sig(context)     NULL  /* FIXME */
 #define FPUX_sig(context)    NULL  /* FIXME */
-#define XState_sig(context)  NULL  /* FIXME */
 
 #elif defined (__APPLE__)
 
@@ -321,7 +310,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 #define ERROR_sig(context)   ((context)->uc_mcontext->__es.__err)
 #define FPU_sig(context)     NULL
 #define FPUX_sig(context)    ((XSAVE_FORMAT *)&(context)->uc_mcontext->__fs.__fpu_fcw)
-#define XState_sig(context)  NULL  /* FIXME */
 #else
 #define EAX_sig(context)     ((context)->uc_mcontext->ss.eax)
 #define EBX_sig(context)     ((context)->uc_mcontext->ss.ebx)
@@ -343,7 +331,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 #define ERROR_sig(context)   ((context)->uc_mcontext->es.err)
 #define FPU_sig(context)     NULL
 #define FPUX_sig(context)    ((XSAVE_FORMAT *)&(context)->uc_mcontext->fs.fpu_fcw)
-#define XState_sig(context)  NULL  /* FIXME */
 #endif
 
 #elif defined(__NetBSD__)
@@ -374,7 +361,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 
 #define FPU_sig(context)     NULL
 #define FPUX_sig(context)    ((XSAVE_FORMAT *)&((context)->uc_mcontext.__fpregs))
-#define XState_sig(context)  NULL  /* FIXME */
 
 #define T_MCHK T_MCA
 #define T_XMMFLT T_XMM
@@ -407,7 +393,6 @@ static inline int set_thread_area( struct modify_ldt_s *ptr )
 
 #define FPU_sig(context)     ((FLOATING_SAVE_AREA *)&(context)->uc_mcontext.fpregs.fp_reg_set.fpchip_state)
 #define FPUX_sig(context)    NULL
-#define XState_sig(context)  NULL  /* FIXME */
 
 #else
 #error You must define the signal context functions for your platform
@@ -767,11 +752,10 @@ static void fpux_to_fpu( FLOATING_SAVE_AREA *fpu, const XSAVE_FORMAT *fpux )
  *
  * Build a context structure from the signal info.
  */
-static inline void save_context( struct xcontext *xcontext, const ucontext_t *sigcontext )
+static inline void save_context( CONTEXT *context, const ucontext_t *sigcontext )
 {
     FLOATING_SAVE_AREA *fpu = FPU_sig(sigcontext);
     XSAVE_FORMAT *fpux = FPUX_sig(sigcontext);
-    CONTEXT *context = &xcontext->c;
 
     memset(context, 0, sizeof(*context));
     context->ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS;
@@ -808,11 +792,6 @@ static inline void save_context( struct xcontext *xcontext, const ucontext_t *si
         context->ContextFlags |= CONTEXT_FLOATING_POINT | CONTEXT_EXTENDED_REGISTERS;
         memcpy( context->ExtendedRegisters, fpux, sizeof(*fpux) );
         if (!fpu) fpux_to_fpu( &context->FloatSave, fpux );
-        xcontext->xstate = XState_sig(fpux);
-    }
-    else
-    {
-        xcontext->xstate = NULL;
     }
     if (!fpu && !fpux) save_fpu( context );
 }
@@ -823,11 +802,10 @@ static inline void save_context( struct xcontext *xcontext, const ucontext_t *si
  *
  * Restore the signal info from the context.
  */
-static inline void restore_context( const struct xcontext *xcontext, ucontext_t *sigcontext )
+static inline void restore_context( const CONTEXT *context, ucontext_t *sigcontext )
 {
     FLOATING_SAVE_AREA *fpu = FPU_sig(sigcontext);
     XSAVE_FORMAT *fpux = FPUX_sig(sigcontext);
-    const CONTEXT *context = &xcontext->c;
 
     x86_thread_data()->dr0 = context->Dr0;
     x86_thread_data()->dr1 = context->Dr1;
@@ -853,18 +831,7 @@ static inline void restore_context( const struct xcontext *xcontext, ucontext_t 
     SS_sig(sigcontext)  = context->SegSs;
 
     if (fpu) *fpu = context->FloatSave;
-    if (fpux)
-    {
-        XSTATE *src_xs, *dst_xs;
-
-        memcpy( fpux, context->ExtendedRegisters, sizeof(*fpux) );
-
-        if ((dst_xs = XState_sig(fpux)) && (src_xs = xstate_from_context( context )))
-        {
-            memcpy( &dst_xs->YmmContext, &src_xs->YmmContext, sizeof(dst_xs->YmmContext) );
-            dst_xs->Mask |= src_xs->Mask;
-        }
-    }
+    if (fpux) memcpy( fpux, context->ExtendedRegisters, sizeof(*fpux) );
     if (!fpu && !fpux) restore_fpu( context );
 }
 
@@ -1475,14 +1442,15 @@ static BOOL check_atl_thunk( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, CONT
  *
  * Setup the exception record and context on the thread stack.
  */
-static void *setup_exception_record( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, struct xcontext *xcontext )
+static void *setup_exception_record( ucontext_t *sigcontext, EXCEPTION_RECORD *rec, CONTEXT *context )
 {
     void *stack = init_handler( sigcontext );
 
     rec->ExceptionAddress = (void *)EIP_sig( sigcontext );
-    save_context( xcontext, sigcontext );
+    save_context( context, sigcontext );
     return stack;
 }
+
 
 /***********************************************************************
  *           setup_raise_exception
@@ -1490,61 +1458,32 @@ static void *setup_exception_record( ucontext_t *sigcontext, EXCEPTION_RECORD *r
  * Change context to setup a call to a raise exception function.
  */
 static void setup_raise_exception( ucontext_t *sigcontext, void *stack_ptr,
-                                   EXCEPTION_RECORD *rec, struct xcontext *xcontext )
+                                   EXCEPTION_RECORD *rec, CONTEXT *context )
 {
-    CONTEXT *context = &xcontext->c;
-    size_t stack_size;
-
-    struct stack_layout
+    struct
     {
         EXCEPTION_RECORD *rec_ptr;       /* first arg for KiUserExceptionDispatcher */
         CONTEXT          *context_ptr;   /* second arg for KiUserExceptionDispatcher */
         CONTEXT           context;
-        CONTEXT_EX        context_ex;
         EXCEPTION_RECORD  rec;
         DWORD             ebp;
         DWORD             eip;
-        char              xstate[0];
     } *stack;
-
-C_ASSERT( (offsetof(struct stack_layout, xstate) == sizeof(struct stack_layout)) );
 
     NTSTATUS status = send_debug_event( rec, context, TRUE );
 
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
     {
-        restore_context( xcontext, sigcontext );
+        restore_context( context, sigcontext );
         return;
     }
 
     /* fix up instruction pointer in context for EXCEPTION_BREAKPOINT */
     if (rec->ExceptionCode == EXCEPTION_BREAKPOINT) context->Eip--;
 
-    stack_size = sizeof(*stack);
-    if (xcontext->xstate)
-    {
-        stack_size += (ULONG_PTR)stack_ptr - (((ULONG_PTR)stack_ptr
-                - sizeof(XSTATE)) & ~(ULONG_PTR)63);
-    }
-
-    stack = virtual_setup_exception( stack_ptr, stack_size, rec );
+    stack = virtual_setup_exception( stack_ptr, sizeof(*stack), rec );
     stack->rec          = *rec;
     stack->context      = *context;
-
-    if (xcontext->xstate)
-    {
-        XSTATE *dst_xs = (XSTATE *)stack->xstate;
-
-        assert(!((ULONG_PTR)dst_xs & 63));
-        context_init_xstate( &stack->context, stack->xstate );
-        dst_xs->CompactionMask = user_shared_data->XState.CompactionEnabled ? 0x8000000000000004 : 0;
-        if (xcontext->xstate->Mask & 4)
-        {
-            dst_xs->Mask = 4;
-            memcpy( &dst_xs->YmmContext, &xcontext->xstate->YmmContext, sizeof(dst_xs->YmmContext) );
-        }
-    }
-
     stack->rec_ptr      = &stack->rec;
     stack->context_ptr  = &stack->context;
     ESP_sig(sigcontext) = (DWORD)stack;
@@ -1567,10 +1506,9 @@ C_ASSERT( (offsetof(struct stack_layout, xstate) == sizeof(struct stack_layout))
  */
 static void setup_exception( ucontext_t *sigcontext, EXCEPTION_RECORD *rec )
 {
-    struct xcontext xcontext;
-    void *stack = setup_exception_record( sigcontext, rec, &xcontext );
-
-    setup_raise_exception( sigcontext, stack, rec, &xcontext );
+    CONTEXT context;
+    void *stack = setup_exception_record( sigcontext, rec, &context );
+    setup_raise_exception( sigcontext, stack, rec, &context );
 }
 
 
@@ -1685,10 +1623,8 @@ static inline DWORD get_fpu_code( const CONTEXT *context )
  * Handle an interrupt.
  */
 static BOOL handle_interrupt( unsigned int interrupt, ucontext_t *sigcontext, void *stack,
-                              EXCEPTION_RECORD *rec, struct xcontext *xcontext )
+                              EXCEPTION_RECORD *rec, CONTEXT *context )
 {
-    CONTEXT *context = &xcontext->c;
-
     switch(interrupt)
     {
     case 0x2d:
@@ -1713,7 +1649,7 @@ static BOOL handle_interrupt( unsigned int interrupt, ucontext_t *sigcontext, vo
         rec->ExceptionInformation[0] = context->Eax;
         rec->ExceptionInformation[1] = context->Ecx;
         rec->ExceptionInformation[2] = context->Edx;
-        setup_raise_exception( sigcontext, stack, rec, xcontext );
+        setup_raise_exception( sigcontext, stack, rec, context );
         return TRUE;
     default:
         return FALSE;
@@ -1729,9 +1665,9 @@ static BOOL handle_interrupt( unsigned int interrupt, ucontext_t *sigcontext, vo
 static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
-    struct xcontext xcontext;
+    CONTEXT context;
     ucontext_t *ucontext = sigcontext;
-    void *stack = setup_exception_record( sigcontext, &rec, &xcontext );
+    void *stack = setup_exception_record( sigcontext, &rec, &context );
 
     switch (TRAP_sig(ucontext))
     {
@@ -1751,8 +1687,8 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
     case TRAP_x86_PROTFLT:   /* General protection fault */
         {
             WORD err = ERROR_sig(ucontext);
-            if (!err && (rec.ExceptionCode = is_privileged_instr( &xcontext.c ))) break;
-            if ((err & 7) == 2 && handle_interrupt( err >> 3, ucontext, stack, &rec, &xcontext )) return;
+            if (!err && (rec.ExceptionCode = is_privileged_instr( &context ))) break;
+            if ((err & 7) == 2 && handle_interrupt( err >> 3, ucontext, stack, &rec, &context )) return;
             rec.ExceptionCode = EXCEPTION_ACCESS_VIOLATION;
             rec.NumberParameters = 2;
             rec.ExceptionInformation[0] = 0;
@@ -1761,7 +1697,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
             else
             {
                 rec.ExceptionInformation[1] = 0xffffffff;
-                if (check_invalid_gs( ucontext, &xcontext.c )) return;
+                if (check_invalid_gs( ucontext, &context )) return;
             }
         }
         break;
@@ -1778,7 +1714,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
             NtQueryInformationProcess( GetCurrentProcess(), ProcessExecuteFlags,
                                        &flags, sizeof(flags), NULL );
             if (!(flags & MEM_EXECUTE_OPTION_DISABLE_THUNK_EMULATION) &&
-                check_atl_thunk( ucontext, &rec, &xcontext.c ))
+                check_atl_thunk( ucontext, &rec, &context ))
                 return;
 
             /* send EXCEPTION_EXECUTE_FAULT only if data execution prevention is enabled */
@@ -1787,7 +1723,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         break;
     case TRAP_x86_ALIGNFLT:  /* Alignment check exception */
         /* FIXME: pass through exception handler first? */
-        if (xcontext.c.EFlags & 0x00040000)
+        if (context.EFlags & 0x00040000)
         {
             EFL_sig(ucontext) &= ~0x00040000;  /* disable AC flag */
             return;
@@ -1806,7 +1742,7 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec.ExceptionCode = EXCEPTION_ILLEGAL_INSTRUCTION;
         break;
     }
-    setup_raise_exception( ucontext, stack, &rec, &xcontext );
+    setup_raise_exception( ucontext, stack, &rec, &context );
 }
 
 
@@ -1818,9 +1754,9 @@ static void segv_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
-    struct xcontext xcontext;
+    CONTEXT context;
     ucontext_t *ucontext = sigcontext;
-    void *stack = setup_exception_record( sigcontext, &rec, &xcontext );
+    void *stack = setup_exception_record( sigcontext, &rec, &context );
 
     switch (TRAP_sig(ucontext))
     {
@@ -1829,15 +1765,15 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         /* when single stepping can't tell whether this is a hw bp or a
          * single step interrupt. try to avoid as much overhead as possible
          * and only do a server call if there is any hw bp enabled. */
-        if (!(xcontext.c.EFlags & 0x100) || (xcontext.c.Dr7 & 0xff))
+        if (!(context.EFlags & 0x100) || (context.Dr7 & 0xff))
         {
             /* (possible) hardware breakpoint, fetch the debug registers */
-            DWORD saved_flags = xcontext.c.ContextFlags;
-            xcontext.c.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-            NtGetContextThread( GetCurrentThread(), &xcontext.c );
-            xcontext.c.ContextFlags |= saved_flags;  /* restore flags */
+            DWORD saved_flags = context.ContextFlags;
+            context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+            NtGetContextThread( GetCurrentThread(), &context );
+            context.ContextFlags |= saved_flags;  /* restore flags */
         }
-        xcontext.c.EFlags &= ~0x100;  /* clear single-step flag */
+        context.EFlags &= ~0x100;  /* clear single-step flag */
         break;
     case TRAP_x86_BPTFLT:   /* Breakpoint exception */
         rec.ExceptionAddress = (char *)rec.ExceptionAddress - 1;  /* back up over the int3 instruction */
@@ -1850,7 +1786,7 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec.ExceptionInformation[2] = 0; /* FIXME */
         break;
     }
-    setup_raise_exception( sigcontext, stack, &rec, &xcontext );
+    setup_raise_exception( sigcontext, stack, &rec, &context );
 }
 
 
@@ -1862,9 +1798,9 @@ static void trap_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
     EXCEPTION_RECORD rec = { 0 };
-    struct xcontext xcontext;
+    CONTEXT context;
     ucontext_t *ucontext = sigcontext;
-    void *stack = setup_exception_record( sigcontext, &rec, &xcontext );
+    void *stack = setup_exception_record( sigcontext, &rec, &context );
 
     switch (TRAP_sig(ucontext))
     {
@@ -1875,8 +1811,8 @@ static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec.ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
         break;
     case TRAP_x86_ARITHTRAP:  /* Floating point exception */
-        rec.ExceptionCode = get_fpu_code( &xcontext.c );
-        rec.ExceptionAddress = (void *)xcontext.c.FloatSave.ErrorOffset;
+        rec.ExceptionCode = get_fpu_code( &context );
+        rec.ExceptionAddress = (void *)context.FloatSave.ErrorOffset;
         break;
     case TRAP_x86_CACHEFLT:  /* SIMD exception */
         /* TODO:
@@ -1896,7 +1832,7 @@ static void fpe_handler( int signal, siginfo_t *siginfo, void *sigcontext )
         rec.ExceptionCode = EXCEPTION_FLT_INVALID_OPERATION;
         break;
     }
-    setup_raise_exception( sigcontext, stack, &rec, &xcontext );
+    setup_raise_exception( sigcontext, stack, &rec, &context );
 }
 
 
@@ -1944,12 +1880,12 @@ static void quit_handler( int signal, siginfo_t *siginfo, void *sigcontext )
  */
 static void usr1_handler( int signal, siginfo_t *siginfo, void *sigcontext )
 {
-    struct xcontext xcontext;
+    CONTEXT context;
 
     init_handler( sigcontext );
-    save_context( &xcontext, sigcontext );
-    wait_suspend( &xcontext.c );
-    restore_context( &xcontext, sigcontext );
+    save_context( &context, sigcontext );
+    wait_suspend( &context );
+    restore_context( &context, sigcontext );
 }
 
 

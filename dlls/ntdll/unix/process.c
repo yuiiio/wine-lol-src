@@ -836,7 +836,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
     if (socketpair( PF_UNIX, SOCK_STREAM, 0, socketfd ) == -1)
     {
         status = STATUS_TOO_MANY_OPENED_FILES;
-        free( objattr );
+        RtlFreeHeap( GetProcessHeap(), 0, objattr );
         goto done;
     }
 #ifdef SO_PASSCRED
@@ -873,7 +873,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
         process_info = wine_server_ptr_handle( reply->info );
     }
     SERVER_END_REQ;
-    free( objattr );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
 
     if (status)
     {
@@ -906,7 +906,7 @@ NTSTATUS WINAPI NtCreateUserProcess( HANDLE *process_handle_ptr, HANDLE *thread_
         }
     }
     SERVER_END_REQ;
-    free( objattr );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     if (status) goto done;
 
     /* create the child process */

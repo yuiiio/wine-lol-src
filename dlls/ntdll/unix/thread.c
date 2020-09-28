@@ -193,7 +193,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
 
     if (server_pipe( request_pipe ) == -1)
     {
-        free( objattr );
+        RtlFreeHeap( GetProcessHeap(), 0, objattr );
         return STATUS_TOO_MANY_OPENED_FILES;
     }
     server_send_fd( request_pipe[0] );
@@ -216,7 +216,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle, ACCESS_MASK access, OBJECT_ATT
     }
     SERVER_END_REQ;
 
-    free( objattr );
+    RtlFreeHeap( GetProcessHeap(), 0, objattr );
     if (status)
     {
         close( request_pipe[1] );

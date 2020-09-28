@@ -1690,18 +1690,10 @@ NTSTATUS WINAPI NtQuerySystemInformation( SYSTEM_INFORMATION_CLASS class,
 
     case SystemTimeOfDayInformation:
     {
-        struct tm *tm;
-        time_t now;
         SYSTEM_TIMEOFDAY_INFORMATION sti = {{{ 0 }}};
 
-        sti.BootTime.QuadPart = server_start_time;
-        now = time( NULL );
-        tm = gmtime( &now );
-        sti.TimeZoneBias.QuadPart = mktime( tm ) - now;
-        tm = localtime( &now );
-        if (tm->tm_isdst) sti.TimeZoneBias.QuadPart -= 3600;
-        sti.TimeZoneBias.QuadPart *= TICKSPERSEC;
-        NtQuerySystemTime( &sti.SystemTime );
+        /* liKeSystemTime, liExpTimeZoneBias, uCurrentTimeZoneId */
+        sti.liKeBootTime.QuadPart = server_start_time;
 
         if (size <= sizeof(sti))
         {

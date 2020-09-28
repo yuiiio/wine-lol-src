@@ -6029,15 +6029,12 @@ static NTSTATUS get_device_info( int fd, FILE_FS_DEVICE_INFORMATION *info )
             info->DeviceType = FILE_DEVICE_NETWORK_FILE_SYSTEM;
             info->Characteristics |= FILE_REMOTE_DEVICE;
             break;
+        case 0x01021994:  /* tmpfs */
+        case 0x28cd3d45:  /* cramfs */
         case 0x1373:      /* devfs */
         case 0x9fa0:      /* procfs */
             info->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
             break;
-        case 0x01021994:  /* tmpfs */
-        case 0x28cd3d45:  /* cramfs */
-            /* Don't map these to FILE_DEVICE_VIRTUAL_DISK by default. Virtual
-             * filesystems are rare on Windows, and some programs refuse to
-             * recognize them as valid. */
         default:
             info->DeviceType = FILE_DEVICE_DISK_FILE_SYSTEM;
             break;
@@ -6081,9 +6078,8 @@ static NTSTATUS get_device_info( int fd, FILE_FS_DEVICE_INFORMATION *info )
                 info->Characteristics |= FILE_REMOVABLE_MEDIA;
                 break;
             case DKC_MD:
-            /* Don't map these to FILE_DEVICE_VIRTUAL_DISK by default. Virtual
-             * filesystems are rare on Windows, and some programs refuse to
-             * recognize them as valid. */
+                info->DeviceType = FILE_DEVICE_VIRTUAL_DISK;
+                break;
             default:
                 info->DeviceType = FILE_DEVICE_DISK_FILE_SYSTEM;
             }

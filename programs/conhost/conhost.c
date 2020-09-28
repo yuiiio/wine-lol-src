@@ -79,7 +79,6 @@ struct console
     HANDLE                server;              /* console server handle */
     unsigned int          mode;                /* input mode */
     struct screen_buffer *active;              /* active screen buffer */
-    int                   is_unix;             /* UNIX terminal mode */
     INPUT_RECORD         *records;             /* input records */
     unsigned int          record_count;        /* number of input records */
     unsigned int          record_size;         /* size of input records buffer */
@@ -357,14 +356,10 @@ static void tty_sync( struct console *console )
 
 static void init_tty_output( struct console *console )
 {
-    if (!console->is_unix)
-    {
-        /* initialize tty output, but don't flush */
-        tty_write( console, "\x1b[2J", 4 ); /* clear screen */
-        set_tty_attr( console, console->active->attr );
-        tty_write( console, "\x1b[H", 3 );  /* move cursor to (0,0) */
-    }
-    else console->tty_attr = empty_char_info.attr;
+    /* initialize tty output, but don't flush */
+    tty_write( console, "\x1b[2J", 4 ); /* clear screen */
+    set_tty_attr( console, console->active->attr );
+    tty_write( console, "\x1b[H", 3 );  /* move cursor to (0,0) */
     console->tty_cursor_visible = TRUE;
 }
 
@@ -2646,7 +2641,7 @@ static int main_loop( struct console *console, HANDLE signal )
 
 int __cdecl wmain(int argc, WCHAR *argv[])
 {
-    int headless = 0, i, width = 0, height = 0;
+    int headless = 0, i, width = 80, height = 150;
     HANDLE signal = NULL, input_thread;
     WCHAR *end;
 
@@ -2669,24 +2664,18 @@ int __cdecl wmain(int argc, WCHAR *argv[])
             headless = 1;
             continue;
         }
-        if (!wcscmp( argv[i], L"--unix"))
-        {
-            console.is_unix = 1;
-            headless = 1;
-            continue;
-        }
         if (!wcscmp( argv[i], L"--width" ))
         {
             if (++i == argc) return 1;
             width = wcstol( argv[i], &end, 0 );
-            if ((!width && !console.is_unix) || width > 0xffff || *end) return 1;
+            if (!width || width > 0xffff || *end) return 1;
             continue;
         }
         if (!wcscmp( argv[i], L"--height" ))
         {
             if (++i == argc) return 1;
             height = wcstol( argv[i], &end, 0 );
-            if ((!height && !console.is_unix) || height > 0xffff || *end) return 1;
+            if (!height || height > 0xffff || *end) return 1;
             continue;
         }
         if (!wcscmp( argv[i], L"--signal" ))
@@ -2718,9 +2707,6 @@ int __cdecl wmain(int argc, WCHAR *argv[])
         ERR( "no server handle\n" );
         return 1;
     }
-
-    if (!width)  width = 80;
-    if (!height) height = 150;
 
     if (!(console.active = create_screen_buffer( &console, 1, width, height ))) return 1;
     if (headless)

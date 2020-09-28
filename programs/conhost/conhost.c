@@ -250,14 +250,7 @@ static NTSTATUS write_console_input( struct console *console, const INPUT_RECORD
                 count--;
                 if (records[i].Event.KeyEvent.bKeyDown)
                 {
-                    struct condrv_ctrl_event ctrl_event;
-                    IO_STATUS_BLOCK io;
-
-                    ctrl_event.event = CTRL_C_EVENT;
-                    ctrl_event.group_id = 0;
-                    NtDeviceIoControlFile( console->server, NULL, NULL, NULL, &io, IOCTL_CONDRV_CTRL_EVENT,
-                                           &ctrl_event, sizeof(ctrl_event), NULL, 0 );
-
+                    FIXME("CTRL C\n");
                 }
             }
             else i++;

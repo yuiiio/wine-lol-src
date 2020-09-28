@@ -1767,7 +1767,7 @@ static NTSTATUS fill_file_info( const struct stat *st, ULONG attr, void *ptr,
 }
 
 
-static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
+static NTSTATUS server_get_unix_name( HANDLE handle, ANSI_STRING *unix_name )
 {
     data_size_t size = 1024;
     NTSTATUS ret;
@@ -1777,6 +1777,7 @@ static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
     {
         name = RtlAllocateHeap( GetProcessHeap(), 0, size + 1 );
         if (!name) return STATUS_NO_MEMORY;
+        unix_name->MaximumLength = size + 1;
 
         SERVER_START_REQ( get_handle_unix_name )
         {
@@ -1790,7 +1791,8 @@ static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
         if (!ret)
         {
             name[size] = 0;
-            *unix_name = name;
+            unix_name->Buffer = name;
+            unix_name->Length = size;
             break;
         }
         RtlFreeHeap( GetProcessHeap(), 0, name );
@@ -1799,15 +1801,15 @@ static NTSTATUS server_get_unix_name( HANDLE handle, char **unix_name )
     return ret;
 }
 
-static NTSTATUS fill_name_info( const char *unix_name, FILE_NAME_INFORMATION *info, LONG *name_len )
+static NTSTATUS fill_name_info( const ANSI_STRING *unix_name, FILE_NAME_INFORMATION *info, LONG *name_len )
 {
-    WCHAR *nt_name;
+    UNICODE_STRING nt_name;
     NTSTATUS status;
 
     if (!(status = unix_to_nt_file_name( unix_name, &nt_name )))
     {
-        const WCHAR *ptr = nt_name;
-        const WCHAR *end = ptr + wcslen( nt_name );
+        const WCHAR *ptr = nt_name.Buffer;
+        const WCHAR *end = ptr + (nt_name.Length / sizeof(WCHAR));
 
         /* Skip the volume mount point. */
         while (ptr != end && *ptr == '\\') ++ptr;
@@ -1820,7 +1822,7 @@ static NTSTATUS fill_name_info( const char *unix_name, FILE_NAME_INFORMATION *in
         else *name_len = info->FileNameLength;
 
         memcpy( info->FileName, ptr, *name_len );
-        RtlFreeHeap( GetProcessHeap(), 0, nt_name );
+        RtlFreeUnicodeString( &nt_name );
     }
 
     return status;
@@ -1951,7 +1953,7 @@ static struct mountmgr_unix_drive *get_mountmgr_fs_info( HANDLE handle, int fd )
     struct mountmgr_unix_drive *drive;
     OBJECT_ATTRIBUTES attr;
     UNICODE_STRING string;
-    char *unix_name;
+    ANSI_STRING unix_name;
     IO_STATUS_BLOCK io;
     HANDLE mountmgr;
     NTSTATUS status;
@@ -1960,8 +1962,8 @@ static struct mountmgr_unix_drive *get_mountmgr_fs_info( HANDLE handle, int fd )
     if (server_get_unix_name( handle, &unix_name ))
         return NULL;
 
-    letter = find_dos_device( unix_name );
-    RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+    letter = find_dos_device( unix_name.Buffer );
+    RtlFreeAnsiString( &unix_name );
 
     if (!(drive = RtlAllocateHeap( GetProcessHeap(), 0, 1024 )))
         return NULL;
@@ -3445,19 +3447,19 @@ NTSTATUS CDECL wine_nt_to_unix_file_name( const UNICODE_STRING *nameW, char *nam
 /******************************************************************
  *           unix_to_nt_file_name
  */
-NTSTATUS unix_to_nt_file_name( const char *name, WCHAR **nt )
+NTSTATUS CDECL unix_to_nt_file_name( const ANSI_STRING *name, UNICODE_STRING *nt )
 {
     static const WCHAR unix_prefixW[] = {'\\','?','?','\\','u','n','i','x',0};
     WCHAR dos_prefixW[] = {'\\','?','?','\\','A',':','\\',0};
     const WCHAR *prefix = unix_prefixW;
-    unsigned int lenW, lenA = strlen(name);
-    const char *path = name;
+    unsigned int lenW, lenA = name->Length;
+    const char *path = name->Buffer;
     NTSTATUS status;
-    WCHAR *p, *buffer;
+    WCHAR *p;
     int drive;
 
     status = find_drive_rootA( &path, lenA, &drive );
-    lenA -= path - name;
+    lenA -= (path - name->Buffer);
 
     if (status == STATUS_SUCCESS)
     {
@@ -3468,26 +3470,15 @@ NTSTATUS unix_to_nt_file_name( const char *name, WCHAR **nt )
     else if (status != STATUS_OBJECT_PATH_NOT_FOUND) return status;
 
     lenW = wcslen( prefix );
-    if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, (lenA + lenW + 1) * sizeof(WCHAR) )))
+    if (!(nt->Buffer = RtlAllocateHeap( GetProcessHeap(), 0, (lenA + lenW + 1) * sizeof(WCHAR) )))
         return STATUS_NO_MEMORY;
-    memcpy( buffer, prefix, lenW * sizeof(WCHAR) );
-    lenW += ntdll_umbstowcs( path, lenA, buffer + lenW, lenA );
-    buffer[lenW] = 0;
-    for (p = buffer; *p; p++) if (*p == '/') *p = '\\';
-    *nt = buffer;
+    memcpy( nt->Buffer, prefix, lenW * sizeof(WCHAR) );
+    lenW += ntdll_umbstowcs( path, lenA, nt->Buffer + lenW, lenA );
+    nt->Buffer[lenW] = 0;
+    nt->Length = lenW * sizeof(WCHAR);
+    nt->MaximumLength = nt->Length + sizeof(WCHAR);
+    for (p = nt->Buffer; *p; p++) if (*p == '/') *p = '\\';
     return STATUS_SUCCESS;
-}
-
-
-/******************************************************************
- *           wine_unix_to_nt_file_name
- */
-NTSTATUS CDECL wine_unix_to_nt_file_name( const ANSI_STRING *name, UNICODE_STRING *nt )
-{
-    WCHAR *nt_name = NULL;
-    NTSTATUS status = unix_to_nt_file_name( name->Buffer, &nt_name );
-    if (nt_name) RtlInitUnicodeString( nt, nt_name );
-    return status;
 }
 
 
@@ -3983,7 +3974,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileAllInformation:
         {
             FILE_ALL_INFORMATION *info = ptr;
-            char *unix_name;
+            ANSI_STRING unix_name;
 
             if (fd_get_file_info( fd, options, &st, &attr ) == -1) io->u.Status = errno_to_status( errno );
             else if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
@@ -4000,8 +3991,8 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 info->ModeInformation.Mode = 0;  /* FIXME */
                 info->AlignmentInformation.AlignmentRequirement = 1;  /* FIXME */
 
-                io->u.Status = fill_name_info( unix_name, &info->NameInformation, &name_len );
-                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+                io->u.Status = fill_name_info( &unix_name, &info->NameInformation, &name_len );
+                RtlFreeAnsiString( &unix_name );
                 io->Information = FIELD_OFFSET(FILE_ALL_INFORMATION, NameInformation.FileName) + name_len;
             }
         }
@@ -4047,13 +4038,13 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileNameInformation:
         {
             FILE_NAME_INFORMATION *info = ptr;
-            char *unix_name;
+            ANSI_STRING unix_name;
 
             if (!(io->u.Status = server_get_unix_name( handle, &unix_name )))
             {
                 LONG name_len = len - FIELD_OFFSET(FILE_NAME_INFORMATION, FileName);
-                io->u.Status = fill_name_info( unix_name, info, &name_len );
-                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+                io->u.Status = fill_name_info( &unix_name, info, &name_len );
+                RtlFreeAnsiString( &unix_name );
                 io->Information = FIELD_OFFSET(FILE_NAME_INFORMATION, FileName) + name_len;
             }
         }
@@ -4061,14 +4052,14 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
     case FileNetworkOpenInformation:
         {
             FILE_NETWORK_OPEN_INFORMATION *info = ptr;
-            char *unix_name;
+            ANSI_STRING unix_name;
 
             if (!(io->u.Status = server_get_unix_name( handle, &unix_name )))
             {
                 ULONG attributes;
                 struct stat st;
 
-                if (get_file_info( unix_name, &st, &attributes ) == -1)
+                if (get_file_info( unix_name.Buffer, &st, &attributes ) == -1)
                     io->u.Status = errno_to_status( errno );
                 else if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))
                     io->u.Status = STATUS_INVALID_INFO_CLASS;
@@ -4088,7 +4079,7 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                     info->EndOfFile      = std.EndOfFile;
                     info->FileAttributes = basic.FileAttributes;
                 }
-                RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+                RtlFreeAnsiString( &unix_name );
             }
         }
         break;
@@ -6393,29 +6384,29 @@ NTSTATUS WINAPI NtQueryObject( HANDLE handle, OBJECT_INFORMATION_CLASS info_clas
     case ObjectNameInformation:
     {
         OBJECT_NAME_INFORMATION *p = ptr;
-        char *unix_name;
-        WCHAR *nt_name;
+        ANSI_STRING unix_name;
 
         /* first try as a file object */
 
         if (!(status = server_get_unix_name( handle, &unix_name )))
         {
-            if (!(status = unix_to_nt_file_name( unix_name, &nt_name )))
+            UNICODE_STRING nt_name;
+
+            if (!(status = unix_to_nt_file_name( &unix_name, &nt_name )))
             {
-                ULONG size = (wcslen(nt_name) + 1) * sizeof(WCHAR);
                 if (len < sizeof(*p)) status = STATUS_INFO_LENGTH_MISMATCH;
-                else if (len < sizeof(*p) + size) status = STATUS_BUFFER_OVERFLOW;
+                else if (len < sizeof(*p) + nt_name.MaximumLength) status = STATUS_BUFFER_OVERFLOW;
                 else
                 {
                     p->Name.Buffer = (WCHAR *)(p + 1);
-                    p->Name.Length = size - sizeof(WCHAR);
-                    p->Name.MaximumLength = size;
-                    wcscpy( p->Name.Buffer, nt_name );
+                    p->Name.Length = nt_name.Length;
+                    p->Name.MaximumLength = nt_name.MaximumLength;
+                    memcpy( p->Name.Buffer, nt_name.Buffer, nt_name.MaximumLength );
                 }
-                if (used_len) *used_len = sizeof(*p) + size;
-                RtlFreeHeap( GetProcessHeap(), 0, nt_name );
+                if (used_len) *used_len = sizeof(*p) + nt_name.MaximumLength;
+                RtlFreeUnicodeString( &nt_name );
             }
-            RtlFreeHeap( GetProcessHeap(), 0, unix_name );
+            RtlFreeAnsiString( &unix_name );
             break;
         }
         else if (status != STATUS_OBJECT_TYPE_MISMATCH) break;

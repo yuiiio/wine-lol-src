@@ -1057,14 +1057,16 @@ static void append_envW( WCHAR *env, SIZE_T *pos, const char *name, const WCHAR 
 /* set an environment variable for one of the wine path variables */
 static void add_path_var( WCHAR *env, SIZE_T *pos, const char *name, const char *path )
 {
-    WCHAR *nt_name;
+    UNICODE_STRING nt_name;
+    ANSI_STRING unix_name;
 
     if (!path) append_envW( env, pos, name, NULL );
     else
     {
-        if (unix_to_nt_file_name( path, &nt_name )) return;
-        append_envW( env, pos, name, nt_name );
-        RtlFreeHeap( GetProcessHeap(), 0, nt_name );
+        RtlInitAnsiString( &unix_name, path );
+        if (unix_to_nt_file_name( &unix_name, &nt_name )) return;
+        append_envW( env, pos, name, nt_name.Buffer );
+        RtlFreeUnicodeString( &nt_name );
     }
 }
 
@@ -1200,24 +1202,25 @@ void CDECL get_initial_directory( UNICODE_STRING *dir )
 
     if (pwd)
     {
-        WCHAR *nt_name;
+        ANSI_STRING unix_name;
+        UNICODE_STRING nt_name;
 
-        if (!unix_to_nt_file_name( pwd, &nt_name ))
+        RtlInitAnsiString( &unix_name, pwd );
+        if (!unix_to_nt_file_name( &unix_name, &nt_name ))
         {
             /* skip the \??\ prefix */
-            ULONG len = wcslen( nt_name );
-            if (len > 6 && nt_name[5] == ':')
+            if (nt_name.Length > 6 * sizeof(WCHAR) && nt_name.Buffer[5] == ':')
             {
-                dir->Length = (len - 4) * sizeof(WCHAR);
-                memcpy( dir->Buffer, nt_name + 4, dir->Length );
+                dir->Length = nt_name.Length - 4 * sizeof(WCHAR);
+                memcpy( dir->Buffer, nt_name.Buffer + 4, dir->Length );
             }
             else  /* change \??\ to \\?\ */
             {
-                dir->Length = len * sizeof(WCHAR);
-                memcpy( dir->Buffer, nt_name, dir->Length );
+                dir->Length = nt_name.Length;
+                memcpy( dir->Buffer, nt_name.Buffer, dir->Length );
                 dir->Buffer[1] = '\\';
             }
-            RtlFreeHeap( GetProcessHeap(), 0, nt_name );
+            RtlFreeUnicodeString( &nt_name );
         }
     }
 

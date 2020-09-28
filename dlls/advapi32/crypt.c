@@ -24,11 +24,21 @@
  *  - Thread-safing
  */
 
+#include "config.h"
+#include "wine/port.h"
+
 #include <limits.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef HAVE_SYS_STAT_H
+# include <sys/stat.h>
+#endif
+#include <fcntl.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -37,6 +47,7 @@
 #include "winreg.h"
 #include "rpc.h"
 #include "wine/debug.h"
+#include "wine/unicode.h"
 #include "winternl.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(crypt);
@@ -68,11 +79,11 @@ static inline PWSTR CRYPT_GetProvKeyName(PCWSTR pProvName)
 	};
 	PWSTR keyname;
 
-	keyname = CRYPT_Alloc((lstrlenW(KEYSTR) + lstrlenW(pProvName) +1)*sizeof(WCHAR));
+	keyname = CRYPT_Alloc((strlenW(KEYSTR) + strlenW(pProvName) +1)*sizeof(WCHAR));
 	if (keyname)
 	{
-		lstrcpyW(keyname, KEYSTR);
-		lstrcpyW(keyname + lstrlenW(KEYSTR), pProvName);
+		strcpyW(keyname, KEYSTR);
+		strcpyW(keyname + strlenW(KEYSTR), pProvName);
 	} else
 		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
 	return keyname;
@@ -97,11 +108,11 @@ static inline PWSTR CRYPT_GetTypeKeyName(DWORD dwType, BOOL user)
 	PWSTR keyname;
 	PWSTR ptr;
 
-	keyname = CRYPT_Alloc( ((user ? lstrlenW(USERSTR) : lstrlenW(MACHINESTR)) +1)*sizeof(WCHAR));
+	keyname = CRYPT_Alloc( ((user ? strlenW(USERSTR) : strlenW(MACHINESTR)) +1)*sizeof(WCHAR));
 	if (keyname)
 	{
-		user ? lstrcpyW(keyname, USERSTR) : lstrcpyW(keyname, MACHINESTR);
-		ptr = keyname + lstrlenW(keyname);
+		user ? strcpyW(keyname, USERSTR) : strcpyW(keyname, MACHINESTR);
+		ptr = keyname + strlenW(keyname);
 		*(--ptr) = (dwType % 10) + '0';
 		*(--ptr) = ((dwType / 10) % 10) + '0';
 		*(--ptr) = (dwType / 100) + '0';
@@ -292,10 +303,19 @@ static void CRYPT_CreateMachineGuid(void)
 		{
                     UUID uuid;
                     WCHAR buf[37];
+                    RPC_STATUS rs;
+                    static const WCHAR uuidFmt[] = {
+                        '%','0','8','x','-','%','0','4','x','-',
+                        '%','0','4','x','-','%','0','2','x',
+                        '%','0','2','x','-','%','0','2','x',
+                        '%','0','2','x','%','0','2','x',
+                        '%','0','2','x','%','0','2','x',
+                        '%','0','2','x',0 };
 
-                    if (UuidCreate(&uuid) == S_OK)
+                    rs = UuidCreate(&uuid);
+                    if (rs == S_OK)
                     {
-                        swprintf(buf, ARRAY_SIZE(buf), L"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                        sprintfW(buf, uuidFmt,
                                  uuid.Data1, uuid.Data2, uuid.Data3,
                                  uuid.Data4[0], uuid.Data4[1],
                                  uuid.Data4[2], uuid.Data4[3],
@@ -425,12 +445,12 @@ BOOL WINAPI CryptAcquireContextW (HCRYPTPROV *phProv, LPCWSTR pszContainer,
 		}
 		RegCloseKey(key);
 	} else {
-		if ( !(provname = CRYPT_Alloc((lstrlenW(pszProvider) +1)*sizeof(WCHAR))) )
+		if ( !(provname = CRYPT_Alloc((strlenW(pszProvider) +1)*sizeof(WCHAR))) )
 		{
 			SetLastError(ERROR_NOT_ENOUGH_MEMORY);
 			goto error;
 		}
-		lstrcpyW(provname, pszProvider);
+		strcpyW(provname, pszProvider);
 	}
 
 	keyname = CRYPT_GetProvKeyName(provname);
@@ -1323,7 +1343,7 @@ BOOL WINAPI CryptEnumProviderTypesW (DWORD dwIndex, DWORD *pdwReserved,
 	RegOpenKeyW(hKey, keyname, &hSubkey);
 	RegCloseKey(hKey);
 
-	ch = keyname + lstrlenW(keyname);
+	ch = keyname + strlenW(keyname);
 	/* Convert "Type 000" to 0, etc/ */
 	*pdwProvType = *(--ch) - '0';
 	*pdwProvType += (*(--ch) - '0') * 10;
@@ -2115,7 +2135,7 @@ BOOL WINAPI CryptSetProviderExW (LPCWSTR pszProvName, DWORD dwProvType, DWORD *p
 		CRYPT_Free(keyname);
 		
 		if (RegSetValueExW(hTypeKey, nameW, 0, REG_SZ, (const BYTE *)pszProvName,
-			(lstrlenW(pszProvName) + 1)*sizeof(WCHAR)))
+			(strlenW(pszProvName) + 1)*sizeof(WCHAR)))
 		{
 			RegCloseKey(hTypeKey);
 			RegCloseKey(hProvKey);

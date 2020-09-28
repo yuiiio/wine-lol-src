@@ -19,6 +19,8 @@
  *
  */
 
+#include "config.h"
+
 #include <stdarg.h>
 #include <string.h>
 
@@ -41,6 +43,7 @@
 #include "lmcons.h"
 
 #include "wine/debug.h"
+#include "wine/unicode.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(advapi);
 
@@ -269,18 +272,18 @@ static inline DWORD get_security_regkey( LPWSTR full_key_name, DWORD access, HAN
     static const WCHAR current_userW[] = {'C','U','R','R','E','N','T','_','U','S','E','R',0};
     static const WCHAR machineW[] = {'M','A','C','H','I','N','E',0};
     static const WCHAR usersW[] = {'U','S','E','R','S',0};
-    LPWSTR p = wcschr(full_key_name, '\\');
+    LPWSTR p = strchrW(full_key_name, '\\');
     int len = p-full_key_name;
     HKEY hParent;
 
     if (!p) return ERROR_INVALID_PARAMETER;
-    if (wcsncmp( full_key_name, classes_rootW, len ) == 0)
+    if (strncmpW( full_key_name, classes_rootW, len ) == 0)
         hParent = HKEY_CLASSES_ROOT;
-    else if (wcsncmp( full_key_name, current_userW, len ) == 0)
+    else if (strncmpW( full_key_name, current_userW, len ) == 0)
         hParent = HKEY_CURRENT_USER;
-    else if (wcsncmp( full_key_name, machineW, len ) == 0)
+    else if (strncmpW( full_key_name, machineW, len ) == 0)
         hParent = HKEY_LOCAL_MACHINE;
-    else if (wcsncmp( full_key_name, usersW, len ) == 0)
+    else if (strncmpW( full_key_name, usersW, len ) == 0)
         hParent = HKEY_USERS;
     else
         return ERROR_INVALID_PARAMETER;
@@ -306,7 +309,7 @@ BOOL ADVAPI_IsLocalComputer(LPCWSTR ServerName)
     Result = GetComputerNameW(buf,  &dwSize);
     if (Result && (ServerName[0] == '\\') && (ServerName[1] == '\\'))
         ServerName += 2;
-    Result = Result && !wcscmp(ServerName, buf);
+    Result = Result && !lstrcmpW(ServerName, buf);
     heap_free(buf);
 
     return Result;
@@ -649,7 +652,7 @@ LookupPrivilegeValueW( LPCWSTR lpSystemName, LPCWSTR lpName, PLUID lpLuid )
     {
         if( !WellKnownPrivNames[i] )
             continue;
-        if( wcsicmp( WellKnownPrivNames[i], lpName) )
+        if( strcmpiW( WellKnownPrivNames[i], lpName) )
             continue;
         lpLuid->LowPart = i;
         lpLuid->HighPart = 0;
@@ -806,7 +809,7 @@ LookupPrivilegeNameW( LPCWSTR lpSystemName, PLUID lpLuid, LPWSTR lpName,
         SetLastError(ERROR_NO_SUCH_PRIVILEGE);
         return FALSE;
     }
-    privNameLen = lstrlenW(WellKnownPrivNames[lpLuid->LowPart]);
+    privNameLen = strlenW(WellKnownPrivNames[lpLuid->LowPart]);
     /* Windows crashes if cchName is NULL, so will I */
     if (*cchName <= privNameLen)
     {
@@ -816,7 +819,7 @@ LookupPrivilegeNameW( LPCWSTR lpSystemName, PLUID lpLuid, LPWSTR lpName,
     }
     else
     {
-        lstrcpyW(lpName, WellKnownPrivNames[lpLuid->LowPart]);
+        strcpyW(lpName, WellKnownPrivNames[lpLuid->LowPart]);
         *cchName = privNameLen;
         return TRUE;
     }
@@ -1274,7 +1277,7 @@ static BOOL lookup_user_account_name(PSID Sid, PDWORD cbSid, LPWSTR ReferencedDo
         ret = FALSE;
     }
     else if (ReferencedDomainName)
-        lstrcpyW(ReferencedDomainName, domainName);
+        strcpyW(ReferencedDomainName, domainName);
 
     *cchReferencedDomainName = nameLen;
 
@@ -1320,7 +1323,7 @@ static BOOL lookup_computer_account_name(PSID Sid, PDWORD cbSid, LPWSTR Referenc
         ret = FALSE;
     }
     else if (ReferencedDomainName)
-        lstrcpyW(ReferencedDomainName, domainName);
+        strcpyW(ReferencedDomainName, domainName);
 
     *cchReferencedDomainName = nameLen;
 
@@ -1357,9 +1360,9 @@ static void split_domain_account( const LSA_UNICODE_STRING *str, LSA_UNICODE_STR
 
 static BOOL match_domain( ULONG idx, const LSA_UNICODE_STRING *domain )
 {
-    ULONG len = lstrlenW( ACCOUNT_SIDS[idx].domain );
+    ULONG len = strlenW( ACCOUNT_SIDS[idx].domain );
 
-    if (len == domain->Length / sizeof(WCHAR) && !wcsnicmp( domain->Buffer, ACCOUNT_SIDS[idx].domain, len ))
+    if (len == domain->Length / sizeof(WCHAR) && !strncmpiW( domain->Buffer, ACCOUNT_SIDS[idx].domain, len ))
         return TRUE;
 
     return FALSE;
@@ -1367,15 +1370,15 @@ static BOOL match_domain( ULONG idx, const LSA_UNICODE_STRING *domain )
 
 static BOOL match_account( ULONG idx, const LSA_UNICODE_STRING *account )
 {
-    ULONG len = lstrlenW( ACCOUNT_SIDS[idx].account );
+    ULONG len = strlenW( ACCOUNT_SIDS[idx].account );
 
-    if (len == account->Length / sizeof(WCHAR) && !wcsnicmp( account->Buffer, ACCOUNT_SIDS[idx].account, len ))
+    if (len == account->Length / sizeof(WCHAR) && !strncmpiW( account->Buffer, ACCOUNT_SIDS[idx].account, len ))
         return TRUE;
 
     if (ACCOUNT_SIDS[idx].alias)
     {
-        len = lstrlenW( ACCOUNT_SIDS[idx].alias );
-        if (len == account->Length / sizeof(WCHAR) && !wcsnicmp( account->Buffer, ACCOUNT_SIDS[idx].alias, len ))
+        len = strlenW( ACCOUNT_SIDS[idx].alias );
+        if (len == account->Length / sizeof(WCHAR) && !strncmpiW( account->Buffer, ACCOUNT_SIDS[idx].alias, len ))
             return TRUE;
     }
     return FALSE;
@@ -1423,7 +1426,7 @@ BOOL lookup_local_wellknown_name( const LSA_UNICODE_STRING *account_and_domain,
                 *cbSid = sidLen;
             }
 
-            len = lstrlenW( ACCOUNT_SIDS[i].domain );
+            len = strlenW( ACCOUNT_SIDS[i].domain );
             if (*cchReferencedDomainName <= len || !ret)
             {
                 SetLastError(ERROR_INSUFFICIENT_BUFFER);
@@ -1432,7 +1435,7 @@ BOOL lookup_local_wellknown_name( const LSA_UNICODE_STRING *account_and_domain,
             }
             else if (ReferencedDomainName)
             {
-                lstrcpyW( ReferencedDomainName, ACCOUNT_SIDS[i].domain );
+                strcpyW( ReferencedDomainName, ACCOUNT_SIDS[i].domain );
             }
 
             *cchReferencedDomainName = len;
@@ -1470,7 +1473,7 @@ BOOL lookup_local_user_name( const LSA_UNICODE_STRING *account_and_domain,
     {
         /* check to make sure this account is on this computer */
         if (GetComputerNameW( userName, &nameLen ) &&
-            (domain.Length / sizeof(WCHAR) != nameLen || wcsncmp( domain.Buffer, userName, nameLen )))
+            (domain.Length / sizeof(WCHAR) != nameLen || strncmpW( domain.Buffer, userName, nameLen )))
         {
             SetLastError(ERROR_NONE_MAPPED);
             ret = FALSE;
@@ -1479,7 +1482,7 @@ BOOL lookup_local_user_name( const LSA_UNICODE_STRING *account_and_domain,
     }
 
     if (GetUserNameW( userName, &nameLen ) &&
-        account.Length / sizeof(WCHAR) == nameLen - 1 && !wcsncmp( account.Buffer, userName, nameLen - 1 ))
+        account.Length / sizeof(WCHAR) == nameLen - 1 && !strncmpW( account.Buffer, userName, nameLen - 1 ))
     {
             ret = lookup_user_account_name( Sid, cbSid, ReferencedDomainName, cchReferencedDomainName, peUse );
             *handled = TRUE;
@@ -1488,7 +1491,7 @@ BOOL lookup_local_user_name( const LSA_UNICODE_STRING *account_and_domain,
     {
         nameLen = UNLEN + 1;
         if (GetComputerNameW( userName, &nameLen ) &&
-            account.Length / sizeof(WCHAR) == nameLen && !wcsncmp( account.Buffer, userName , nameLen ))
+            account.Length / sizeof(WCHAR) == nameLen && !strncmpW( account.Buffer, userName , nameLen ))
         {
             ret = lookup_computer_account_name( Sid, cbSid, ReferencedDomainName, cchReferencedDomainName, peUse );
             *handled = TRUE;
@@ -1519,7 +1522,7 @@ BOOL WINAPI LookupAccountNameW( LPCWSTR lpSystemName, LPCWSTR lpAccountName, PSI
         return FALSE;
     }
 
-    if (!lpAccountName || !wcscmp( lpAccountName, Blank ))
+    if (!lpAccountName || !strcmpW( lpAccountName, Blank ))
     {
         lpAccountName = BUILTIN;
     }
@@ -2146,7 +2149,7 @@ static DWORD trustee_to_sid( DWORD nDestinationSidLength, PSID pDestinationSid, 
         DWORD sid_size = nDestinationSidLength;
         DWORD domain_size = MAX_COMPUTERNAME_LENGTH + 1;
         SID_NAME_USE use;
-        if (!wcscmp( pTrustee->ptstrName, CURRENT_USER ))
+        if (!strcmpW( pTrustee->ptstrName, CURRENT_USER ))
         {
             if (!lookup_user_account_name( pDestinationSid, &sid_size, NULL, &domain_size, &use ))
             {

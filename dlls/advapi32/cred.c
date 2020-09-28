@@ -33,6 +33,7 @@
 
 #include "crypt.h"
 
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 #include "advapi32_misc.h"
@@ -271,12 +272,12 @@ static DWORD registry_write_credential(HKEY hkey, const CREDENTIALW *credential,
                          sizeof(credential->Type));
     if (ret != ERROR_SUCCESS) return ret;
     ret = RegSetValueExW(hkey, NULL, 0, REG_SZ, (LPVOID)credential->TargetName,
-                         sizeof(WCHAR)*(lstrlenW(credential->TargetName)+1));
+                         sizeof(WCHAR)*(strlenW(credential->TargetName)+1));
     if (ret != ERROR_SUCCESS) return ret;
     if (credential->Comment)
     {
         ret = RegSetValueExW(hkey, wszCommentValue, 0, REG_SZ, (LPVOID)credential->Comment,
-                             sizeof(WCHAR)*(lstrlenW(credential->Comment)+1));
+                             sizeof(WCHAR)*(strlenW(credential->Comment)+1));
         if (ret != ERROR_SUCCESS) return ret;
     }
     ret = RegSetValueExW(hkey, wszLastWrittenValue, 0, REG_BINARY, (LPVOID)&LastWritten,
@@ -289,13 +290,13 @@ static DWORD registry_write_credential(HKEY hkey, const CREDENTIALW *credential,
     if (credential->TargetAlias)
     {
         ret = RegSetValueExW(hkey, wszTargetAliasValue, 0, REG_SZ, (LPVOID)credential->TargetAlias,
-                             sizeof(WCHAR)*(lstrlenW(credential->TargetAlias)+1));
+                             sizeof(WCHAR)*(strlenW(credential->TargetAlias)+1));
         if (ret != ERROR_SUCCESS) return ret;
     }
     if (credential->UserName)
     {
         ret = RegSetValueExW(hkey, wszUserNameValue, 0, REG_SZ, (LPVOID)credential->UserName,
-                             sizeof(WCHAR)*(lstrlenW(credential->UserName)+1));
+                             sizeof(WCHAR)*(strlenW(credential->UserName)+1));
         if (ret != ERROR_SUCCESS) return ret;
     }
     if (!preserve_blob)
@@ -330,9 +331,9 @@ static DWORD host_write_credential( const CREDENTIALW *credential, BOOL preserve
                        OPEN_EXISTING, 0, 0 );
     if (mgr == INVALID_HANDLE_VALUE) return GetLastError();
 
-    size = sizeof(*cred) + (lstrlenW( credential->TargetName ) + lstrlenW( credential->UserName ) + 2) * sizeof(WCHAR);
+    size = sizeof(*cred) + (strlenW( credential->TargetName ) + strlenW( credential->UserName ) + 2) * sizeof(WCHAR);
     size += credential->CredentialBlobSize;
-    if (credential->Comment) size += (lstrlenW( credential->Comment ) + 1) * sizeof(WCHAR);
+    if (credential->Comment) size += (strlenW( credential->Comment ) + 1) * sizeof(WCHAR);
     if (!(cred = heap_alloc( size )))
     {
         CloseHandle( mgr );
@@ -341,13 +342,13 @@ static DWORD host_write_credential( const CREDENTIALW *credential, BOOL preserve
     ptr = (WCHAR *)(cred + 1);
 
     cred->targetname_offset = sizeof(*cred);
-    cred->targetname_size   = (lstrlenW( credential->TargetName ) + 1) * sizeof(WCHAR);
-    lstrcpyW( ptr, credential->TargetName );
+    cred->targetname_size   = (strlenW( credential->TargetName ) + 1) * sizeof(WCHAR);
+    strcpyW( ptr, credential->TargetName );
     ptr += cred->targetname_size / sizeof(WCHAR);
 
     cred->username_offset = cred->targetname_offset + cred->targetname_size;
-    cred->username_size   = (lstrlenW( credential->UserName ) + 1) * sizeof(WCHAR);
-    lstrcpyW( ptr, credential->UserName );
+    cred->username_size   = (strlenW( credential->UserName ) + 1) * sizeof(WCHAR);
+    strcpyW( ptr, credential->UserName );
     ptr += cred->username_size / sizeof(WCHAR);
 
     cred->blob_offset = cred->username_offset + cred->username_size;
@@ -363,8 +364,8 @@ static DWORD host_write_credential( const CREDENTIALW *credential, BOOL preserve
     cred->comment_offset = cred->blob_offset + cred->blob_size;
     if (credential->Comment)
     {
-        cred->comment_size = (lstrlenW( credential->Comment ) + 1) * sizeof(WCHAR);
-        lstrcpyW( ptr, credential->Comment );
+        cred->comment_size = (strlenW( credential->Comment ) + 1) * sizeof(WCHAR);
+        strcpyW( ptr, credential->Comment );
     }
     else cred->comment_size = 0;
 
@@ -438,7 +439,7 @@ static LPWSTR get_key_name_for_target(LPCWSTR target_name, DWORD type)
     LPCWSTR prefix = NULL;
     LPWSTR key_name, p;
 
-    len = lstrlenW(target_name);
+    len = strlenW(target_name);
     if (type == CRED_TYPE_GENERIC)
     {
         prefix = wszGenericPrefix;
@@ -453,8 +454,8 @@ static LPWSTR get_key_name_for_target(LPCWSTR target_name, DWORD type)
     key_name = heap_alloc(len * sizeof(WCHAR));
     if (!key_name) return NULL;
 
-    lstrcpyW(key_name, prefix);
-    lstrcatW(key_name, target_name);
+    strcpyW(key_name, prefix);
+    strcatW(key_name, target_name);
 
     for (p = key_name; *p; p++)
         if (*p == '\\') *p = '_';
@@ -491,7 +492,7 @@ static BOOL registry_credential_matches_filter(HKEY hkeyCred, LPCWSTR filter)
     TRACE("comparing filter %s to target name %s\n", debugstr_w(filter),
           debugstr_w(target_name));
 
-    p = wcschr(filter, '*');
+    p = strchrW(filter, '*');
     ret = CompareStringW(GetThreadLocale(), NORM_IGNORECASE, filter,
                          (p && !p[1] ? p - filter : -1), target_name,
                          (p && !p[1] ? p - filter : -1)) == CSTR_EQUAL;
@@ -763,7 +764,7 @@ BOOL WINAPI CredDeleteA(LPCSTR TargetName, DWORD Type, DWORD Flags)
 static DWORD host_delete_credential( const WCHAR *targetname )
 {
     struct mountmgr_credential *cred;
-    DWORD size, name_size = (lstrlenW( targetname ) + 1) * sizeof(WCHAR);
+    DWORD size, name_size = (strlenW( targetname ) + 1) * sizeof(WCHAR);
     HANDLE mgr;
     WCHAR *ptr;
     BOOL ret;
@@ -781,7 +782,7 @@ static DWORD host_delete_credential( const WCHAR *targetname )
     cred->targetname_offset = sizeof(*cred);
     cred->targetname_size   = name_size;
     ptr = (WCHAR *)(cred + 1);
-    lstrcpyW( ptr, targetname );
+    strcpyW( ptr, targetname );
 
     ret = DeviceIoControl( mgr, IOCTL_MOUNTMGR_DELETE_CREDENTIAL, cred, size, NULL, 0, NULL, NULL );
     heap_free( cred );
@@ -922,7 +923,7 @@ static DWORD host_enumerate_credentials( const WCHAR *filter, CREDENTIALW **cred
     HANDLE mgr;
     WCHAR *ptr;
 
-    if (filter) filter_size = (lstrlenW( filter ) + 1) * sizeof(WCHAR);
+    if (filter) filter_size = (strlenW( filter ) + 1) * sizeof(WCHAR);
     else
     {
         filter = emptyW;
@@ -944,7 +945,7 @@ static DWORD host_enumerate_credentials( const WCHAR *filter, CREDENTIALW **cred
         list->filter_offset = sizeof(*list);
         list->filter_size   = filter_size;
         ptr = (WCHAR *)((char *)list + list->filter_offset);
-        lstrcpyW( ptr, filter );
+        strcpyW( ptr, filter );
 
         if (DeviceIoControl( mgr, IOCTL_MOUNTMGR_ENUMERATE_CREDENTIALS, list, size, list, size, NULL, NULL )) break;
         if ((ret = GetLastError()) != ERROR_MORE_DATA) goto done;
@@ -1176,7 +1177,7 @@ BOOL WINAPI CredReadA(LPCSTR TargetName, DWORD Type, DWORD Flags, PCREDENTIALA *
 static DWORD host_read_credential( const WCHAR *targetname, CREDENTIALW **ret_credential )
 {
     struct mountmgr_credential *cred_in, *cred_out = NULL, *tmp;
-    DWORD err = ERROR_OUTOFMEMORY, size_in, size_out, size_name = (lstrlenW( targetname ) + 1) * sizeof(WCHAR);
+    DWORD err = ERROR_OUTOFMEMORY, size_in, size_out, size_name = (strlenW( targetname ) + 1) * sizeof(WCHAR);
     HANDLE mgr;
     WCHAR *ptr;
     BOOL ret;
@@ -1194,7 +1195,7 @@ static DWORD host_read_credential( const WCHAR *targetname, CREDENTIALW **ret_cr
     cred_in->targetname_offset = sizeof(*cred_in);
     cred_in->targetname_size   = size_name;
     ptr = (WCHAR *)(cred_in + 1);
-    lstrcpyW( ptr, targetname );
+    strcpyW( ptr, targetname );
 
     size_out = 256;
     if (!(cred_out = heap_alloc( size_out ))) goto done;
@@ -1224,12 +1225,12 @@ static DWORD host_read_credential( const WCHAR *targetname, CREDENTIALW **ret_cr
         credential->Type = CRED_TYPE_DOMAIN_PASSWORD;
         memcpy( ptr, (char *)cred_out + cred_out->targetname_offset, cred_out->targetname_size );
         credential->TargetName = ptr;
-        ptr += lstrlenW( ptr ) + 1;
+        ptr += strlenW( ptr ) + 1;
         if (cred_out->comment_size)
         {
             memcpy( ptr, (char *)cred_out + cred_out->comment_offset, cred_out->comment_size );
             credential->Comment = ptr;
-            ptr += lstrlenW( ptr ) + 1;
+            ptr += strlenW( ptr ) + 1;
         }
         credential->LastWritten = cred_out->last_written;
         if ((credential->CredentialBlobSize = cred_out->blob_size))
@@ -1596,7 +1597,7 @@ BOOL WINAPI CredWriteW(PCREDENTIALW Credential, DWORD Flags)
     {
         if (!Credential->UserName ||
             (Credential->Persist == CRED_PERSIST_ENTERPRISE &&
-            (!wcschr(Credential->UserName, '\\') && !wcschr(Credential->UserName, '@'))))
+            (!strchrW(Credential->UserName, '\\') && !strchrW(Credential->UserName, '@'))))
         {
             ERR("bad username %s\n", debugstr_w(Credential->UserName));
             SetLastError(ERROR_BAD_USERNAME);
@@ -1767,7 +1768,7 @@ BOOL WINAPI CredMarshalCredentialW( CRED_MARSHAL_TYPE type, PVOID cred, LPWSTR *
     }
     case UsernameTargetCredential:
     {
-        len = lstrlenW( target->UserName );
+        len = strlenW( target->UserName );
         size = (sizeof(DWORD) + len * sizeof(WCHAR) + 2) * 4 / 3;
         if (!(p = heap_alloc( (size + 4) * sizeof(WCHAR) ))) return FALSE;
         p[0] = '@';
@@ -1878,7 +1879,7 @@ BOOL WINAPI CredUnmarshalCredentialW( LPCWSTR cred, PCRED_MARSHAL_TYPE type, PVO
         SetLastError( ERROR_INVALID_PARAMETER );
         return FALSE;
     }
-    len = lstrlenW( cred + 3 );
+    len = strlenW( cred + 3 );
     *type = char_decode( cred[2] );
     switch (*type)
     {
@@ -1951,7 +1952,7 @@ BOOL WINAPI CredIsMarshaledCredentialW(LPCWSTR name)
     if (name && name[0] == '@' && name[1] == '@' && name[2] > 'A' && name[3])
     {
         char hash[CERT_HASH_LENGTH];
-        int len = lstrlenW(name + 3 );
+        int len = strlenW(name + 3 );
         DWORD size;
 
         if ((name[2] - 'A') == CertCredential && (len == 27) && cred_decode(name + 3, len, hash))

@@ -833,10 +833,7 @@ BOOL get_thread_times(int unix_pid, int unix_tid, LARGE_INTEGER *kernel_time, LA
     FILE *f;
     int i;
 
-    if (unix_tid == -1)
-        sprintf( buf, "/proc/%u/stat", unix_pid );
-    else
-        sprintf( buf, "/proc/%u/task/%u/stat", unix_pid, unix_tid );
+    sprintf( buf, "/proc/%u/task/%u/stat", unix_pid, unix_tid );
     if (!(f = fopen( buf, "r" )))
     {
         ERR("Failed to open %s: %s\n", buf, strerror(errno));

@@ -233,7 +233,7 @@ static startup_info_t *create_startup_info( const RTL_USER_PROCESS_PARAMETERS *p
     size = (size + 1) & ~1;
     *info_size = size;
 
-    if (!(info = calloc( size, 1 ))) return NULL;
+    if (!(info = RtlAllocateHeap( GetProcessHeap(), HEAP_ZERO_MEMORY, size ))) return NULL;
 
     info->debug_flags   = params->DebugFlags;
     info->console_flags = params->ConsoleFlags;
@@ -461,7 +461,7 @@ static ULONG get_env_size( const RTL_USER_PROCESS_PARAMETERS *params, char **win
         if (!*winedebug && !wcsncmp( ptr, WINEDEBUG, ARRAY_SIZE( WINEDEBUG ) - 1 ))
         {
             DWORD len = wcslen(ptr) * 3 + 1;
-            if ((*winedebug = malloc( len )))
+            if ((*winedebug = RtlAllocateHeap( GetProcessHeap(), 0, len )))
                 ntdll_wcstoumbs( ptr, wcslen(ptr) + 1, *winedebug, len, FALSE );
         }
         ptr += wcslen(ptr) + 1;
@@ -991,8 +991,8 @@ done:
     if (thread_handle) NtClose( thread_handle );
     if (socketfd[0] != -1) close( socketfd[0] );
     if (unixdir != -1) close( unixdir );
-    free( startup_info );
-    free( winedebug );
+    RtlFreeHeap( GetProcessHeap(), 0, startup_info );
+    RtlFreeHeap( GetProcessHeap(), 0, winedebug );
     return status;
 }
 

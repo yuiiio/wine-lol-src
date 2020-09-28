@@ -134,6 +134,7 @@ static RTL_CRITICAL_SECTION csVirtual = { &critsect_debug, -1, 0, 0, 0, 0 };
 
 static const BOOL is_win64 = (sizeof(void *) > sizeof(int));
 static const UINT page_shift = 12;
+static const UINT_PTR page_size = 0x1000;
 static const UINT_PTR page_mask = 0xfff;
 static const UINT_PTR granularity_mask = 0xffff;
 
@@ -2865,7 +2866,7 @@ unsigned int CDECL virtual_locked_server_call( void *req_ptr )
 /***********************************************************************
  *           virtual_locked_read
  */
-ssize_t virtual_locked_read( int fd, void *addr, size_t size )
+ssize_t CDECL virtual_locked_read( int fd, void *addr, size_t size )
 {
     sigset_t sigset;
     BOOL has_write_watch = FALSE;
@@ -2890,7 +2891,7 @@ ssize_t virtual_locked_read( int fd, void *addr, size_t size )
 /***********************************************************************
  *           virtual_locked_pread
  */
-ssize_t virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
+ssize_t CDECL virtual_locked_pread( int fd, void *addr, size_t size, off_t offset )
 {
     sigset_t sigset;
     BOOL has_write_watch = FALSE;
@@ -3006,7 +3007,7 @@ int virtual_handle_stack_fault( void *addr )
  *
  * Check if a memory buffer can be read, triggering page faults if needed for DIB section access.
  */
-BOOL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
+BOOL CDECL virtual_check_buffer_for_read( const void *ptr, SIZE_T size )
 {
     if (!size) return TRUE;
     if (!ptr) return FALSE;

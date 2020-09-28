@@ -3947,13 +3947,14 @@ void __wine_process_init(void)
     UNICODE_STRING nt_name;
     HMODULE ntdll_module = (HMODULE)((__wine_spec_nt_header.OptionalHeader.ImageBase + 0xffff) & ~0xffff);
     INITIAL_TEB stack;
+    BOOL suspend;
     SIZE_T info_size;
     TEB *teb;
     PEB *peb;
 
     if (!unix_funcs) load_ntdll_so( ntdll_module, &__wine_spec_nt_header );
 
-    teb = thread_init( &info_size );
+    teb = thread_init( &info_size, &suspend );
     peb = teb->Peb;
     peb->ProcessHeap = RtlCreateHeap( HEAP_GROWABLE, NULL, 0, 0, NULL, NULL );
     peb->LoaderLock = &loader_section;

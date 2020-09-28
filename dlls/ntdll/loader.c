@@ -3633,6 +3633,8 @@ void WINAPI LdrShutdownThread(void)
 
     RtlAcquirePebLock();
     RemoveEntryList( &NtCurrentTeb()->TlsLinks );
+    RtlReleasePebLock();
+
     if ((pointers = NtCurrentTeb()->ThreadLocalStoragePointer))
     {
         for (i = 0; i < tls_module_count; i++) RtlFreeHeap( GetProcessHeap(), 0, pointers[i] );
@@ -3640,9 +3642,6 @@ void WINAPI LdrShutdownThread(void)
     }
     RtlFreeHeap( GetProcessHeap(), 0, NtCurrentTeb()->FlsSlots );
     RtlFreeHeap( GetProcessHeap(), 0, NtCurrentTeb()->TlsExpansionSlots );
-    NtCurrentTeb()->TlsExpansionSlots = NULL;
-    RtlReleasePebLock();
-
     RtlLeaveCriticalSection( &loader_section );
 }
 

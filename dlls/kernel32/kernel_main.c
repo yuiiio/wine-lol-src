@@ -44,7 +44,6 @@ static STARTUPINFOA startup_infoA;
 /***********************************************************************
  *           set_entry_point
  */
-#ifdef __i386__
 static void set_entry_point( HMODULE module, const char *name, DWORD rva )
 {
     IMAGE_EXPORT_DIRECTORY *exports;
@@ -65,12 +64,9 @@ static void set_entry_point( HMODULE module, const char *name, DWORD rva )
             if (!(res = strcmp( ename, name )))
             {
                 WORD ordinal = ordinals[pos];
-                DWORD oldprot;
-
+                assert( ordinal < exports->NumberOfFunctions );
                 TRACE( "setting %s at %p to %08x\n", name, &functions[ordinal], rva );
-                VirtualProtect( functions + ordinal, sizeof(*functions), PAGE_READWRITE, &oldprot );
                 functions[ordinal] = rva;
-                VirtualProtect( functions + ordinal, sizeof(*functions), oldprot, NULL );
                 return;
             }
             if (res > 0) max = pos - 1;
@@ -78,7 +74,6 @@ static void set_entry_point( HMODULE module, const char *name, DWORD rva )
         }
     }
 }
-#endif
 
 
 /***********************************************************************
@@ -139,7 +134,6 @@ static BOOL process_attach( HMODULE module )
 
     copy_startup_info();
 
-#ifdef __i386__
     if (!(GetVersion() & 0x80000000))
     {
         /* Securom checks for this one when version is NT */
@@ -152,7 +146,7 @@ static BOOL process_attach( HMODULE module )
         if (LdrFindEntryForAddress( GetModuleHandleW( 0 ), &ldr ) || !(ldr->Flags & LDR_WINE_INTERNAL))
             LoadLibraryA( "krnl386.exe16" );
     }
-#endif
+
     return TRUE;
 }
 

@@ -159,17 +159,18 @@ static void fill_console_output( HANDLE handle, int i, int j, int len, CHAR_INFO
 /* helper function for GetLargestConsoleWindowSize */
 static COORD get_largest_console_window_size( HANDLE handle )
 {
-    struct condrv_output_info info;
     COORD c = { 0, 0 };
 
-    if (!DeviceIoControl( handle, IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL ))
+    SERVER_START_REQ( get_console_output_info )
     {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return c;
+        req->handle = console_handle_unmap( handle );
+        if (!wine_server_call_err( req ))
+        {
+            c.X = reply->max_width;
+            c.Y = reply->max_height;
+        }
     }
-
-    c.X = info.max_width;
-    c.Y = info.max_height;
+    SERVER_END_REQ;
     TRACE( "(%p), returning %dx%d\n", handle, c.X, c.Y );
     return c;
 }

@@ -1805,26 +1805,11 @@ DWORD WINAPI GetPrivateProfileSectionNamesW( LPWSTR buffer, DWORD size,
 					     LPCWSTR filename)
 {
     DWORD ret = 0;
-    HKEY key;
-
-    if ((key = open_file_mapping_key( filename )))
-    {
-        WCHAR *section;
-        DWORD i;
-
-        for (i = 0; (section = enum_key( key, i )); ++i)
-        {
-            lstrcpynW( buffer + ret, section, size - ret - 1 );
-            ret = min( ret + strlenW( section ) + 1, size - 1 );
-        }
-
-        RegCloseKey( key );
-    }
 
     RtlEnterCriticalSection( &PROFILE_CritSect );
 
     if (PROFILE_Open( filename, FALSE ))
-        ret += PROFILE_GetSectionNames( buffer + ret, size - ret );
+        ret = PROFILE_GetSectionNames(buffer, size);
 
     RtlLeaveCriticalSection( &PROFILE_CritSect );
 

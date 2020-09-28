@@ -826,6 +826,18 @@ NTSTATUS WINAPI NtReplyWaitReceivePort(
  *	Misc
  */
 
+ /******************************************************************************
+ *  NtSetIntervalProfile	[NTDLL.@]
+ *  ZwSetIntervalProfile	[NTDLL.@]
+ */
+NTSTATUS WINAPI NtSetIntervalProfile(
+        ULONG Interval,
+        KPROFILE_SOURCE Source)
+{
+    FIXME("%u,%d\n", Interval, Source);
+    return STATUS_SUCCESS;
+}
+
 /***********************************************************************
  * RtlIsProcessorFeaturePresent [NTDLL.@]
  */

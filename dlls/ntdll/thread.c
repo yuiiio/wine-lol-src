@@ -425,6 +425,7 @@ TEB *thread_init(void)
     thread_data->wait_fd[1] = -1;
     thread_data->esync_queue_fd = -1;
     thread_data->esync_apc_fd = -1;
+    thread_data->fsync_apc_futex = NULL;
 
     unix_funcs->dbg_init();
     unix_funcs->get_paths( &build_dir, &data_dir, &config_dir );
@@ -720,6 +721,7 @@ NTSTATUS WINAPI NtCreateThreadEx( HANDLE *handle_ptr, ACCESS_MASK access, OBJECT
     thread_data->start_stack = (char *)teb->Tib.StackBase;
     thread_data->esync_queue_fd = -1;
     thread_data->esync_apc_fd = -1;
+    thread_data->fsync_apc_futex = NULL;
 
     pthread_attr_init( &pthread_attr );
     pthread_attr_setstack( &pthread_attr, teb->DeallocationStack,

@@ -48,6 +48,7 @@
 #include "ntdll_misc.h"
 #include "ddk/wdm.h"
 #include "esync.h"
+#include "fsync.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(module);
 WINE_DECLARE_DEBUG_CHANNEL(relay);
@@ -4661,6 +4662,7 @@ void __wine_process_init(void)
     peb->ProcessHeap = RtlCreateHeap( HEAP_GROWABLE, NULL, 0, 0, NULL, NULL );
     peb->LoaderLock = &loader_section;
 
+    fsync_init();
     esync_init();
 
     init_unix_codepage();

@@ -23,10 +23,28 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+/* Reference applications:
+ * -  IDA (interactive disassembler) full version 3.75. Works.
+ * -  LYNX/W32. Works mostly, some keys crash it.
+ */
+
+#include "config.h"
+#include "wine/port.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
+#include <assert.h>
+#ifdef HAVE_TERMIOS_H
+# include <termios.h>
+#endif
+#ifdef HAVE_SYS_POLL_H
+# include <sys/poll.h>
+#endif
 
 #define NONAMELESSUNION
 #include "ntstatus.h"
@@ -36,7 +54,6 @@
 #include "winnls.h"
 #include "winerror.h"
 #include "wincon.h"
-#include "wine/condrv.h"
 #include "wine/server.h"
 #include "wine/exception.h"
 #include "wine/unicode.h"
@@ -47,8 +64,122 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(console);
 
+static CRITICAL_SECTION CONSOLE_CritSect;
+static CRITICAL_SECTION_DEBUG critsect_debug =
+{
+    0, 0, &CONSOLE_CritSect,
+    { &critsect_debug.ProcessLocksList, &critsect_debug.ProcessLocksList },
+      0, 0, { (DWORD_PTR)(__FILE__ ": CONSOLE_CritSect") }
+};
+static CRITICAL_SECTION CONSOLE_CritSect = { &critsect_debug, -1, 0, 0, 0, 0 };
+
 static const WCHAR coninW[] = {'C','O','N','I','N','$',0};
 static const WCHAR conoutW[] = {'C','O','N','O','U','T','$',0};
+
+/* map input records to ASCII */
+static void input_records_WtoA( INPUT_RECORD *buffer, int count )
+{
+    UINT cp = GetConsoleCP();
+    int i;
+    char ch;
+
+    for (i = 0; i < count; i++)
+    {
+        if (buffer[i].EventType != KEY_EVENT) continue;
+        WideCharToMultiByte( cp, 0, &buffer[i].Event.KeyEvent.uChar.UnicodeChar, 1, &ch, 1, NULL, NULL );
+        buffer[i].Event.KeyEvent.uChar.AsciiChar = ch;
+    }
+}
+
+static struct termios S_termios;        /* saved termios for bare consoles */
+static BOOL S_termios_raw /* = FALSE */;
+
+/* The scheme for bare consoles for managing raw/cooked settings is as follows:
+ * - a bare console is created for all CUI programs started from command line (without
+ *   wineconsole) (let's call those PS)
+ * - of course, every child of a PS which requires console inheritance will get it
+ * - the console termios attributes are saved at the start of program which is attached to be
+ *   bare console
+ * - if any program attached to a bare console requests input from console, the console is
+ *   turned into raw mode
+ * - when the program which created the bare console (the program started from command line)
+ *   exits, it will restore the console termios attributes it saved at startup (this
+ *   will put back the console into cooked mode if it had been put in raw mode)
+ * - if any other program attached to this bare console is still alive, the Unix shell will put
+ *   it in the background, hence forbidding access to the console. Therefore, reading console
+ *   input will not be available when the bare console creator has died.
+ *   FIXME: This is a limitation of current implementation
+ */
+
+/* returns the fd for a bare console (-1 otherwise) */
+static int  get_console_bare_fd(HANDLE hin)
+{
+    int         fd;
+
+    if (is_console_handle(hin) &&
+        wine_server_handle_to_fd(wine_server_ptr_handle(console_handle_unmap(hin)),
+                                 0, &fd, NULL) == STATUS_SUCCESS)
+        return fd;
+    return -1;
+}
+
+static BOOL save_console_mode(HANDLE hin)
+{
+    int         fd;
+    BOOL        ret;
+
+    if ((fd = get_console_bare_fd(hin)) == -1) return FALSE;
+    ret = tcgetattr(fd, &S_termios) >= 0;
+    close(fd);
+    return ret;
+}
+
+static BOOL put_console_into_raw_mode(int fd)
+{
+    RtlEnterCriticalSection(&CONSOLE_CritSect);
+    if (!S_termios_raw)
+    {
+        struct termios term = S_termios;
+
+        term.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN);
+        term.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+        term.c_cflag &= ~(CSIZE | PARENB);
+        term.c_cflag |= CS8;
+        /* FIXME: we should actually disable output processing here
+         * and let kernel32/console.c do the job (with support of enable/disable of
+         * processed output)
+         */
+        /* term.c_oflag &= ~(OPOST); */
+        term.c_cc[VMIN] = 1;
+        term.c_cc[VTIME] = 0;
+        S_termios_raw = tcsetattr(fd, TCSANOW, &term) >= 0;
+    }
+    RtlLeaveCriticalSection(&CONSOLE_CritSect);
+
+    return S_termios_raw;
+}
+
+/* put back the console in cooked mode iff we're the process which created the bare console
+ * we don't test if this process has set the console in raw mode as it could be one of its
+ * children who did it
+ */
+static BOOL restore_console_mode(HANDLE hin)
+{
+    int         fd;
+    BOOL        ret = TRUE;
+
+    if (S_termios_raw)
+    {
+        if ((fd = get_console_bare_fd(hin)) == -1) return FALSE;
+        ret = tcsetattr(fd, TCSANOW, &S_termios) >= 0;
+        close(fd);
+    }
+
+    if (RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle == KERNEL32_CONSOLE_SHELL)
+        TERM_Exit();
+
+    return ret;
+}
 
 /******************************************************************************
  * GetConsoleWindow [KERNEL32.@] Get hwnd of the console window.
@@ -57,14 +188,30 @@ static const WCHAR conoutW[] = {'C','O','N','O','U','T','$',0};
  *   Success: hwnd of the console window.
  *   Failure: NULL
  */
-HWND WINAPI GetConsoleWindow(void)
+HWND WINAPI GetConsoleWindow(VOID)
 {
-    struct condrv_input_info info;
-    BOOL ret;
+    HWND hWnd = NULL;
 
-    ret = DeviceIoControl( RtlGetCurrentPeb()->ProcessParameters->ConsoleHandle,
-                           IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL );
-    return ret ? wine_server_ptr_handle(info.win) : NULL;
+    SERVER_START_REQ(get_console_input_info)
+    {
+        req->handle = 0;
+        if (!wine_server_call_err(req)) hWnd = wine_server_ptr_handle( reply->win );
+    }
+    SERVER_END_REQ;
+
+    return hWnd;
+}
+
+
+/***********************************************************************
+ *           Beep   (KERNEL32.@)
+ */
+BOOL WINAPI Beep( DWORD dwFreq, DWORD dwDur )
+{
+    static const char beep = '\a';
+    /* dwFreq and dwDur are ignored by Win95 */
+    if (isatty(2)) write( 2, &beep, 1 );
+    return TRUE;
 }
 
 
@@ -77,21 +224,39 @@ HWND WINAPI GetConsoleWindow(void)
  */
 HANDLE WINAPI OpenConsoleW(LPCWSTR name, DWORD access, BOOL inherit, DWORD creation)
 {
-    SECURITY_ATTRIBUTES sa;
+    HANDLE      output = INVALID_HANDLE_VALUE;
+    HANDLE      ret;
 
     TRACE("(%s, 0x%08x, %d, %u)\n", debugstr_w(name), access, inherit, creation);
 
-    if (!name || (strcmpiW( coninW, name ) && strcmpiW( conoutW, name )) || creation != OPEN_EXISTING)
+    if (name)
     {
-        SetLastError( ERROR_INVALID_PARAMETER );
+        if (strcmpiW(coninW, name) == 0)
+            output = (HANDLE) FALSE;
+        else if (strcmpiW(conoutW, name) == 0)
+            output = (HANDLE) TRUE;
+    }
+
+    if (output == INVALID_HANDLE_VALUE || creation != OPEN_EXISTING)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
         return INVALID_HANDLE_VALUE;
     }
 
-    sa.nLength = sizeof(sa);
-    sa.lpSecurityDescriptor = NULL;
-    sa.bInheritHandle = inherit;
+    SERVER_START_REQ( open_console )
+    {
+        req->from       = wine_server_obj_handle( output );
+        req->access     = access;
+        req->attributes = inherit ? OBJ_INHERIT : 0;
+        req->share      = FILE_SHARE_READ | FILE_SHARE_WRITE;
+        wine_server_call_err( req );
+        ret = wine_server_ptr_handle( reply->handle );
+    }
+    SERVER_END_REQ;
+    if (ret)
+        ret = console_handle_map(ret);
 
-    return CreateFileW( name, access, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, creation, 0, NULL );
+    return ret;
 }
 
 /******************************************************************
@@ -101,10 +266,16 @@ HANDLE WINAPI OpenConsoleW(LPCWSTR name, DWORD access, BOOL inherit, DWORD creat
  */
 BOOL WINAPI VerifyConsoleIoHandle(HANDLE handle)
 {
-    IO_STATUS_BLOCK io;
-    DWORD mode;
-    return !NtDeviceIoControlFile( handle, NULL, NULL, NULL, &io, IOCTL_CONDRV_GET_MODE,
-                                   NULL, 0, &mode, sizeof(mode) );
+    BOOL ret;
+
+    if (!is_console_handle(handle)) return FALSE;
+    SERVER_START_REQ(get_console_mode)
+    {
+	req->handle = console_handle_unmap(handle);
+	ret = !wine_server_call( req );
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************
@@ -160,14 +331,133 @@ HANDLE WINAPI GetConsoleInputWaitHandle(void)
  */
 enum read_console_input_return {rci_error = 0, rci_timeout = 1, rci_gotone = 2};
 
+static enum read_console_input_return bare_console_fetch_input(HANDLE handle, int fd, DWORD timeout)
+{
+    enum read_console_input_return      ret;
+    char                                input[8];
+    WCHAR                               inputw[8];
+    int                                 i;
+    size_t                              idx = 0, idxw;
+    unsigned                            numEvent;
+    INPUT_RECORD                        ir[8];
+    DWORD                               written;
+    struct pollfd                       pollfd;
+    BOOL                                locked = FALSE, next_char;
+
+    do
+    {
+        if (idx == sizeof(input))
+        {
+            FIXME("buffer too small (%s)\n", wine_dbgstr_an(input, idx));
+            ret = rci_error;
+            break;
+        }
+        pollfd.fd = fd;
+        pollfd.events = POLLIN;
+        pollfd.revents = 0;
+        next_char = FALSE;
+
+        switch (poll(&pollfd, 1, timeout))
+        {
+        case 1:
+            if (!locked)
+            {
+                RtlEnterCriticalSection(&CONSOLE_CritSect);
+                locked = TRUE;
+            }
+            i = read(fd, &input[idx], 1);
+            if (i < 0)
+            {
+                ret = rci_error;
+                break;
+            }
+            if (i == 0)
+            {
+                /* actually another thread likely beat us to reading the char
+                 * return rci_gotone, while not perfect, it should work in most of the cases (as the new event
+                 * should be now in the queue, fed from the other thread)
+                 */
+                ret = rci_gotone;
+                break;
+            }
+
+            idx++;
+            numEvent = TERM_FillInputRecord(input, idx, ir);
+            switch (numEvent)
+            {
+            case 0:
+                /* we need more char(s) to tell if it matches a key-db entry. wait 1/2s for next char */
+                timeout = 500;
+                next_char = TRUE;
+                break;
+            case -1:
+                /* we haven't found the string into key-db, push full input string into server */
+                idxw = MultiByteToWideChar(CP_UNIXCP, 0, input, idx, inputw, ARRAY_SIZE(inputw));
+
+                /* we cannot translate yet... likely we need more chars (wait max 1/2s for next char) */
+                if (idxw == 0)
+                {
+                    timeout = 500;
+                    next_char = TRUE;
+                    break;
+                }
+                for (i = 0; i < idxw; i++)
+                {
+                    numEvent = TERM_FillSimpleChar(inputw[i], ir);
+                    WriteConsoleInputW(handle, ir, numEvent, &written);
+                }
+                ret = rci_gotone;
+                break;
+            default:
+                /* we got a transformation from key-db... push this into server */
+                ret = WriteConsoleInputW(handle, ir, numEvent, &written) ? rci_gotone : rci_error;
+                break;
+            }
+            break;
+        case 0: ret = rci_timeout; break;
+        default: ret = rci_error; break;
+        }
+    } while (next_char);
+    if (locked) RtlLeaveCriticalSection(&CONSOLE_CritSect);
+
+    return ret;
+}
+
 static enum read_console_input_return read_console_input(HANDLE handle, PINPUT_RECORD ir, DWORD timeout)
 {
-    int blocking = timeout != 0;
-    DWORD read_bytes;
+    int fd;
+    enum read_console_input_return      ret;
 
-    if (!DeviceIoControl( handle, IOCTL_CONDRV_READ_INPUT, &blocking, sizeof(blocking), ir, sizeof(*ir), &read_bytes, NULL ))
-        return rci_error;
-    return read_bytes ? rci_gotone : rci_timeout;
+    if ((fd = get_console_bare_fd(handle)) != -1)
+    {
+        put_console_into_raw_mode(fd);
+        if (WaitForSingleObject(handle, 0) != WAIT_OBJECT_0)
+        {
+            ret = bare_console_fetch_input(handle, fd, timeout);
+        }
+        else ret = rci_gotone;
+        close(fd);
+        if (ret != rci_gotone) return ret;
+    }
+    else
+    {
+        if (!VerifyConsoleIoHandle(handle)) return rci_error;
+
+        if (WaitForSingleObject(handle, timeout) != WAIT_OBJECT_0)
+            return rci_timeout;
+    }
+
+    SERVER_START_REQ( read_console_input )
+    {
+        req->handle = console_handle_unmap(handle);
+        req->flush = TRUE;
+        wine_server_set_reply( req, ir, sizeof(INPUT_RECORD) );
+        if (wine_server_call_err( req ) || !reply->read) ret = rci_error;
+        else ret = rci_gotone;
+    }
+    SERVER_END_REQ;
+
+    return ret;
 }
 
 
@@ -278,10 +568,11 @@ BOOL WINAPI ReadConsoleA( HANDLE handle, LPVOID buffer, DWORD length, DWORD *ret
 BOOL WINAPI ReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer,
 			 DWORD nNumberOfCharsToRead, LPDWORD lpNumberOfCharsRead, LPVOID lpReserved)
 {
-    IO_STATUS_BLOCK io;
     DWORD	charsread;
     LPWSTR	xbuf = lpBuffer;
     DWORD	mode;
+    BOOL        is_bare = FALSE;
+    int         fd;
 
     TRACE("(%p,%p,%d,%p,%p)\n",
 	  hConsoleInput, lpBuffer, nNumberOfCharsToRead, lpNumberOfCharsRead, lpReserved);
@@ -292,21 +583,19 @@ BOOL WINAPI ReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer,
         return FALSE;
     }
 
-    if (!NtDeviceIoControlFile(hConsoleInput, NULL, NULL, NULL, &io, IOCTL_CONDRV_READ_CONSOLE, NULL, 0, lpBuffer,
-                               nNumberOfCharsToRead * sizeof(WCHAR)))
-    {
-        if (lpNumberOfCharsRead) *lpNumberOfCharsRead = io.Information / sizeof(WCHAR);
-        return TRUE;
-    }
-
     if (!GetConsoleMode(hConsoleInput, &mode))
         return FALSE;
+    if ((fd = get_console_bare_fd(hConsoleInput)) != -1)
+    {
+        close(fd);
+        is_bare = TRUE;
+    }
     if (mode & ENABLE_LINE_INPUT)
     {
 	if (!S_EditString || S_EditString[S_EditStrPos] == 0)
 	{
 	    HeapFree(GetProcessHeap(), 0, S_EditString);
-	    if (!(S_EditString = CONSOLE_Readline(hConsoleInput, TRUE)))
+	    if (!(S_EditString = CONSOLE_Readline(hConsoleInput, !is_bare)))
 		return FALSE;
 	    S_EditStrPos = 0;
 	}
@@ -349,6 +638,45 @@ BOOL WINAPI ReadConsoleW(HANDLE hConsoleInput, LPVOID lpBuffer,
 
 
 /***********************************************************************
+ *            ReadConsoleInputA   (KERNEL32.@)
+ */
+BOOL WINAPI ReadConsoleInputA( HANDLE handle, INPUT_RECORD *buffer, DWORD length, DWORD *count )
+{
+    DWORD read;
+
+    if (!ReadConsoleInputW( handle, buffer, length, &read )) return FALSE;
+    input_records_WtoA( buffer, read );
+    if (count) *count = read;
+    return TRUE;
+}
+
+
+/***********************************************************************
+ *            ReadConsoleInputW   (KERNEL32.@)
+ */
+BOOL WINAPI ReadConsoleInputW(HANDLE hConsoleInput, PINPUT_RECORD lpBuffer,
+                              DWORD nLength, LPDWORD lpNumberOfEventsRead)
+{
+    DWORD idx = 0;
+    DWORD timeout = INFINITE;
+
+    if (!nLength)
+    {
+        if (lpNumberOfEventsRead) *lpNumberOfEventsRead = 0;
+        return TRUE;
+    }
+
+    /* loop until we get at least one event */
+    while (read_console_input(hConsoleInput, &lpBuffer[idx], timeout) == rci_gotone &&
+           ++idx < nLength)
+        timeout = 0;
+
+    if (lpNumberOfEventsRead) *lpNumberOfEventsRead = idx;
+    return idx != 0;
+}
+
+
+/***********************************************************************
  *            GetNumberOfConsoleMouseButtons   (KERNEL32.@)
  */
 BOOL WINAPI GetNumberOfConsoleMouseButtons(LPDWORD nrofbuttons)
@@ -359,29 +687,63 @@ BOOL WINAPI GetNumberOfConsoleMouseButtons(LPDWORD nrofbuttons)
 }
 
 /******************************************************************
+ *		CONSOLE_HandleCtrlC
+ *
+ * Check whether the shall manipulate CtrlC events
+ */
+LONG CALLBACK CONSOLE_HandleCtrlC( EXCEPTION_POINTERS *eptr )
+{
+    extern DWORD WINAPI CtrlRoutine( void *arg );
+    HANDLE thread;
+
+    if (eptr->ExceptionRecord->ExceptionCode != CONTROL_C_EXIT) return EXCEPTION_CONTINUE_SEARCH;
+
+    /* FIXME: better test whether a console is attached to this process ??? */
+    if (CONSOLE_GetNumHistoryEntries() == (unsigned)-1) return EXCEPTION_CONTINUE_SEARCH;
+
+    /* check if we have to ignore ctrl-C events */
+    if (!(NtCurrentTeb()->Peb->ProcessParameters->ConsoleFlags & 1))
+    {
+        /* Create a separate thread to signal all the events. 
+         * This is needed because:
+         *  - this function can be called in an Unix signal handler (hence on an
+         *    different stack than the thread that's running). This breaks the 
+         *    Win32 exception mechanisms (where the thread's stack is checked).
+         *  - since the current thread, while processing the signal, can hold the
+         *    console critical section, we need another execution environment where
+         *    we can wait on this critical section 
+         */
+        thread = CreateThread(NULL, 0, CtrlRoutine, (void*)CTRL_C_EVENT, 0, NULL);
+        if (thread) CloseHandle(thread);
+    }
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+/******************************************************************
  *		CONSOLE_WriteChars
  *
  * WriteConsoleOutput helper: hides server call semantics
  * writes a string at a given pos with standard attribute
  */
-static int CONSOLE_WriteChars(HANDLE handle, const WCHAR *str, size_t length, COORD *coord)
+static int CONSOLE_WriteChars(HANDLE hCon, LPCWSTR lpBuffer, int nc, COORD* pos)
 {
-    struct condrv_output_params *params;
-    DWORD written = 0, size;
+    int written = -1;
 
-    if (!length) return 0;
+    if (!nc) return 0;
 
-    size = sizeof(*params) + length * sizeof(WCHAR);
-    if (!(params = HeapAlloc( GetProcessHeap(), 0, size ))) return FALSE;
-    params->mode   = CHAR_INFO_MODE_TEXTSTDATTR;
-    params->x      = coord->X;
-    params->y      = coord->Y;
-    params->width  = 0;
-    memcpy( params + 1, str, length * sizeof(*str) );
-    if (DeviceIoControl( handle, IOCTL_CONDRV_WRITE_OUTPUT, params, size,
-                         &written, sizeof(written), NULL, NULL ))
-        coord->X += written;
-    HeapFree( GetProcessHeap(), 0, params );
+    SERVER_START_REQ( write_console_output )
+    {
+        req->handle = console_handle_unmap(hCon);
+        req->x      = pos->X;
+        req->y      = pos->Y;
+        req->mode   = CHAR_INFO_MODE_TEXTSTDATTR;
+        req->wrap   = FALSE;
+        wine_server_add_data( req, lpBuffer, nc * sizeof(WCHAR) );
+        if (!wine_server_call_err( req )) written = reply->written;
+    }
+    SERVER_END_REQ;
+
+    if (written > 0) pos->X += written;
     return written;
 }
 
@@ -500,8 +862,7 @@ BOOL WINAPI WriteConsoleW(HANDLE hConsoleOutput, LPCVOID lpBuffer, DWORD nNumber
     DWORD			nw = 0;
     const WCHAR*		psz = lpBuffer;
     CONSOLE_SCREEN_BUFFER_INFO	csbi;
-    int				k, first = 0;
-    IO_STATUS_BLOCK io;
+    int				k, first = 0, fd;
 
     TRACE("%p %s %d %p %p\n",
 	  hConsoleOutput, debugstr_wn(lpBuffer, nNumberOfCharsToWrite),
@@ -509,11 +870,40 @@ BOOL WINAPI WriteConsoleW(HANDLE hConsoleOutput, LPCVOID lpBuffer, DWORD nNumber
 
     if (lpNumberOfCharsWritten) *lpNumberOfCharsWritten = 0;
 
-    if (!NtDeviceIoControlFile(hConsoleOutput, NULL, NULL, NULL, &io, IOCTL_CONDRV_WRITE_CONSOLE, (void *)lpBuffer,
-                               nNumberOfCharsToWrite * sizeof(WCHAR), NULL, 0))
+    if ((fd = get_console_bare_fd(hConsoleOutput)) != -1)
     {
-        if (lpNumberOfCharsWritten) *lpNumberOfCharsWritten = nNumberOfCharsToWrite;
-        return TRUE;
+        char*           ptr;
+        unsigned        len;
+        HANDLE          hFile;
+        NTSTATUS        status;
+        IO_STATUS_BLOCK iosb;
+
+        close(fd);
+        /* FIXME: mode ENABLED_OUTPUT is not processed (or actually we rely on underlying Unix/TTY fd
+         * to do the job
+         */
+        len = WideCharToMultiByte(CP_UNIXCP, 0, lpBuffer, nNumberOfCharsToWrite, NULL, 0, NULL, NULL);
+        if ((ptr = HeapAlloc(GetProcessHeap(), 0, len)) == NULL)
+            return FALSE;
+
+        WideCharToMultiByte(CP_UNIXCP, 0, lpBuffer, nNumberOfCharsToWrite, ptr, len, NULL, NULL);
+        hFile = wine_server_ptr_handle(console_handle_unmap(hConsoleOutput));
+        status = NtWriteFile(hFile, NULL, NULL, NULL, &iosb, ptr, len, 0, NULL);
+        if (status == STATUS_PENDING)
+        {
+            WaitForSingleObject(hFile, INFINITE);
+            status = iosb.u.Status;
+        }
+
+        if (status != STATUS_PENDING && lpNumberOfCharsWritten)
+        {
+            if (iosb.Information == len)
+                *lpNumberOfCharsWritten = nNumberOfCharsToWrite;
+            else
+                FIXME("Conversion not supported yet\n");
+        }
+        HeapFree(GetProcessHeap(), 0, ptr);
+        return set_ntstatus( status );
     }
 
     if (!GetConsoleMode(hConsoleOutput, &mode) || !GetConsoleScreenBufferInfo(hConsoleOutput, &csbi))
@@ -593,16 +983,19 @@ BOOL WINAPI WriteConsoleW(HANDLE hConsoleOutput, LPCVOID lpBuffer, DWORD nNumber
  */
 void CONSOLE_FillLineUniform(HANDLE hConsoleOutput, int i, int j, int len, LPCHAR_INFO lpFill)
 {
-    struct condrv_fill_output_params params;
-
-    params.mode  = CHAR_INFO_MODE_TEXTATTR;
-    params.x     = i;
-    params.y     = j;
-    params.count = len;
-    params.wrap  = FALSE;
-    params.ch    = lpFill->Char.UnicodeChar;
-    params.attr  = lpFill->Attributes;
-    DeviceIoControl( hConsoleOutput, IOCTL_CONDRV_FILL_OUTPUT, &params, sizeof(params), NULL, 0, NULL, NULL );
+    SERVER_START_REQ( fill_console_output )
+    {
+        req->handle    = console_handle_unmap(hConsoleOutput);
+        req->mode      = CHAR_INFO_MODE_TEXTATTR;
+        req->x         = i;
+        req->y         = j;
+        req->count     = len;
+        req->wrap      = FALSE;
+        req->data.ch   = lpFill->Char.UnicodeChar;
+        req->data.attr = lpFill->Attributes;
+        wine_server_call_err( req );
+    }
+    SERVER_END_REQ;
 }
 
 /******************************************************************
@@ -695,11 +1088,16 @@ BOOL	CONSOLE_AppendHistory(const WCHAR* ptr)
  *
  *
  */
-unsigned CONSOLE_GetNumHistoryEntries(HANDLE console)
+unsigned CONSOLE_GetNumHistoryEntries(void)
 {
-    struct condrv_input_info info;
-    BOOL ret = DeviceIoControl( console, IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL );
-    return ret ? info.history_index : ~0;
+    unsigned ret = -1;
+    SERVER_START_REQ(get_console_input_info)
+    {
+        req->handle = 0;
+        if (!wine_server_call_err( req )) ret = reply->history_index;
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************
@@ -709,9 +1107,15 @@ unsigned CONSOLE_GetNumHistoryEntries(HANDLE console)
  */
 BOOL CONSOLE_GetEditionMode(HANDLE hConIn, int* mode)
 {
-    struct condrv_input_info info;
-    return DeviceIoControl( hConIn, IOCTL_CONDRV_GET_INPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL )
-        ? info.edition_mode : 0;
+    unsigned ret = 0;
+    SERVER_START_REQ(get_console_input_info)
+    {
+        req->handle = console_handle_unmap(hConIn);
+        if ((ret = !wine_server_call_err( req )))
+            *mode = reply->edition_mode;
+    }
+    SERVER_END_REQ;
+    return ret;
 }
 
 /******************************************************************
@@ -748,6 +1152,64 @@ DWORD WINAPI GetConsoleProcessList(LPDWORD processlist, DWORD processcount)
 
 BOOL CONSOLE_Init(RTL_USER_PROCESS_PARAMETERS *params)
 {
+    memset(&S_termios, 0, sizeof(S_termios));
+    if (params->ConsoleHandle == KERNEL32_CONSOLE_SHELL)
+    {
+        HANDLE  conin;
+
+        /* FIXME: to be done even if program is a GUI ? */
+        /* This is wine specific: we have no parent (we're started from unix)
+         * so, create a simple console with bare handles
+         */
+        TERM_Init();
+        wine_server_send_fd(0);
+        SERVER_START_REQ( alloc_console )
+        {
+            req->access     = GENERIC_READ | GENERIC_WRITE;
+            req->attributes = OBJ_INHERIT;
+            req->pid        = 0xffffffff;
+            req->input_fd   = 0;
+            wine_server_call( req );
+            conin = wine_server_ptr_handle( reply->handle_in );
+            /* reply->event shouldn't be created by server */
+        }
+        SERVER_END_REQ;
+
+        if (!params->hStdInput)
+            params->hStdInput = conin;
+
+        if (!params->hStdOutput)
+        {
+            wine_server_send_fd(1);
+            SERVER_START_REQ( create_console_output )
+            {
+                req->handle_in  = wine_server_obj_handle(conin);
+                req->access     = GENERIC_WRITE|GENERIC_READ;
+                req->attributes = OBJ_INHERIT;
+                req->share      = FILE_SHARE_READ|FILE_SHARE_WRITE;
+                req->fd         = 1;
+                wine_server_call(req);
+                params->hStdOutput = wine_server_ptr_handle(reply->handle_out);
+            }
+            SERVER_END_REQ;
+        }
+        if (!params->hStdError)
+        {
+            wine_server_send_fd(2);
+            SERVER_START_REQ( create_console_output )
+            {
+                req->handle_in  = wine_server_obj_handle(conin);
+                req->access     = GENERIC_WRITE|GENERIC_READ;
+                req->attributes = OBJ_INHERIT;
+                req->share      = FILE_SHARE_READ|FILE_SHARE_WRITE;
+                req->fd         = 2;
+                wine_server_call(req);
+                params->hStdError = wine_server_ptr_handle(reply->handle_out);
+            }
+            SERVER_END_REQ;
+        }
+    }
+
     /* convert value from server:
      * + INVALID_HANDLE_VALUE => TEB: 0, STARTUPINFO: INVALID_HANDLE_VALUE
      * + 0                    => TEB: 0, STARTUPINFO: INVALID_HANDLE_VALUE
@@ -755,20 +1217,29 @@ BOOL CONSOLE_Init(RTL_USER_PROCESS_PARAMETERS *params)
      */
     if (!params->hStdInput || params->hStdInput == INVALID_HANDLE_VALUE)
         params->hStdInput = 0;
-    else if (!is_console_handle(params->hStdInput) && VerifyConsoleIoHandle(params->hStdInput))
+    else if (VerifyConsoleIoHandle(console_handle_map(params->hStdInput)))
+    {
         params->hStdInput = console_handle_map(params->hStdInput);
+        save_console_mode(params->hStdInput);
+    }
 
     if (!params->hStdOutput || params->hStdOutput == INVALID_HANDLE_VALUE)
         params->hStdOutput = 0;
-    else if (!is_console_handle(params->hStdOutput) && VerifyConsoleIoHandle(params->hStdOutput))
+    else if (VerifyConsoleIoHandle(console_handle_map(params->hStdOutput)))
         params->hStdOutput = console_handle_map(params->hStdOutput);
 
     if (!params->hStdError || params->hStdError == INVALID_HANDLE_VALUE)
         params->hStdError = 0;
-    else if (!is_console_handle(params->hStdError) && VerifyConsoleIoHandle(params->hStdError))
+    else if (VerifyConsoleIoHandle(console_handle_map(params->hStdError)))
         params->hStdError = console_handle_map(params->hStdError);
 
     return TRUE;
+}
+
+BOOL CONSOLE_Exit(void)
+{
+    /* the console is in raw mode, put it back in cooked mode */
+    return restore_console_mode(GetStdHandle(STD_INPUT_HANDLE));
 }
 
 /* Undocumented, called by native doskey.exe */
@@ -891,11 +1362,11 @@ BOOL WINAPI SetConsoleKeyShortcuts(BOOL set, BYTE keys, VOID *a, DWORD b)
 
 BOOL WINAPI GetCurrentConsoleFontEx(HANDLE hConsole, BOOL maxwindow, CONSOLE_FONT_INFOEX *fontinfo)
 {
-    DWORD size;
+    BOOL ret;
     struct
     {
-        struct condrv_output_info info;
-        WCHAR face_name[LF_FACESIZE - 1];
+        unsigned int color_map[16];
+        WCHAR face_name[LF_FACESIZE];
     } data;
 
     if (fontinfo->cbSize != sizeof(CONSOLE_FONT_INFOEX))
@@ -904,30 +1375,37 @@ BOOL WINAPI GetCurrentConsoleFontEx(HANDLE hConsole, BOOL maxwindow, CONSOLE_FON
         return FALSE;
     }
 
-    if (!DeviceIoControl( hConsole, IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0,
-                          &data, sizeof(data), &size, NULL ))
+    SERVER_START_REQ(get_console_output_info)
     {
-        SetLastError( ERROR_INVALID_HANDLE );
-        return FALSE;
+        req->handle = console_handle_unmap(hConsole);
+        wine_server_set_reply( req, &data, sizeof(data) - sizeof(WCHAR) );
+        if ((ret = !wine_server_call_err(req)))
+        {
+            fontinfo->nFont = 0;
+            if (maxwindow)
+            {
+                fontinfo->dwFontSize.X = min(reply->width, reply->max_width);
+                fontinfo->dwFontSize.Y = min(reply->height, reply->max_height);
+            }
+            else
+            {
+                fontinfo->dwFontSize.X = reply->win_right - reply->win_left + 1;
+                fontinfo->dwFontSize.Y = reply->win_bottom - reply->win_top + 1;
+            }
+            if (wine_server_reply_size( reply ) > sizeof(data.color_map))
+            {
+                data_size_t len = wine_server_reply_size( reply ) - sizeof(data.color_map);
+                memcpy( fontinfo->FaceName, data.face_name, len );
+                fontinfo->FaceName[len / sizeof(WCHAR)] = 0;
+            }
+            else
+                fontinfo->FaceName[0] = 0;
+            fontinfo->FontFamily = reply->font_pitch_family;
+            fontinfo->FontWeight = reply->font_weight;
+        }
     }
-
-    fontinfo->nFont = 0;
-    if (maxwindow)
-    {
-        fontinfo->dwFontSize.X = min( data.info.width, data.info.max_width );
-        fontinfo->dwFontSize.Y = min( data.info.height, data.info.max_height );
-    }
-    else
-    {
-        fontinfo->dwFontSize.X = data.info.win_right - data.info.win_left + 1;
-        fontinfo->dwFontSize.Y = data.info.win_bottom - data.info.win_top + 1;
-    }
-    size -= sizeof(data.info);
-    if (size) memcpy( fontinfo->FaceName, data.face_name, size );
-    fontinfo->FaceName[size / sizeof(WCHAR)] = 0;
-    fontinfo->FontFamily = data.info.font_pitch_family;
-    fontinfo->FontWeight = data.info.font_weight;
-    return TRUE;
+    SERVER_END_REQ;
+    return ret;
 }
 
 BOOL WINAPI GetCurrentConsoleFont(HANDLE hConsole, BOOL maxwindow, CONSOLE_FONT_INFO *fontinfo)
@@ -949,7 +1427,6 @@ BOOL WINAPI GetCurrentConsoleFont(HANDLE hConsole, BOOL maxwindow, CONSOLE_FONT_
 
 static COORD get_console_font_size(HANDLE hConsole, DWORD index)
 {
-    struct condrv_output_info info;
     COORD c = {0,0};
 
     if (index >= GetNumberOfConsoleFonts())
@@ -958,12 +1435,16 @@ static COORD get_console_font_size(HANDLE hConsole, DWORD index)
         return c;
     }
 
-    if (DeviceIoControl( hConsole, IOCTL_CONDRV_GET_OUTPUT_INFO, NULL, 0, &info, sizeof(info), NULL, NULL ))
+    SERVER_START_REQ(get_console_output_info)
     {
-        c.X = info.font_width;
-        c.Y = info.font_height;
+        req->handle = console_handle_unmap(hConsole);
+        if (!wine_server_call_err(req))
+        {
+            c.X = reply->font_width;
+            c.Y = reply->font_height;
+        }
     }
-    else SetLastError( ERROR_INVALID_HANDLE );
+    SERVER_END_REQ;
     return c;
 }
 

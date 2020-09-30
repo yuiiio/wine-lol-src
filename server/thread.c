@@ -116,7 +116,6 @@ static const struct object_ops thread_apc_ops =
     no_map_access,              /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
-    no_get_full_name,           /* get_full_name */
     no_lookup_name,             /* lookup_name */
     no_link_name,               /* link_name */
     NULL,                       /* unlink_name */
@@ -153,7 +152,6 @@ static const struct object_ops context_ops =
     no_map_access,              /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
-    no_get_full_name,           /* get_full_name */
     no_lookup_name,             /* lookup_name */
     no_link_name,               /* link_name */
     NULL,                       /* unlink_name */
@@ -188,7 +186,6 @@ static const struct object_ops thread_ops =
     thread_map_access,          /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
-    no_get_full_name,           /* get_full_name */
     no_lookup_name,             /* lookup_name */
     no_link_name,               /* link_name */
     NULL,                       /* unlink_name */
@@ -237,7 +234,6 @@ static inline void init_thread_structure( struct thread *thread )
     thread->exit_code       = 0;
     thread->priority        = 0;
     thread->suspend         = 0;
-    thread->dbg_hidden      = 0;
     thread->desktop_users   = 0;
     thread->token           = NULL;
     thread->desc            = NULL;
@@ -628,8 +624,6 @@ static void set_thread_info( struct thread *thread,
         security_set_thread_token( thread, req->token );
     if (req->mask & SET_THREAD_INFO_ENTRYPOINT)
         thread->entry_point = req->entry_point;
-    if (req->mask & SET_THREAD_INFO_DBG_HIDDEN)
-        thread->dbg_hidden = 1;
     if (req->mask & SET_THREAD_INFO_DESCRIPTION)
     {
         WCHAR *desc;
@@ -1302,6 +1296,30 @@ static unsigned int get_context_system_regs( enum cpu_type cpu )
     return 0;
 }
 
+/* take a snapshot of currently running threads */
+struct thread_snapshot *thread_snap( int *count )
+{
+    struct thread_snapshot *snapshot, *ptr;
+    struct thread *thread;
+    int total = 0;
+
+    LIST_FOR_EACH_ENTRY( thread, &thread_list, struct thread, entry )
+        if (thread->state != TERMINATED) total++;
+    if (!total || !(snapshot = mem_alloc( sizeof(*snapshot) * total ))) return NULL;
+    ptr = snapshot;
+    LIST_FOR_EACH_ENTRY( thread, &thread_list, struct thread, entry )
+    {
+        if (thread->state == TERMINATED) continue;
+        ptr->thread   = thread;
+        ptr->count    = thread->obj.refcount;
+        ptr->priority = thread->priority;
+        grab_object( thread );
+        ptr++;
+    }
+    *count = total;
+    return snapshot;
+}
+
 /* gets the current impersonation token */
 struct token *thread_get_impersonation_token( struct thread *thread )
 {
@@ -1497,10 +1515,11 @@ DECL_HANDLER(open_thread)
 DECL_HANDLER(get_thread_info)
 {
     struct thread *thread;
-    unsigned int access = req->access & (THREAD_QUERY_INFORMATION | THREAD_QUERY_LIMITED_INFORMATION);
+    obj_handle_t handle = req->handle;
 
-    if (!access) access = THREAD_QUERY_LIMITED_INFORMATION;
-    thread = get_thread_from_handle( req->handle, access );
+    if (!handle) thread = get_thread_from_id( req->tid_in );
+    else thread = get_thread_from_handle( req->handle, THREAD_QUERY_LIMITED_INFORMATION );
+
     if (thread)
     {
         reply->pid            = get_process_id( thread->process );
@@ -1512,7 +1531,6 @@ DECL_HANDLER(get_thread_info)
         reply->affinity       = thread->affinity;
         reply->last           = thread->process->running_threads == 1;
         reply->suspend_count  = thread->suspend;
-        reply->dbg_hidden     = thread->dbg_hidden;
         reply->desc_len       = thread->desc_len;
 
         if (thread->desc && get_reply_max_size())
@@ -1532,12 +1550,10 @@ DECL_HANDLER(get_thread_times)
 {
     struct thread *thread;
 
-    if ((thread = get_thread_from_handle( req->handle, THREAD_QUERY_LIMITED_INFORMATION )))
+    if ((thread = get_thread_from_handle( req->handle, THREAD_QUERY_INFORMATION )))
     {
         reply->creation_time  = thread->creation_time;
         reply->exit_time      = thread->exit_time;
-        reply->unix_pid       = thread->unix_pid;
-        reply->unix_tid       = thread->unix_tid;
 
         release_object( thread );
     }

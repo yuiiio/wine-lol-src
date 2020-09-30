@@ -18,14 +18,20 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
 
 #include "windef.h"
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "wine/unicode.h"
 #include "controls.h"
 #include "win.h"
 
@@ -50,6 +56,7 @@ const struct builtin_class_descr ICONTITLE_builtin_class =
  */
 static BOOL ICONTITLE_SetTitlePos( HWND hwnd, HWND owner )
 {
+    static const WCHAR emptyTitleText[] = {'<','.','.','.','>',0};
     WCHAR str[80];
     HDC hDC;
     HFONT hPrevFont;
@@ -64,8 +71,8 @@ static BOOL ICONTITLE_SetTitlePos( HWND hwnd, HWND owner )
 
     if( !length )
     {
-        lstrcpyW( str, L"<...>" );
-        length = lstrlenW( str );
+        strcpyW( str, emptyTitleText );
+        length = strlenW( str );
     }
 
     if (!(hDC = GetDC( hwnd ))) return FALSE;

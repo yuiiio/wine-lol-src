@@ -29,6 +29,7 @@
 #include "oaidl.h"
 #include "initguid.h"
 
+static BOOL   (WINAPI *pIsDebuggerPresent)(void);
 static BOOL   (WINAPI *pQueryActCtxSettingsW)(DWORD,HANDLE,LPCWSTR,LPCWSTR,LPWSTR,SIZE_T,SIZE_T*);
 
 static NTSTATUS(NTAPI *pRtlFindActivationContextSectionString)(DWORD,const GUID *,ULONG,PUNICODE_STRING,PACTCTX_SECTION_KEYED_DATA);
@@ -2015,7 +2016,7 @@ static void test_actctx(void)
         test_detailed_info(handle, &detailed_info1, __LINE__);
         test_info_in_assembly(handle, 1, &manifest1_info, __LINE__);
 
-        if (!IsDebuggerPresent())
+        if (pIsDebuggerPresent && !pIsDebuggerPresent())
         {
             /* CloseHandle will generate an exception if a debugger is present */
             b = CloseHandle(handle);
@@ -2713,6 +2714,7 @@ static BOOL init_funcs(void)
     HMODULE hLibrary = GetModuleHandleA("kernel32.dll");
 
 #define X(f) if (!(p##f = (void*)GetProcAddress(hLibrary, #f))) return FALSE;
+    X(IsDebuggerPresent);
     pQueryActCtxSettingsW = (void *)GetProcAddress( hLibrary, "QueryActCtxSettingsW" );
 
     hLibrary = GetModuleHandleA("ntdll.dll");

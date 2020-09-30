@@ -129,7 +129,6 @@ static const struct object_ops handle_table_ops =
     no_map_access,                   /* map_access */
     default_get_sd,                  /* get_sd */
     default_set_sd,                  /* set_sd */
-    no_get_full_name,                /* get_full_name */
     no_lookup_name,                  /* lookup_name */
     no_link_name,                    /* link_name */
     NULL,                            /* unlink_name */
@@ -286,7 +285,7 @@ obj_handle_t alloc_handle( struct process *process, void *ptr, unsigned int acce
 {
     struct object *obj = ptr;
     access = obj->ops->map_access( obj, access ) & ~RESERVED_ALL;
-    if (access && !check_object_access( NULL, obj, &access )) return 0;
+    if (access && !check_object_access( obj, &access )) return 0;
     return alloc_handle_entry( process, ptr, access, attr );
 }
 
@@ -298,7 +297,7 @@ static obj_handle_t alloc_global_handle_no_access_check( void *obj, unsigned int
     {
         if (!(global_table = alloc_handle_table( NULL, 0 )))
             return 0;
-        make_object_permanent( &global_table->obj );
+        make_object_static( &global_table->obj );
     }
     return handle_local_to_global( alloc_entry( global_table, obj, access ));
 }
@@ -308,7 +307,7 @@ static obj_handle_t alloc_global_handle_no_access_check( void *obj, unsigned int
 /* return the handle, or 0 on error */
 static obj_handle_t alloc_global_handle( void *obj, unsigned int access )
 {
-    if (access && !check_object_access( NULL, obj, &access )) return 0;
+    if (access && !check_object_access( obj, &access )) return 0;
     return alloc_global_handle_no_access_check( obj, access );
 }
 
@@ -356,8 +355,7 @@ static void shrink_handle_table( struct handle_table *table )
 
 /* copy the handle table of the parent process */
 /* return 1 if OK, 0 on error */
-struct handle_table *copy_handle_table( struct process *process, struct process *parent,
-                                        const obj_handle_t *handles, unsigned int handle_count )
+struct handle_table *copy_handle_table( struct process *process, struct process *parent )
 {
     struct handle_table *parent_table = parent->handles;
     struct handle_table *table;
@@ -369,36 +367,15 @@ struct handle_table *copy_handle_table( struct process *process, struct process 
     if (!(table = alloc_handle_table( process, parent_table->count )))
         return NULL;
 
-    if (handles)
+    if ((table->last = parent_table->last) >= 0)
     {
-        struct handle_entry *dst, *src;
-        int index;
-
-        dst = table->entries;
-        memset( dst, 0, parent_table->count * sizeof(*dst) );
-
-        for (i = 0; i < handle_count; i++)
+        struct handle_entry *ptr = table->entries;
+        memcpy( ptr, parent_table->entries, (table->last + 1) * sizeof(struct handle_entry) );
+        for (i = 0; i <= table->last; i++, ptr++)
         {
-            src = get_handle( parent, handles[i] );
-            if (!src || !(src->access & RESERVED_INHERIT)) continue;
-            grab_object_for_handle( src->ptr );
-            index = handle_to_index( handles[i] );
-            dst[index] = *src;
-            table->last = max( table->last, index );
-        }
-    }
-    else
-    {
-        if ((table->last = parent_table->last) >= 0)
-        {
-            struct handle_entry *ptr = table->entries;
-            memcpy( ptr, parent_table->entries, (table->last + 1) * sizeof(struct handle_entry) );
-            for (i = 0; i <= table->last; i++, ptr++)
-            {
-                if (!ptr->ptr) continue;
-                if (ptr->access & RESERVED_INHERIT) grab_object_for_handle( ptr->ptr );
-                else ptr->ptr = NULL; /* don't inherit this entry */
-            }
+            if (!ptr->ptr) continue;
+            if (ptr->access & RESERVED_INHERIT) grab_object_for_handle( ptr->ptr );
+            else ptr->ptr = NULL; /* don't inherit this entry */
         }
     }
     /* attempt to shrink the table */
@@ -509,6 +486,27 @@ obj_handle_t find_inherited_handle( struct process *process, const struct object
     return 0;
 }
 
+/* enumerate handles of a given type */
+/* this is needed for window stations and desktops */
+obj_handle_t enumerate_handles( struct process *process, const struct object_ops *ops,
+                                unsigned int *index )
+{
+    struct handle_table *table = process->handles;
+    unsigned int i;
+    struct handle_entry *entry;
+
+    if (!table) return 0;
+
+    for (i = *index, entry = &table->entries[i]; i <= table->last; i++, entry++)
+    {
+        if (!entry->ptr) continue;
+        if (entry->ptr->ops != ops) continue;
+        *index = i + 1;
+        return index_to_handle(i);
+    }
+    return 0;
+}
+
 /* get/set the handle reserved flags */
 /* return the old flags (or -1 on error) */
 static int set_handle_flags( struct process *process, obj_handle_t handle, int mask, int flags )
@@ -558,17 +556,10 @@ obj_handle_t duplicate_handle( struct process *src, obj_handle_t src_handle, str
     /* asking for the more access rights than src_access? */
     if (access & ~src_access)
     {
-        if ((current->token && !check_object_access( current->token, obj, &access )) ||
-            !check_object_access( dst->token, obj, &access ))
-        {
-            release_object( obj );
-            return 0;
-        }
-
         if (options & DUP_HANDLE_MAKE_GLOBAL)
             res = alloc_global_handle( obj, access );
         else
-            res = alloc_handle_no_access_check( dst, obj, access, attr );
+            res = alloc_handle( dst, obj, access, attr );
     }
     else
     {
@@ -678,7 +669,7 @@ DECL_HANDLER(get_object_info)
     reply->access = get_handle_access( current->process, req->handle );
     reply->ref_count = obj->refcount;
     reply->handle_count = obj->handle_count;
-    if ((name = obj->ops->get_full_name( obj, &reply->total )))
+    if ((name = get_object_full_name( obj, &reply->total )))
         set_reply_data_ptr( name, min( reply->total, get_reply_max_size() ));
     release_object( obj );
 }
@@ -841,18 +832,4 @@ DECL_HANDLER(get_system_handles)
         info.handle = handle;
         enum_processes( enum_handles, &info );
     }
-}
-
-DECL_HANDLER(make_temporary)
-{
-    struct object *obj;
-
-    if (!(obj = get_handle_obj( current->process, req->handle, 0, NULL ))) return;
-
-    if (obj->is_permanent)
-    {
-        make_object_temporary( obj );
-        release_object( obj );
-    }
-    release_object( obj );
 }

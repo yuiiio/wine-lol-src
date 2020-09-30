@@ -19,13 +19,19 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+#include "wine/port.h"
+
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-
-#define RUNNING_ON_VALGRIND 0  /* FIXME */
+#ifdef HAVE_VALGRIND_MEMCHECK_H
+#include <valgrind/memcheck.h>
+#else
+#define RUNNING_ON_VALGRIND 0
+#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -116,7 +122,7 @@ C_ASSERT( HEAP_MAX_SMALL_FREE_LIST % ALIGNMENT == 0 );
 /* Max size of the blocks on the free lists above HEAP_MAX_SMALL_FREE_LIST */
 static const SIZE_T HEAP_freeListSizes[] =
 {
-    0x200, 0x400, 0x1000, ~(SIZE_T)0
+    0x200, 0x400, 0x1000, ~0UL
 };
 #define HEAP_NB_FREE_LISTS (ARRAY_SIZE( HEAP_freeListSizes ) + HEAP_NB_SMALL_FREE_LISTS)
 
@@ -2013,7 +2019,7 @@ SIZE_T WINAPI RtlSizeHeap( HANDLE heap, ULONG flags, const void *ptr )
     if (!heapPtr)
     {
         RtlSetLastWin32ErrorAndNtStatusFromNtStatus( STATUS_INVALID_HANDLE );
-        return ~(SIZE_T)0;
+        return ~0UL;
     }
     flags &= HEAP_NO_SERIALIZE;
     flags |= heapPtr->flags;
@@ -2023,7 +2029,7 @@ SIZE_T WINAPI RtlSizeHeap( HANDLE heap, ULONG flags, const void *ptr )
     if (!validate_block_pointer( heapPtr, &subheap, pArena ))
     {
         RtlSetLastWin32ErrorAndNtStatusFromNtStatus( STATUS_INVALID_PARAMETER );
-        ret = ~(SIZE_T)0;
+        ret = ~0UL;
     }
     else if (!subheap)
     {

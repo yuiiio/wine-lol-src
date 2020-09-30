@@ -960,22 +960,6 @@ const char *get_link_name( const ORDDEF *odp )
     return ret;
 }
 
-/*******************************************************************
- *         sort_func_list
- *
- * Sort a list of functions, removing duplicates.
- */
-int sort_func_list( ORDDEF **list, int count, int (*compare)(const void *, const void *) )
-{
-    int i, j;
-
-    if (!count) return 0;
-    qsort( list, count, sizeof(*list), compare );
-    for (i = j = 0; i < count; i++) if (compare( &list[j], &list[i] )) list[++j] = list[i];
-    return j + 1;
-}
-
-
 /* parse a cpu name and return the corresponding value */
 int get_cpu_from_name( const char *name )
 {
@@ -1290,36 +1274,4 @@ const char *get_asm_string_section(void)
     case PLATFORM_APPLE: return ".cstring";
     default:             return ".section .rodata";
     }
-}
-
-const char *arm64_page( const char *sym )
-{
-    static char *buffer;
-
-    switch (target_platform)
-    {
-    case PLATFORM_APPLE:
-        free( buffer );
-        buffer = strmake( "%s@PAGE", sym );
-        return buffer;
-    default:
-        return sym;
-    }
-}
-
-const char *arm64_pageoff( const char *sym )
-{
-    static char *buffer;
-
-    free( buffer );
-    switch (target_platform)
-    {
-    case PLATFORM_APPLE:
-        buffer = strmake( "%s@PAGEOFF", sym );
-        break;
-    default:
-        buffer = strmake( ":lo12:%s", sym );
-        break;
-    }
-    return buffer;
 }

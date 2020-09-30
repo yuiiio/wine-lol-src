@@ -58,7 +58,6 @@
 #include "winerror.h"
 #define USE_WS_PREFIX
 #include "winsock2.h"
-#include "wine/afd.h"
 
 #include "process.h"
 #include "file.h"
@@ -151,7 +150,6 @@ static const struct object_ops sock_ops =
     default_fd_map_access,        /* map_access */
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
-    no_get_full_name,             /* get_full_name */
     no_lookup_name,               /* lookup_name */
     no_link_name,                 /* link_name */
     NULL,                         /* unlink_name */
@@ -314,7 +312,7 @@ static inline int sock_error( struct fd *fd )
 
 static int sock_dispatch_asyncs( struct sock *sock, int event, int error )
 {
-    if (is_fd_overlapped( sock->fd ))
+    if ( sock->flags & WSA_FLAG_OVERLAPPED )
     {
         if (event & (POLLIN|POLLPRI) && async_waiting( &sock->read_q ))
         {
@@ -538,6 +536,30 @@ static enum server_fd_type sock_get_fd_type( struct fd *fd )
     return FD_TYPE_SOCKET;
 }
 
+static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
+{
+    struct sock *sock = get_fd_user( fd );
+
+    assert( sock->obj.ops == &sock_ops );
+
+    switch(code)
+    {
+    case WS_SIO_ADDRESS_LIST_CHANGE:
+        if ((sock->state & FD_WINE_NONBLOCKING) && async_is_blocking( async ))
+        {
+            set_win32_error( WSAEWOULDBLOCK );
+            return 0;
+        }
+        if (!sock_get_ifchange( sock )) return 0;
+        queue_async( &sock->ifchange_q, async );
+        set_error( STATUS_PENDING );
+        return 1;
+    default:
+        set_error( STATUS_NOT_SUPPORTED );
+        return 0;
+    }
+}
+
 static void sock_queue_async( struct fd *fd, struct async *async, int type, int count )
 {
     struct sock *sock = get_fd_user( fd );
@@ -609,19 +631,14 @@ static void sock_destroy( struct object *obj )
     }
 }
 
-static struct sock *create_socket(void)
+static void init_sock(struct sock *sock)
 {
-    struct sock *sock;
-
-    if (!(sock = alloc_object( &sock_ops ))) return NULL;
-    sock->fd      = NULL;
-    sock->state   = 0;
+    sock->state = 0;
     sock->mask    = 0;
     sock->hmask   = 0;
     sock->pmask   = 0;
     sock->polling = 0;
     sock->flags   = 0;
-    sock->proto   = 0;
     sock->type    = 0;
     sock->family  = 0;
     sock->event   = NULL;
@@ -635,12 +652,12 @@ static struct sock *create_socket(void)
     init_async_queue( &sock->write_q );
     init_async_queue( &sock->ifchange_q );
     memset( sock->errors, 0, sizeof(sock->errors) );
-    return sock;
 }
 
-static int init_socket( struct sock *sock, int family, int type, int protocol, unsigned int flags )
+/* create a new and unconnected socket */
+static struct object *create_socket( int family, int type, int protocol, unsigned int flags )
 {
-    unsigned int options = 0;
+    struct sock *sock;
     int sockfd;
 
     sockfd = socket( family, type, protocol );
@@ -648,28 +665,30 @@ static int init_socket( struct sock *sock, int family, int type, int protocol, u
     {
         if (errno == EINVAL) set_win32_error( WSAESOCKTNOSUPPORT );
         else set_win32_error( sock_get_error( errno ));
-        return -1;
+        return NULL;
     }
     fcntl(sockfd, F_SETFL, O_NONBLOCK); /* make socket nonblocking */
+    if (!(sock = alloc_object( &sock_ops )))
+    {
+        close( sockfd );
+        return NULL;
+    }
+    init_sock( sock );
     sock->state  = (type != SOCK_STREAM) ? (FD_READ|FD_WRITE) : 0;
     sock->flags  = flags;
     sock->proto  = protocol;
     sock->type   = type;
     sock->family = family;
 
-    if (sock->fd)
+    if (!(sock->fd = create_anonymous_fd( &sock_fd_ops, sockfd, &sock->obj,
+                            (flags & WSA_FLAG_OVERLAPPED) ? 0 : FILE_SYNCHRONOUS_IO_NONALERT )))
     {
-        options = get_fd_options( sock->fd );
-        release_object( sock->fd );
-    }
-
-    if (!(sock->fd = create_anonymous_fd( &sock_fd_ops, sockfd, &sock->obj, options )))
-    {
-        return -1;
+        release_object( sock );
+        return NULL;
     }
     sock_reselect( sock );
     clear_error();
-    return 0;
+    return &sock->obj;
 }
 
 /* accepts a socket and inits it */
@@ -701,8 +720,6 @@ static struct sock *accept_socket( obj_handle_t handle )
     if (!sock)
         return NULL;
 
-    if (get_unix_fd( sock->fd ) == -1) return NULL;
-
     if ( sock->deferred )
     {
         acceptsock = sock->deferred;
@@ -715,13 +732,14 @@ static struct sock *accept_socket( obj_handle_t handle )
             release_object( sock );
             return NULL;
         }
-        if (!(acceptsock = create_socket()))
+        if (!(acceptsock = alloc_object( &sock_ops )))
         {
             close( acceptfd );
             release_object( sock );
             return NULL;
         }
 
+        init_sock( acceptsock );
         /* newly created socket gets the same properties of the listening socket */
         acceptsock->state  = FD_WINE_CONNECTED|FD_READ|FD_WRITE;
         if (sock->state & FD_WINE_NONBLOCKING)
@@ -755,9 +773,6 @@ static int accept_into_socket( struct sock *sock, struct sock *acceptsock )
 {
     int acceptfd;
     struct fd *newfd;
-
-    if (get_unix_fd( sock->fd ) == -1) return FALSE;
-
     if ( sock->deferred )
     {
         newfd = dup_fd_object( sock->deferred->fd, 0, 0,
@@ -917,46 +932,6 @@ static int sock_get_ntstatus( int err )
     }
 }
 
-static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
-{
-    struct sock *sock = get_fd_user( fd );
-
-    assert( sock->obj.ops == &sock_ops );
-
-    if (get_unix_fd( fd ) == -1 && code != IOCTL_AFD_CREATE) return 0;
-
-    switch(code)
-    {
-    case IOCTL_AFD_CREATE:
-    {
-        const struct afd_create_params *params = get_req_data();
-
-        if (get_req_data_size() != sizeof(*params))
-        {
-            set_error( STATUS_INVALID_PARAMETER );
-            return 0;
-        }
-        init_socket( sock, params->family, params->type, params->protocol, params->flags );
-        return 0;
-    }
-
-    case IOCTL_AFD_ADDRESS_LIST_CHANGE:
-        if ((sock->state & FD_WINE_NONBLOCKING) && async_is_blocking( async ))
-        {
-            set_win32_error( WSAEWOULDBLOCK );
-            return 0;
-        }
-        if (!sock_get_ifchange( sock )) return 0;
-        queue_async( &sock->ifchange_q, async );
-        set_error( STATUS_PENDING );
-        return 1;
-
-    default:
-        set_error( STATUS_NOT_SUPPORTED );
-        return 0;
-    }
-}
-
 #ifdef HAVE_LINUX_RTNETLINK_H
 
 /* only keep one ifchange object around, all sockets waiting for wakeups will look to it */
@@ -990,7 +965,6 @@ static const struct object_ops ifchange_ops =
     default_fd_map_access,   /* map_access */
     default_get_sd,          /* get_sd */
     default_set_sd,          /* set_sd */
-    no_get_full_name,        /* get_full_name */
     no_lookup_name,          /* lookup_name */
     no_link_name,            /* link_name */
     NULL,                    /* unlink_name */
@@ -1190,71 +1164,17 @@ static void sock_release_ifchange( struct sock *sock )
     }
 }
 
-static struct object_type *socket_device_get_type( struct object *obj );
-static void socket_device_dump( struct object *obj, int verbose );
-static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr );
-static struct object *socket_device_open_file( struct object *obj, unsigned int access,
-                                               unsigned int sharing, unsigned int options );
-
-static const struct object_ops socket_device_ops =
+/* create a socket */
+DECL_HANDLER(create_socket)
 {
-    sizeof(struct object),      /* size */
-    socket_device_dump,         /* dump */
-    socket_device_get_type,     /* get_type */
-    no_add_queue,               /* add_queue */
-    NULL,                       /* remove_queue */
-    NULL,                       /* signaled */
-    no_satisfied,               /* satisfied */
-    no_signal,                  /* signal */
-    no_get_fd,                  /* get_fd */
-    default_fd_map_access,      /* map_access */
-    default_get_sd,             /* get_sd */
-    default_set_sd,             /* set_sd */
-    default_get_full_name,      /* get_full_name */
-    socket_device_lookup_name,  /* lookup_name */
-    directory_link_name,        /* link_name */
-    default_unlink_name,        /* unlink_name */
-    socket_device_open_file,    /* open_file */
-    no_kernel_obj_list,         /* get_kernel_obj_list */
-    no_close_handle,            /* close_handle */
-    no_destroy                  /* destroy */
-};
+    struct object *obj;
 
-static struct object_type *socket_device_get_type( struct object *obj )
-{
-    static const WCHAR name[] = {'D','e','v','i','c','e'};
-    static const struct unicode_str str = { name, sizeof(name) };
-    return get_object_type( &str );
-}
-
-static void socket_device_dump( struct object *obj, int verbose )
-{
-    fputs( "Socket device\n", stderr );
-}
-
-static struct object *socket_device_lookup_name( struct object *obj, struct unicode_str *name, unsigned int attr )
-{
-    return NULL;
-}
-
-static struct object *socket_device_open_file( struct object *obj, unsigned int access,
-                                               unsigned int sharing, unsigned int options )
-{
-    struct sock *sock;
-
-    if (!(sock = create_socket())) return NULL;
-    if (!(sock->fd = alloc_pseudo_fd( &sock_fd_ops, &sock->obj, options )))
+    reply->handle = 0;
+    if ((obj = create_socket( req->family, req->type, req->protocol, req->flags )) != NULL)
     {
-        release_object( sock );
-        return NULL;
+        reply->handle = alloc_handle( current->process, obj, req->access, req->attributes );
+        release_object( obj );
     }
-    return &sock->obj;
-}
-
-struct object *create_socket_device( struct object *root, const struct unicode_str *name,
-                                     unsigned int attr, const struct security_descriptor *sd )
-{
-    return create_named_object( root, &socket_device_ops, name, attr, sd );
 }
 
 /* accept a socket */
@@ -1306,7 +1226,6 @@ DECL_HANDLER(set_socket_event)
 
     if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
                                                 FILE_WRITE_ATTRIBUTES, &sock_ops))) return;
-    if (get_unix_fd( sock->fd ) == -1) return;
     old_event = sock->event;
     sock->mask    = req->mask;
     sock->hmask   &= ~req->mask; /* re-enable held events */
@@ -1339,7 +1258,6 @@ DECL_HANDLER(get_socket_event)
 
     if (!(sock = (struct sock *)get_handle_obj( current->process, req->handle,
                                                 FILE_READ_ATTRIBUTES, &sock_ops ))) return;
-    if (get_unix_fd( sock->fd ) == -1) return;
     reply->mask  = sock->mask;
     reply->pmask = sock->pmask;
     reply->state = sock->state;
@@ -1371,8 +1289,6 @@ DECL_HANDLER(enable_socket_event)
     if (!(sock = (struct sock*)get_handle_obj( current->process, req->handle,
                                                FILE_WRITE_ATTRIBUTES, &sock_ops)))
         return;
-
-    if (get_unix_fd( sock->fd ) == -1) return;
 
     /* for event-based notification, windows erases stale events */
     sock->pmask &= ~req->mask;
@@ -1411,8 +1327,6 @@ DECL_HANDLER(get_socket_info)
 
     sock = (struct sock *)get_handle_obj( current->process, req->handle, FILE_READ_ATTRIBUTES, &sock_ops );
     if (!sock) return;
-
-    if (get_unix_fd( sock->fd ) == -1) return;
 
     reply->family   = sock->family;
     reply->type     = sock->type;

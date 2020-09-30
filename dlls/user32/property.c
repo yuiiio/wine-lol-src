@@ -18,13 +18,16 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+#include "wine/port.h"
+
 #include <stdarg.h>
 #include <string.h>
 
 #include "windef.h"
 #include "winbase.h"
-#include "winnls.h"
 #include "winuser.h"
+#include "wine/unicode.h"
 #include "wine/server.h"
 
 /* size of buffer needed to store an atom string */
@@ -132,7 +135,7 @@ HANDLE WINAPI GetPropW( HWND hwnd, LPCWSTR str )
     {
         req->window = wine_server_user_handle( hwnd );
         if (IS_INTRESOURCE(str)) req->atom = LOWORD(str);
-        else wine_server_add_data( req, str, lstrlenW(str) * sizeof(WCHAR) );
+        else wine_server_add_data( req, str, strlenW(str) * sizeof(WCHAR) );
         if (!wine_server_call_err( req )) ret = reply->data;
     }
     SERVER_END_REQ;
@@ -165,7 +168,7 @@ BOOL WINAPI SetPropW( HWND hwnd, LPCWSTR str, HANDLE handle )
         req->window = wine_server_user_handle( hwnd );
         req->data   = (ULONG_PTR)handle;
         if (IS_INTRESOURCE(str)) req->atom = LOWORD(str);
-        else wine_server_add_data( req, str, lstrlenW(str) * sizeof(WCHAR) );
+        else wine_server_add_data( req, str, strlenW(str) * sizeof(WCHAR) );
         ret = !wine_server_call_err( req );
     }
     SERVER_END_REQ;
@@ -197,7 +200,7 @@ HANDLE WINAPI RemovePropW( HWND hwnd, LPCWSTR str )
     {
         req->window = wine_server_user_handle( hwnd );
         if (IS_INTRESOURCE(str)) req->atom = LOWORD(str);
-        else wine_server_add_data( req, str, lstrlenW(str) * sizeof(WCHAR) );
+        else wine_server_add_data( req, str, strlenW(str) * sizeof(WCHAR) );
         if (!wine_server_call_err( req )) ret = reply->data;
     }
     SERVER_END_REQ;

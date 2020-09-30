@@ -21,6 +21,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include "config.h"
+
 #include <stdarg.h>
 
 #include "windef.h"
@@ -30,6 +32,7 @@
 #include "controls.h"
 #include "user_private.h"
 
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(win);
@@ -322,7 +325,8 @@ VOID WINAPI LoadLocalFonts(VOID)
  */
 BOOL WINAPI User32InitializeImmEntryTable(DWORD magic)
 {
-    HMODULE imm32 = GetModuleHandleW(L"imm32.dll");
+    static const WCHAR imm32_dllW[] = {'i','m','m','3','2','.','d','l','l',0};
+    HMODULE imm32 = GetModuleHandleW(imm32_dllW);
 
     TRACE("(%x)\n", magic);
 
@@ -530,9 +534,10 @@ BOOL WINAPI GetPointerType(UINT32 id, POINTER_INPUT_TYPE *type)
     return TRUE;
 }
 
+static const WCHAR imeW[] = {'I','M','E',0};
 const struct builtin_class_descr IME_builtin_class =
 {
-    L"IME",             /* name */
+    imeW,               /* name */
     0,                  /* style  */
     WINPROC_IME,        /* proc */
     2*sizeof(LONG_PTR), /* extra */

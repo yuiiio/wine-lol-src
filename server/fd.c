@@ -216,7 +216,6 @@ static const struct object_ops fd_ops =
     no_map_access,            /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
-    no_get_full_name,         /* get_full_name */
     no_lookup_name,           /* lookup_name */
     no_link_name,             /* link_name */
     NULL,                     /* unlink_name */
@@ -257,7 +256,6 @@ static const struct object_ops device_ops =
     no_map_access,            /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
-    no_get_full_name,         /* get_full_name */
     no_lookup_name,           /* lookup_name */
     no_link_name,             /* link_name */
     NULL,                     /* unlink_name */
@@ -297,7 +295,6 @@ static const struct object_ops inode_ops =
     no_map_access,            /* map_access */
     default_get_sd,           /* get_sd */
     default_set_sd,           /* set_sd */
-    no_get_full_name,         /* get_full_name */
     no_lookup_name,           /* lookup_name */
     no_link_name,             /* link_name */
     NULL,                     /* unlink_name */
@@ -339,7 +336,6 @@ static const struct object_ops file_lock_ops =
     no_map_access,              /* map_access */
     default_get_sd,             /* get_sd */
     default_set_sd,             /* set_sd */
-    no_get_full_name,           /* get_full_name */
     no_lookup_name,             /* lookup_name */
     no_link_name,               /* link_name */
     NULL,                       /* unlink_name */
@@ -957,18 +953,16 @@ static int get_next_timeout(void)
         if ((ptr = list_head( &abs_timeout_list )) != NULL)
         {
             struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
-            timeout_t diff = (timeout->when - current_time + 9999) / 10000;
-            if (diff > INT_MAX) diff = INT_MAX;
-            else if (diff < 0) diff = 0;
+            int diff = (timeout->when - current_time + 9999) / 10000;
+            if (diff < 0) diff = 0;
             if (ret == -1 || diff < ret) ret = diff;
         }
 
         if ((ptr = list_head( &rel_timeout_list )) != NULL)
         {
             struct timeout_user *timeout = LIST_ENTRY( ptr, struct timeout_user, entry );
-            timeout_t diff = (-timeout->when - monotonic_time + 9999) / 10000;
-            if (diff > INT_MAX) diff = INT_MAX;
-            else if (diff < 0) diff = 0;
+            int diff = (-timeout->when - monotonic_time + 9999) / 10000;
+            if (diff < 0) diff = 0;
             if (ret == -1 || diff < ret) ret = diff;
         }
     }
@@ -2061,6 +2055,12 @@ void set_fd_signaled( struct fd *fd, int signaled )
     if (fd->comp_flags & FILE_SKIP_SET_EVENT_ON_HANDLE) return;
     fd->signaled = signaled;
     if (signaled) wake_up( fd->user, 0 );
+}
+
+/* check if fd is signaled */
+int is_fd_signaled( struct fd *fd )
+{
+    return fd->signaled;
 }
 
 /* handler for close_handle that refuses to close fd-associated handles in other processes */

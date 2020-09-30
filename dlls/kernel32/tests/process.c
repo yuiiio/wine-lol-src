@@ -67,6 +67,8 @@ static void   (WINAPI *pGetNativeSystemInfo)(LPSYSTEM_INFO);
 static BOOL   (WINAPI *pGetSystemRegistryQuota)(PDWORD, PDWORD);
 static BOOL   (WINAPI *pIsWow64Process)(HANDLE,PBOOL);
 static BOOL   (WINAPI *pIsWow64Process2)(HANDLE, USHORT *, USHORT *);
+static LPVOID (WINAPI *pVirtualAllocEx)(HANDLE, LPVOID, SIZE_T, DWORD, DWORD);
+static BOOL   (WINAPI *pVirtualFreeEx)(HANDLE, LPVOID, SIZE_T, DWORD);
 static BOOL   (WINAPI *pQueryFullProcessImageNameA)(HANDLE hProcess, DWORD dwFlags, LPSTR lpExeName, PDWORD lpdwSize);
 static BOOL   (WINAPI *pQueryFullProcessImageNameW)(HANDLE hProcess, DWORD dwFlags, LPWSTR lpExeName, PDWORD lpdwSize);
 static DWORD  (WINAPI *pK32GetProcessImageFileNameA)(HANDLE,LPSTR,DWORD);
@@ -79,6 +81,7 @@ static BOOL   (WINAPI *pSetInformationJobObject)(HANDLE job, JOBOBJECTINFOCLASS 
 static HANDLE (WINAPI *pCreateIoCompletionPort)(HANDLE file, HANDLE existing_port, ULONG_PTR key, DWORD threads);
 static BOOL   (WINAPI *pGetNumaProcessorNode)(UCHAR, PUCHAR);
 static NTSTATUS (WINAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
+static BOOL   (WINAPI *pProcessIdToSessionId)(DWORD,DWORD*);
 static DWORD  (WINAPI *pWTSGetActiveConsoleSessionId)(void);
 static HANDLE (WINAPI *pCreateToolhelp32Snapshot)(DWORD, DWORD);
 static BOOL   (WINAPI *pProcess32First)(HANDLE, PROCESSENTRY32*);
@@ -248,6 +251,8 @@ static BOOL init(void)
     pGetSystemRegistryQuota = (void *) GetProcAddress(hkernel32, "GetSystemRegistryQuota");
     pIsWow64Process = (void *) GetProcAddress(hkernel32, "IsWow64Process");
     pIsWow64Process2 = (void *) GetProcAddress(hkernel32, "IsWow64Process2");
+    pVirtualAllocEx = (void *) GetProcAddress(hkernel32, "VirtualAllocEx");
+    pVirtualFreeEx = (void *) GetProcAddress(hkernel32, "VirtualFreeEx");
     pQueryFullProcessImageNameA = (void *) GetProcAddress(hkernel32, "QueryFullProcessImageNameA");
     pQueryFullProcessImageNameW = (void *) GetProcAddress(hkernel32, "QueryFullProcessImageNameW");
     pK32GetProcessImageFileNameA = (void *) GetProcAddress(hkernel32, "K32GetProcessImageFileNameA");
@@ -259,6 +264,7 @@ static BOOL init(void)
     pSetInformationJobObject = (void *)GetProcAddress(hkernel32, "SetInformationJobObject");
     pCreateIoCompletionPort = (void *)GetProcAddress(hkernel32, "CreateIoCompletionPort");
     pGetNumaProcessorNode = (void *)GetProcAddress(hkernel32, "GetNumaProcessorNode");
+    pProcessIdToSessionId = (void *)GetProcAddress(hkernel32, "ProcessIdToSessionId");
     pWTSGetActiveConsoleSessionId = (void *)GetProcAddress(hkernel32, "WTSGetActiveConsoleSessionId");
     pCreateToolhelp32Snapshot = (void *)GetProcAddress(hkernel32, "CreateToolhelp32Snapshot");
     pProcess32First = (void *)GetProcAddress(hkernel32, "Process32First");
@@ -1708,12 +1714,18 @@ static void test_OpenProcess(void)
     SIZE_T dummy, read_bytes;
     BOOL ret;
 
+    /* not exported in all windows versions */
+    if ((!pVirtualAllocEx) || (!pVirtualFreeEx)) {
+        win_skip("VirtualAllocEx not found\n");
+        return;
+    }
+
     /* without PROCESS_VM_OPERATION */
     hproc = OpenProcess(PROCESS_ALL_ACCESS_NT4 & ~PROCESS_VM_OPERATION, FALSE, GetCurrentProcessId());
     ok(hproc != NULL, "OpenProcess error %d\n", GetLastError());
 
     SetLastError(0xdeadbeef);
-    addr1 = VirtualAllocEx(hproc, 0, 0xFFFC, MEM_RESERVE, PAGE_NOACCESS);
+    addr1 = pVirtualAllocEx(hproc, 0, 0xFFFC, MEM_RESERVE, PAGE_NOACCESS);
     ok(!addr1, "VirtualAllocEx should fail\n");
     if (GetLastError() == ERROR_CALL_NOT_IMPLEMENTED)
     {   /* Win9x */
@@ -1734,7 +1746,7 @@ static void test_OpenProcess(void)
     hproc = OpenProcess(PROCESS_VM_OPERATION, FALSE, GetCurrentProcessId());
     ok(hproc != NULL, "OpenProcess error %d\n", GetLastError());
 
-    addr1 = VirtualAllocEx(hproc, 0, 0xFFFC, MEM_RESERVE, PAGE_NOACCESS);
+    addr1 = pVirtualAllocEx(hproc, 0, 0xFFFC, MEM_RESERVE, PAGE_NOACCESS);
     ok(addr1 != NULL, "VirtualAllocEx error %d\n", GetLastError());
 
     /* without PROCESS_QUERY_INFORMATION */
@@ -1771,7 +1783,7 @@ static void test_OpenProcess(void)
     ok(info.Type == MEM_PRIVATE, "%x != MEM_PRIVATE\n", info.Type);
 
     SetLastError(0xdeadbeef);
-    ok(!VirtualFreeEx(hproc, addr1, 0, MEM_RELEASE),
+    ok(!pVirtualFreeEx(hproc, addr1, 0, MEM_RELEASE),
        "VirtualFreeEx without PROCESS_VM_OPERATION rights should fail\n");
     ok(GetLastError() == ERROR_ACCESS_DENIED, "wrong error %d\n", GetLastError());
 
@@ -1798,7 +1810,7 @@ static void test_OpenProcess(void)
             ok(GetLastError() == ERROR_ACCESS_DENIED, "wrong error %d\n", GetLastError());
 
         SetLastError(0xdeadbeef);
-        ok(!VirtualFreeEx(hproc, addr1, 0, MEM_RELEASE),
+        ok(!pVirtualFreeEx(hproc, addr1, 0, MEM_RELEASE),
            "VirtualFreeEx without PROCESS_VM_OPERATION rights should fail\n");
         ok(GetLastError() == ERROR_ACCESS_DENIED, "wrong error %d\n", GetLastError());
 
@@ -2618,7 +2630,6 @@ static void test_QueryInformationJobObject(void)
     PJOBOBJECT_BASIC_PROCESS_ID_LIST pid_list = (JOBOBJECT_BASIC_PROCESS_ID_LIST *)buf;
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION ext_limit_info;
     JOBOBJECT_BASIC_LIMIT_INFORMATION *basic_limit_info = &ext_limit_info.BasicLimitInformation;
-    JOBOBJECT_BASIC_ACCOUNTING_INFORMATION basic_accounting_info;
     DWORD ret_len;
     PROCESS_INFORMATION pi[2];
     char buffer[50];
@@ -2725,14 +2736,6 @@ static void test_QueryInformationJobObject(void)
     ok(ret, "QueryInformationJobObject error %u\n", GetLastError());
     ok(ret_len == sizeof(ext_limit_info), "QueryInformationJobObject returned ret_len=%u\n", ret_len);
     expect_eq_d(0, basic_limit_info->LimitFlags);
-
-    /* test JobObjectBasicAccountingInformation */
-    ret = pQueryInformationJobObject(job, JobObjectBasicAccountingInformation, &basic_accounting_info,
-                                     sizeof(basic_accounting_info), &ret_len);
-    ok(ret, "QueryInformationJobObject error %u\n", GetLastError());
-    ok(ret_len == sizeof(basic_accounting_info), "QueryInformationJobObject returned ret_len=%u\n", ret_len);
-    expect_eq_d(3, basic_accounting_info.TotalProcesses);
-    expect_eq_d(2, basic_accounting_info.ActiveProcesses);
 
     TerminateProcess(pi[0].hProcess, 0);
     CloseHandle(pi[0].hProcess);
@@ -3295,7 +3298,7 @@ static void test_SuspendProcessState(void)
     BOOL pipe_connected;
     ULONG pipe_magic, numb;
     BOOL ret;
-    void *user_thread_start, *start_ptr, *entry_ptr, *peb_ptr;
+    void *entry_ptr, *peb_ptr;
     PEB child_peb;
 
     exit_process_ptr = GetProcAddress(hkernel32, "ExitProcess");
@@ -3356,7 +3359,6 @@ static void test_SuspendProcessState(void)
     ok( ctx.EFlags == 0x200, "wrong flags %08x\n", ctx.EFlags );
     ok( ctx.MxCsr == 0x1f80, "wrong mxcsr %08x\n", ctx.MxCsr );
     ok( ctx.FltSave.ControlWord == 0x27f, "wrong control %08x\n", ctx.FltSave.ControlWord );
-    start_ptr = (void *)ctx.Rip;
     entry_ptr = (void *)ctx.Rcx;
     peb_ptr = (void *)ctx.Rdx;
 
@@ -3387,7 +3389,6 @@ static void test_SuspendProcessState(void)
     ok( (ctx.EFlags & ~2) == 0x200, "wrong flags %08x\n", ctx.EFlags );
     ok( (WORD)ctx.FloatSave.ControlWord == 0x27f, "wrong control %08x\n", ctx.FloatSave.ControlWord );
     ok( *(WORD *)ctx.ExtendedRegisters == 0x27f, "wrong control %08x\n", *(WORD *)ctx.ExtendedRegisters );
-    start_ptr = (void *)ctx.Eip;
     entry_ptr = (void *)ctx.Eax;
     peb_ptr = (void *)ctx.Ebx;
 
@@ -3411,10 +3412,6 @@ static void test_SuspendProcessState(void)
     ok( ret, "Failed to read PEB (%u)\n", GetLastError() );
     ok( child_peb.ImageBaseAddress == exe_base, "wrong base %p/%p\n",
         child_peb.ImageBaseAddress, exe_base );
-    user_thread_start = GetProcAddress( GetModuleHandleA("ntdll.dll"), "RtlUserThreadStart" );
-    if (user_thread_start)
-        ok( start_ptr == user_thread_start,
-            "wrong start addr %p / %p\n", start_ptr, user_thread_start );
     ok( entry_ptr == (char *)exe_base + nt_header.OptionalHeader.AddressOfEntryPoint,
         "wrong entry point %p/%p\n", entry_ptr,
         (char *)exe_base + nt_header.OptionalHeader.AddressOfEntryPoint );
@@ -3552,7 +3549,13 @@ static void test_session_info(void)
     DWORD session_id, active_session;
     BOOL r;
 
-    r = ProcessIdToSessionId(GetCurrentProcessId(), &session_id);
+    if (!pProcessIdToSessionId)
+    {
+        win_skip("ProcessIdToSessionId is missing\n");
+        return;
+    }
+
+    r = pProcessIdToSessionId(GetCurrentProcessId(), &session_id);
     ok(r, "ProcessIdToSessionId failed: %u\n", GetLastError());
     trace("session_id = %x\n", session_id);
 
@@ -3878,18 +3881,6 @@ static void test_ProcThreadAttributeList(void)
         expect_list.count++;
     }
 
-    ret = pUpdateProcThreadAttribute(&list, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, handles, sizeof(handles[0]), NULL, NULL);
-    ok(ret || broken(GetLastError() == ERROR_NOT_SUPPORTED), "got %d gle %d\n", ret, GetLastError());
-
-    if (ret)
-    {
-        unsigned int i = expect_list.count++;
-        expect_list.mask |= 1 << ProcThreadAttributePseudoConsole;
-        expect_list.attrs[i].attr = PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE;
-        expect_list.attrs[i].size = sizeof(HPCON);
-        expect_list.attrs[i].value = handles;
-    }
-
     ok(!memcmp(&list, &expect_list, size), "mismatch\n");
 
     pDeleteProcThreadAttributeList(&list);
@@ -3900,7 +3891,7 @@ static void test_ProcThreadAttributeList(void)
  * level 2: Process created by level 1 process with handle inheritance and level 0
  *          process parent substitute.
  * level 255: Process created by level 1 process during invalid parent handles testing. */
-static void test_parent_process_attribute(unsigned int level, HANDLE read_pipe)
+void test_parent_process_attribute(unsigned int level, HANDLE read_pipe)
 {
     PROCESS_BASIC_INFORMATION pbi;
     char buffer[MAX_PATH + 64];
@@ -4081,67 +4072,10 @@ static void test_parent_process_attribute(unsigned int level, HANDLE read_pipe)
     }
 }
 
-static void test_handle_list_attribute(BOOL child, HANDLE handle1, HANDLE handle2)
-{
-    char buffer[MAX_PATH + 64];
-    HANDLE pipe[2];
-    PROCESS_INFORMATION info;
-    STARTUPINFOEXA si;
-    SIZE_T size;
-    BOOL ret;
-    SECURITY_ATTRIBUTES sa;
-
-    if (child)
-    {
-        DWORD flags;
-
-        flags = 0;
-        ret = GetHandleInformation(handle1, &flags);
-        ok(ret, "Failed to get handle info, error %d.\n", GetLastError());
-        ok(flags == HANDLE_FLAG_INHERIT, "Unexpected flags %#x.\n", flags);
-        CloseHandle(handle1);
-
-        ret = GetHandleInformation(handle2, &flags);
-        ok(!ret && GetLastError() == ERROR_INVALID_HANDLE, "Unexpected return value, error %d.\n", GetLastError());
-
-        return;
-    }
-
-    ret = pInitializeProcThreadAttributeList(NULL, 1, 0, &size);
-    ok(!ret && GetLastError() == ERROR_INSUFFICIENT_BUFFER,
-            "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
-
-    memset(&si, 0, sizeof(si));
-    si.StartupInfo.cb = sizeof(si.StartupInfo);
-    si.lpAttributeList = heap_alloc(size);
-    ret = pInitializeProcThreadAttributeList(si.lpAttributeList, 1, 0, &size);
-    ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
-
-    memset(&sa, 0, sizeof(sa));
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = TRUE;
-
-    ret = CreatePipe(&pipe[0], &pipe[1], &sa, 1024);
-    ok(ret, "Failed to create a pipe.\n");
-
-    ret = pUpdateProcThreadAttribute(si.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, &pipe[0],
-            sizeof(pipe[0]), NULL, NULL);
-    ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
-
-    sprintf(buffer, "\"%s\" process handlelist %p %p", selfname, pipe[0], pipe[1]);
-    ret = CreateProcessA(NULL, buffer, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL,
-            (STARTUPINFOA *)&si, &info);
-    ok(ret, "Got unexpected ret %#x, GetLastError() %u.\n", ret, GetLastError());
-
-    wait_and_close_child_process(&info);
-
-    CloseHandle(pipe[0]);
-    CloseHandle(pipe[1]);
-}
-
 START_TEST(process)
 {
-    HANDLE job, hproc, h, h2;
+    HANDLE job;
+    HANDLE hproc;
     BOOL b = init();
     ok(b, "Basic init of CreateProcess test\n");
     if (!b) return;
@@ -4203,15 +4137,10 @@ START_TEST(process)
         }
         else if (!strcmp(myARGV[2], "parent") && myARGC >= 5)
         {
+            HANDLE h;
+
             sscanf(myARGV[4], "%p", &h);
             test_parent_process_attribute(atoi(myARGV[3]), h);
-            return;
-        }
-        else if (!strcmp(myARGV[2], "handlelist") && myARGC >= 5)
-        {
-            sscanf(myARGV[3], "%p", &h);
-            sscanf(myARGV[4], "%p", &h2);
-            test_handle_list_attribute(TRUE, h, h2);
             return;
         }
 
@@ -4282,5 +4211,4 @@ START_TEST(process)
     test_BreakawayOk(job);
     CloseHandle(job);
     test_parent_process_attribute(0, NULL);
-    test_handle_list_attribute(FALSE, NULL, NULL);
 }

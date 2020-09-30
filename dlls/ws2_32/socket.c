@@ -155,7 +155,6 @@
 #define USE_WC_PREFIX   /* For CMSG_DATA */
 #include "iphlpapi.h"
 #include "ip2string.h"
-#include "wine/afd.h"
 #include "wine/server.h"
 #include "wine/debug.h"
 #include "wine/exception.h"
@@ -5164,10 +5163,6 @@ INT WINAPI WSAIoctl(SOCKET s, DWORD code, LPVOID in_buff, DWORD in_size, LPVOID 
     case 0x667e: /* Netscape tries hard to use bogus ioctl 0x667e */
         SetLastError(WSAEOPNOTSUPP);
         return SOCKET_ERROR;
-    case WS_SIO_ADDRESS_LIST_CHANGE:
-        code = IOCTL_AFD_ADDRESS_LIST_CHANGE;
-        status = WSAEOPNOTSUPP;
-        break;
     default:
         status = WSAEOPNOTSUPP;
         break;
@@ -7598,15 +7593,8 @@ SOCKET WINAPI WSASocketA(int af, int type, int protocol,
  */
 SOCKET WINAPI WSASocketW(int af, int type, int protocol,
                          LPWSAPROTOCOL_INFOW lpProtocolInfo,
-                         GROUP g, DWORD flags)
+                         GROUP g, DWORD dwFlags)
 {
-    static const WCHAR afdW[] = {'\\','D','e','v','i','c','e','\\','A','f','d',0};
-    struct afd_create_params create_params;
-    OBJECT_ATTRIBUTES attr;
-    UNICODE_STRING string;
-    IO_STATUS_BLOCK io;
-    NTSTATUS status;
-    HANDLE handle;
     SOCKET ret;
     DWORD err;
     int unixaf, unixtype, ipxptype = -1;
@@ -7617,7 +7605,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
    */
 
    TRACE("af=%d type=%d protocol=%d protocol_info=%p group=%d flags=0x%x\n",
-         af, type, protocol, lpProtocolInfo, g, flags );
+         af, type, protocol, lpProtocolInfo, g, dwFlags );
 
     if (!num_startup)
     {
@@ -7648,13 +7636,7 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
             protocol = lpProtocolInfo->iProtocol;
     }
 
-    if (!af && !protocol)
-    {
-        WSASetLastError(WSAEINVAL);
-        return INVALID_SOCKET;
-    }
-
-    if (!type)
+    if (!type && (af || protocol))
     {
         int autoproto = protocol;
         WSAPROTOCOL_INFOW infow;
@@ -7724,72 +7706,62 @@ SOCKET WINAPI WSASocketW(int af, int type, int protocol,
         goto done;
     }
 
-    RtlInitUnicodeString(&string, afdW);
-    InitializeObjectAttributes(&attr, &string, (flags & WSA_FLAG_NO_HANDLE_INHERIT) ? 0 : OBJ_INHERIT, NULL, NULL);
-    if ((status = NtOpenFile(&handle, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, &attr,
-            &io, 0, (flags & WSA_FLAG_OVERLAPPED) ? 0 : FILE_SYNCHRONOUS_IO_NONALERT)))
+    SERVER_START_REQ( create_socket )
     {
-        WARN("Failed to create socket, status %#x.\n", status);
-        WSASetLastError(NtStatusToWSAError(status));
-        return INVALID_SOCKET;
+        req->family     = unixaf;
+        req->type       = unixtype;
+        req->protocol   = protocol;
+        req->access     = GENERIC_READ|GENERIC_WRITE|SYNCHRONIZE;
+        req->attributes = (dwFlags & WSA_FLAG_NO_HANDLE_INHERIT) ? 0 : OBJ_INHERIT;
+        req->flags      = dwFlags & ~WSA_FLAG_NO_HANDLE_INHERIT;
+        err = NtStatusToWSAError( wine_server_call( req ) );
+        ret = HANDLE2SOCKET( wine_server_ptr_handle( reply->handle ));
     }
-
-    create_params.family = unixaf;
-    create_params.type = unixtype;
-    create_params.protocol = protocol;
-    create_params.flags = flags & ~(WSA_FLAG_NO_HANDLE_INHERIT | WSA_FLAG_OVERLAPPED);
-    if ((status = NtDeviceIoControlFile(handle, NULL, NULL, NULL, &io,
-            IOCTL_AFD_CREATE, &create_params, sizeof(create_params), NULL, 0)))
+    SERVER_END_REQ;
+    if (ret)
     {
-        WARN("Failed to initialize socket, status %#x.\n", status);
-        err = NtStatusToWSAError(status);
-        if (err == WSAEACCES) /* raw socket denied */
+        TRACE("\tcreated %04lx\n", ret );
+        if (ipxptype > 0)
+            set_ipx_packettype(ret, ipxptype);
+
+        if (unixaf == AF_INET || unixaf == AF_INET6)
         {
-            if (type == SOCK_RAW)
-                ERR_(winediag)("Failed to create a socket of type SOCK_RAW, this requires special permissions.\n");
-            else
-                ERR_(winediag)("Failed to create socket, this requires special permissions.\n");
+            /* ensure IP_DONTFRAGMENT is disabled for SOCK_DGRAM and SOCK_RAW, enabled for SOCK_STREAM */
+            if (unixtype == SOCK_DGRAM || unixtype == SOCK_RAW) /* in Linux the global default can be enabled */
+                set_dont_fragment(ret, unixaf == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, FALSE);
+            else if (unixtype == SOCK_STREAM)
+                set_dont_fragment(ret, unixaf == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, TRUE);
         }
-        WSASetLastError(err);
-        NtClose(handle);
-        return INVALID_SOCKET;
-    }
-
-    ret = HANDLE2SOCKET(handle);
-    TRACE("\tcreated %04lx\n", ret );
-
-    if (ipxptype > 0)
-        set_ipx_packettype(ret, ipxptype);
-
-    if (unixaf == AF_INET || unixaf == AF_INET6)
-    {
-        /* ensure IP_DONTFRAGMENT is disabled for SOCK_DGRAM and SOCK_RAW, enabled for SOCK_STREAM */
-        if (unixtype == SOCK_DGRAM || unixtype == SOCK_RAW) /* in Linux the global default can be enabled */
-            set_dont_fragment(ret, unixaf == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, FALSE);
-        else if (unixtype == SOCK_STREAM)
-            set_dont_fragment(ret, unixaf == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, TRUE);
-    }
 
 #ifdef IPV6_V6ONLY
-    if (unixaf == AF_INET6)
-    {
-        int fd = get_sock_fd(ret, 0, NULL);
-        if (fd != -1)
+        if (unixaf == AF_INET6)
         {
-            /* IPV6_V6ONLY is set by default on Windows */
-            int enable = 1;
-            if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(enable)))
-                WARN("\tsetting IPV6_V6ONLY failed - errno = %i\n", errno);
-            release_sock_fd(ret, fd);
+            int fd = get_sock_fd(ret, 0, NULL);
+            if (fd != -1)
+            {
+                /* IPV6_V6ONLY is set by default on Windows */
+                int enable = 1;
+                if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &enable, sizeof(enable)))
+                    WARN("\tsetting IPV6_V6ONLY failed - errno = %i\n", errno);
+                release_sock_fd(ret, fd);
+            }
         }
-    }
 #endif
-    if (!socket_list_add(ret))
-    {
-        CloseHandle(handle);
-        return INVALID_SOCKET;
+        if (!socket_list_add(ret))
+        {
+            CloseHandle(SOCKET2HANDLE(ret));
+            return INVALID_SOCKET;
+        }
+        return ret;
     }
-    return ret;
+
+    if (err == WSAEACCES) /* raw socket denied */
+    {
+        if (type == SOCK_RAW)
+            ERR_(winediag)("Failed to create a socket of type SOCK_RAW, this requires special permissions.\n");
+        else
+            ERR_(winediag)("Failed to create socket, this requires special permissions.\n");
+    }
 
 done:
     WARN("\t\tfailed, error %d!\n", err);

@@ -30,6 +30,7 @@
 #include "winbase.h"
 #include "wingdi.h"
 #include "winuser.h"
+#include "wine/unicode.h"
 #include "user_private.h"
 #include "win.h"
 #include "controls.h"
@@ -80,9 +81,10 @@ static void CBResetPos(HEADCOMBO *combo, BOOL redraw);
 /*********************************************************************
  * combo class descriptor
  */
+static const WCHAR comboboxW[] = {'C','o','m','b','o','B','o','x',0};
 const struct builtin_class_descr COMBO_builtin_class =
 {
-    L"ComboBox",          /* name */
+    comboboxW,            /* name */
     CS_PARENTDC | CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW, /* style  */
     WINPROC_COMBO,        /* proc */
     sizeof(HEADCOMBO *),  /* extra */
@@ -411,6 +413,9 @@ static void CBGetDroppedControlRect( LPHEADCOMBO lphc, LPRECT lpRect)
 static LRESULT COMBO_Create( HWND hwnd, LPHEADCOMBO lphc, HWND hwndParent, LONG style,
                              BOOL unicode )
 {
+  static const WCHAR clbName[] = {'C','o','m','b','o','L','B','o','x',0};
+  static const WCHAR editName[] = {'E','d','i','t',0};
+
   if( !CB_GETTYPE(lphc) ) lphc->dwStyle |= CBS_SIMPLE;
   if( CB_GETTYPE(lphc) != CBS_DROPDOWNLIST ) lphc->wState |= CBF_EDIT;
 
@@ -491,7 +496,7 @@ static LRESULT COMBO_Create( HWND hwnd, LPHEADCOMBO lphc, HWND hwndParent, LONG 
       }
 
       if (unicode)
-          lphc->hWndLBox = CreateWindowExW(lbeExStyle, L"ComboLBox", NULL, lbeStyle,
+          lphc->hWndLBox = CreateWindowExW(lbeExStyle, clbName, NULL, lbeStyle,
                                            lphc->droppedRect.left,
                                            lphc->droppedRect.top,
                                            lphc->droppedRect.right - lphc->droppedRect.left,
@@ -526,7 +531,7 @@ static LRESULT COMBO_Create( HWND hwnd, LPHEADCOMBO lphc, HWND hwndParent, LONG 
               if (!IsWindowEnabled(hwnd)) lbeStyle |= WS_DISABLED;
 
               if (unicode)
-                  lphc->hWndEdit = CreateWindowExW(0, L"Edit", NULL, lbeStyle,
+                  lphc->hWndEdit = CreateWindowExW(0, editName, NULL, lbeStyle,
                                                    lphc->textRect.left, lphc->textRect.top,
                                                    lphc->textRect.right - lphc->textRect.left,
                                                    lphc->textRect.bottom - lphc->textRect.top,
@@ -674,7 +679,8 @@ static void CBPaintText(
 
    if( lphc->wState & CBF_EDIT )
    {
-	if( CB_HASSTRINGS(lphc) ) SetWindowTextW( lphc->hWndEdit, pText ? pText : L"" );
+        static const WCHAR empty_stringW[] = { 0 };
+	if( CB_HASSTRINGS(lphc) ) SetWindowTextW( lphc->hWndEdit, pText ? pText : empty_stringW );
 	if( lphc->wState & CBF_FOCUSED )
            SendMessageW(lphc->hWndEdit, EM_SETSEL, 0, MAXLONG);
    }
@@ -730,6 +736,8 @@ static void CBPaintText(
      }
      else
      {
+       static const WCHAR empty_stringW[] = { 0 };
+
        if ( (lphc->wState & CBF_FOCUSED) &&
 	    !(lphc->wState & CBF_DROPPED) ) {
 
@@ -744,7 +752,7 @@ static void CBPaintText(
 		    rectEdit.top + 1,
 		    ETO_OPAQUE | ETO_CLIPPED,
 		    &rectEdit,
-		    pText ? pText : L"" , size, NULL );
+		    pText ? pText : empty_stringW , size, NULL );
 
        if(lphc->wState & CBF_FOCUSED && !(lphc->wState & CBF_DROPPED))
 	 DrawFocusRect( hdc, &rectEdit );
@@ -883,6 +891,7 @@ static void CBUpdateEdit( LPHEADCOMBO lphc , INT index )
 {
    INT	length;
    LPWSTR pText = NULL;
+   static const WCHAR empty_stringW[] = { 0 };
 
    TRACE("\t %i\n", index );
 
@@ -901,7 +910,7 @@ static void CBUpdateEdit( LPHEADCOMBO lphc , INT index )
    if( CB_HASSTRINGS(lphc) )
    {
       lphc->wState |= (CBF_NOEDITNOTIFY | CBF_NOLBSELECT);
-      SendMessageW(lphc->hWndEdit, WM_SETTEXT, 0, pText ? (LPARAM)pText : (LPARAM)L"");
+      SendMessageW(lphc->hWndEdit, WM_SETTEXT, 0, pText ? (LPARAM)pText : (LPARAM)empty_stringW);
       lphc->wState &= ~(CBF_NOEDITNOTIFY | CBF_NOLBSELECT);
    }
 
@@ -2004,7 +2013,10 @@ LRESULT ComboWndProc_common( HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 	case CB_RESETCONTENT:
 		SendMessageW(lphc->hWndLBox, LB_RESETCONTENT, 0, 0);
                 if( (lphc->wState & CBF_EDIT) && CB_HASSTRINGS(lphc) )
-                    SendMessageW(lphc->hWndEdit, WM_SETTEXT, 0, (LPARAM)L"");
+		{
+		    static const WCHAR empty_stringW[] = { 0 };
+                    SendMessageW(lphc->hWndEdit, WM_SETTEXT, 0, (LPARAM)empty_stringW);
+		}
                 else
                     InvalidateRect(lphc->self, NULL, TRUE);
 		return  TRUE;

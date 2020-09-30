@@ -1760,6 +1760,7 @@ static void test_GetRawInputData(void)
     SetLastError(0xdeadbeef);
     ret = GetRawInputData(NULL, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
     ok(ret == ~0U, "Expect ret %u, got %u\n", ~0U, ret);
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_HANDLE, "GetRawInputData returned %08x\n", GetLastError());
 }
 
@@ -1796,20 +1797,25 @@ static void test_RegisterRawInputDevices(void)
 
     SetLastError(0xdeadbeef);
     count = GetRegisteredRawInputDevices(NULL, NULL, 0);
+    todo_wine
     ok(count == ~0U, "GetRegisteredRawInputDevices returned %u\n", count);
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     raw_devices_count = 0;
     count = GetRegisteredRawInputDevices(NULL, &raw_devices_count, 0);
+    todo_wine
     ok(count == ~0U, "GetRegisteredRawInputDevices returned %u\n", count);
     ok(raw_devices_count == 0, "Unexpected registered devices count: %u\n", raw_devices_count);
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     raw_devices_count = 0;
     count = GetRegisteredRawInputDevices(NULL, &raw_devices_count, sizeof(RAWINPUTDEVICE));
     ok(count == 0, "GetRegisteredRawInputDevices returned %u\n", count);
+    todo_wine
     ok(raw_devices_count == 2, "Unexpected registered devices count: %u\n", raw_devices_count);
     ok(GetLastError() == 0xdeadbeef, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
 
@@ -1820,28 +1826,38 @@ static void test_RegisterRawInputDevices(void)
         win_skip("Ignoring GetRegisteredRawInputDevices success\n");
     else
     {
+        todo_wine
         ok(count == ~0U, "GetRegisteredRawInputDevices returned %u\n", count);
         ok(raw_devices_count == 0, "Unexpected registered devices count: %u\n", raw_devices_count);
+        todo_wine
         ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
     }
 
     SetLastError(0xdeadbeef);
     raw_devices_count = 1;
     count = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
+    todo_wine
     ok(count == ~0U, "GetRegisteredRawInputDevices returned %u\n", count);
+    todo_wine
     ok(raw_devices_count == 2, "Unexpected registered devices count: %u\n", raw_devices_count);
+    todo_wine
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
 
     SetLastError(0xdeadbeef);
     memset(raw_devices, 0, sizeof(raw_devices));
     raw_devices_count = ARRAY_SIZE(raw_devices);
     count = GetRegisteredRawInputDevices(raw_devices, &raw_devices_count, sizeof(RAWINPUTDEVICE));
+    todo_wine
     ok(count == 2, "GetRegisteredRawInputDevices returned %u\n", count);
     ok(raw_devices_count == 2, "Unexpected registered devices count: %u\n", raw_devices_count);
     ok(GetLastError() == 0xdeadbeef, "GetRegisteredRawInputDevices unexpected error %08x\n", GetLastError());
+    todo_wine
     ok(raw_devices[0].usUsagePage == 0x01, "Unexpected usage page: %x\n", raw_devices[0].usUsagePage);
+    todo_wine
     ok(raw_devices[0].usUsage == 0x04, "Unexpected usage: %x\n", raw_devices[0].usUsage);
+    todo_wine
     ok(raw_devices[1].usUsagePage == 0x01, "Unexpected usage page: %x\n", raw_devices[1].usUsagePage);
+    todo_wine
     ok(raw_devices[1].usUsage == 0x05, "Unexpected usage: %x\n", raw_devices[1].usUsage);
 
     /* RIDEV_REMOVE requires hwndTarget == NULL */
@@ -1922,20 +1938,26 @@ static LRESULT CALLBACK rawinputbuffer_wndproc(HWND hwnd, UINT msg, WPARAM wpara
     if (msg == WM_INPUT)
     {
         count = GetRawInputBuffer(NULL, NULL, sizeof(RAWINPUTHEADER));
+        todo_wine
         ok(count == ~0U, "GetRawInputBuffer succeeded\n");
 
         size = sizeof(buffer);
         count = GetRawInputBuffer(NULL, &size, sizeof(RAWINPUTHEADER));
         ok(count == 0, "GetRawInputBuffer returned %u\n", count);
+        todo_wine
         ok(size == rawinput_size, "GetRawInputBuffer returned unexpected size: %u\n", size);
 
         size = sizeof(buffer);
         memset(buffer, 0, sizeof(buffer));
         count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
+        todo_wine
         ok(count == 3, "GetRawInputBuffer returned %u\n", count);
         ok(size == sizeof(buffer), "GetRawInputBuffer returned unexpected size: %u\n", size);
+        todo_wine
         ok(rawinput_buffer_mouse_x(buffer, 0) == 2, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 0));
+        todo_wine
         ok(rawinput_buffer_mouse_x(buffer, 1) == 3, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 1));
+        todo_wine
         ok(rawinput_buffer_mouse_x(buffer, 2) == 4, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 2));
 
         /* the first event should be removed by the next GetRawInputBuffer call
@@ -1953,7 +1975,9 @@ static LRESULT CALLBACK rawinputbuffer_wndproc(HWND hwnd, UINT msg, WPARAM wpara
             size = rawinput_size + 1;
             memset(buffer, 0, sizeof(buffer));
             count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
+            todo_wine
             ok(count == 1, "GetRawInputBuffer returned %u\n", count);
+            todo_wine
             ok(rawinput_buffer_mouse_x(buffer, 0) == 5, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 0));
 
             /* peek the messages now, they should still arrive in the correct order */
@@ -1971,30 +1995,36 @@ static LRESULT CALLBACK rawinputbuffer_wndproc(HWND hwnd, UINT msg, WPARAM wpara
             SetLastError(0xdeadbeef);
             count = GetRawInputData((HRAWINPUT)lparam, RID_INPUT, &ri, &size, 0);
             ok(count == ~0U, "GetRawInputData succeeded\n");
+            todo_wine
             ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRawInputData returned %08x\n", GetLastError());
 
             SetLastError(0xdeadbeef);
             size = 0;
             count = GetRawInputData((HRAWINPUT)lparam, RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER));
             ok(count == ~0U, "GetRawInputData succeeded\n");
+            todo_wine
             ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "GetRawInputData returned %08x\n", GetLastError());
 
             SetLastError(0xdeadbeef);
             size = sizeof(ri);
             count = GetRawInputData((HRAWINPUT)lparam, 0, &ri, &size, sizeof(RAWINPUTHEADER));
             ok(count == ~0U, "GetRawInputData succeeded\n");
+            todo_wine
             ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRawInputData returned %08x\n", GetLastError());
 
             SetLastError(0xdeadbeef);
             size = sizeof(ri);
             count = GetRawInputData((HRAWINPUT)lparam, RID_INPUT, &ri, &size, sizeof(RAWINPUTHEADER));
+            todo_wine
             ok(count == sizeof(ri), "GetRawInputData failed\n");
+            todo_wine
             ok(ri.data.mouse.lLastX == 6, "Unexpected rawinput data: %d\n", ri.data.mouse.lLastX);
             ok(GetLastError() == 0xdeadbeef, "GetRawInputData returned %08x\n", GetLastError());
         }
         else
         {
             ok(count == ~0U, "GetRawInputData succeeded\n");
+            todo_wine
             ok(GetLastError() == ERROR_INVALID_HANDLE, "GetRawInputData returned %08x\n", GetLastError());
         }
 
@@ -2033,12 +2063,15 @@ static void test_GetRawInputBuffer(void)
 
     SetLastError(0xdeadbeef);
     count = GetRawInputBuffer(NULL, NULL, sizeof(RAWINPUTHEADER));
+    todo_wine
     ok(count == ~0U, "GetRawInputBuffer succeeded\n");
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRawInputBuffer returned %08x\n", GetLastError());
 
     size = sizeof(buffer);
     count = GetRawInputBuffer(NULL, &size, sizeof(RAWINPUTHEADER));
     ok(count == 0U, "GetRawInputBuffer returned %u\n", count);
+    todo_wine
     ok(size == 0U, "GetRawInputBuffer returned unexpected size: %u\n", size);
 
     size = 0;
@@ -2049,12 +2082,15 @@ static void test_GetRawInputBuffer(void)
     SetLastError(0xdeadbeef);
     size = sizeof(buffer);
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, 0);
+    todo_wine
     ok(count == ~0U, "GetRawInputBuffer succeeded\n");
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRawInputBuffer returned %08x\n", GetLastError());
 
     size = sizeof(buffer);
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
     ok(count == 0U, "GetRawInputBuffer returned %u\n", count);
+    todo_wine
     ok(size == 0U, "GetRawInputBuffer returned unexpected size: %u\n", size);
 
     mouse_event(MOUSEEVENTF_MOVE, 5, 0, 0, 0);
@@ -2062,26 +2098,34 @@ static void test_GetRawInputBuffer(void)
     SetLastError(0xdeadbeef);
     size = 0;
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
+    todo_wine
     ok(count == ~0U, "GetRawInputBuffer succeeded\n");
+    todo_wine
     ok(size == rawinput_size, "GetRawInputBuffer returned unexpected size: %u\n", size);
+    todo_wine
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "GetRawInputBuffer returned %08x\n", GetLastError());
 
     size = 0;
     count = GetRawInputBuffer(NULL, &size, sizeof(RAWINPUTHEADER));
     ok(count == 0, "GetRawInputBuffer returned %u\n", count);
+    todo_wine
     ok(size == rawinput_size, "GetRawInputBuffer returned unexpected size: %u\n", size);
 
     SetLastError(0xdeadbeef);
     size = sizeof(buffer);
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, 0);
+    todo_wine
     ok(count == ~0U, "GetRawInputBuffer succeeded\n");
+    todo_wine
     ok(GetLastError() == ERROR_INVALID_PARAMETER, "GetRawInputBuffer returned %08x\n", GetLastError());
 
     size = sizeof(buffer);
     memset(buffer, 0, sizeof(buffer));
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
+    todo_wine
     ok(count == 1U, "GetRawInputBuffer returned %u\n", count);
     ok(size == sizeof(buffer), "GetRawInputBuffer returned unexpected size: %u\n", size);
+    todo_wine
     ok(rawinput_buffer_mouse_x(buffer, 0) == 5, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 0));
 
 
@@ -2093,8 +2137,11 @@ static void test_GetRawInputBuffer(void)
     size = rawinput_size;
     memset(buffer, 0, sizeof(buffer));
     count = GetRawInputBuffer((RAWINPUT*)buffer, &size, sizeof(RAWINPUTHEADER));
+    todo_wine
     ok(count == ~0U, "GetRawInputBuffer succeeded\n");
+    todo_wine
     ok(GetLastError() == ERROR_INSUFFICIENT_BUFFER, "GetRawInputBuffer returned %08x\n", GetLastError());
+    todo_wine
     ok(rawinput_buffer_mouse_x(buffer, 0) == 5, "Unexpected rawinput data: %d\n", rawinput_buffer_mouse_x(buffer, 0));
 
     size = sizeof(buffer);
@@ -2108,6 +2155,7 @@ static void test_GetRawInputBuffer(void)
     mouse_event(MOUSEEVENTF_MOVE, 3, 0, 0, 0);
     mouse_event(MOUSEEVENTF_MOVE, 4, 0, 0, 0);
     empty_message_queue();
+    todo_wine
     ok(rawinputbuffer_wndproc_count == 2, "Spurious WM_INPUT messages\n");
 
     raw_devices[0].dwFlags = RIDEV_REMOVE;

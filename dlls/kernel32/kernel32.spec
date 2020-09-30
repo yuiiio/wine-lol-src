@@ -182,7 +182,7 @@
 @ stub BaseProcessInitPostImport
 # @ stub BaseQueryModuleData
 # @ stub BaseSetLastNTError
-@ stdcall -fastcall BaseThreadInitThunk(long ptr ptr)
+# @ stub BaseThreadInitThunk
 @ stub BaseUpdateAppcompatCache
 # @ stub BaseVerifyUnicodeString
 # @ stub Basep8BitStringToDynamicUnicodeString
@@ -195,7 +195,7 @@
 # @ stub BasepFreeActivationContextActivationBlock
 # @ stub BasepFreeAppCompatData
 # @ stub BasepMapModuleHandle
-@ stdcall -import Beep(long long)
+@ stdcall Beep(long long)
 @ stdcall BeginUpdateResourceA(str long)
 @ stdcall BeginUpdateResourceW(wstr long)
 @ stdcall BindIoCompletionCallback(long ptr long)
@@ -256,7 +256,7 @@
 @ stdcall -import ConvertThreadToFiber(ptr)
 @ stdcall -import ConvertThreadToFiberEx(ptr long)
 @ stdcall ConvertToGlobalHandle(long)
-@ stdcall -import -arch=i386,x86_64 CopyContext(ptr long ptr)
+# @ stub CopyContext
 @ stdcall CopyFileA(str str long)
 @ stdcall CopyFileExA (str str ptr ptr ptr long)
 @ stdcall -import CopyFileExW(wstr wstr ptr ptr ptr long)
@@ -659,7 +659,7 @@
 # @ stub GetDurationFormatEx
 @ stdcall -import GetDynamicTimeZoneInformation(ptr)
 @ stdcall -import GetDynamicTimeZoneInformationEffectiveYears(ptr ptr ptr)
-@ stdcall -import -ret64 -arch=i386,x86_64 GetEnabledXStateFeatures()
+@ stdcall -ret64 -arch=i386,x86_64 GetEnabledXStateFeatures()
 @ stdcall -import GetEnvironmentStrings()
 @ stdcall -import GetEnvironmentStringsA()
 @ stdcall -import GetEnvironmentStringsW()
@@ -895,8 +895,7 @@
 @ stdcall -import GetWindowsDirectoryA(ptr long)
 @ stdcall -import GetWindowsDirectoryW(ptr long)
 @ stdcall -import GetWriteWatch(long ptr long ptr ptr ptr)
-@ stdcall -import -arch=i386,x86_64 GetXStateFeaturesMask(ptr ptr)
-@ stdcall -import -arch=i386,x86_64 SetXStateFeaturesMask(ptr int64)
+# @ stub GetXStateFeaturesMask
 @ stdcall GlobalAddAtomA(str)
 @ stdcall GlobalAddAtomW(wstr)
 @ stdcall -import GlobalAlloc(long long)
@@ -951,8 +950,7 @@
 @ stdcall InitOnceExecuteOnce(ptr ptr ptr ptr) kernelbase.InitOnceExecuteOnce
 @ stdcall InitOnceInitialize(ptr) ntdll.RtlRunOnceInitialize
 @ stdcall InitializeConditionVariable(ptr) ntdll.RtlInitializeConditionVariable
-@ stdcall -import -arch=i386,x86_64 InitializeContext(ptr long ptr ptr)
-@ stdcall -import -arch=i386,x86_64 InitializeContext2(ptr long ptr ptr int64)
+# @ stub InitializeContext
 @ stdcall InitializeCriticalSection(ptr) ntdll.RtlInitializeCriticalSection
 @ stdcall -import InitializeCriticalSectionAndSpinCount(ptr long)
 @ stdcall -import InitializeCriticalSectionEx(ptr long long)
@@ -1072,7 +1070,7 @@
 @ stdcall LocalSize(long)
 @ stdcall -import LocalUnlock(long)
 @ stdcall -import LocaleNameToLCID(wstr long)
-@ stdcall -import -arch=i386,x86_64 LocateXStateFeature(ptr long ptr)
+# @ stub LocateXStateFeature
 @ stdcall -import LockFile(long long long long long)
 @ stdcall -import LockFileEx(long long long long long ptr)
 @ stdcall -import LockResource(long)
@@ -1194,10 +1192,10 @@
 @ stdcall -import RaiseException(long long long ptr)
 # @ stub RaiseFailFastException
 @ stdcall ReadConsoleA(long ptr long ptr ptr)
-@ stdcall -import ReadConsoleInputA(long ptr long ptr)
+@ stdcall ReadConsoleInputA(long ptr long ptr)
 @ stub ReadConsoleInputExA
 @ stub ReadConsoleInputExW
-@ stdcall -import ReadConsoleInputW(long ptr long ptr)
+@ stdcall ReadConsoleInputW(long ptr long ptr)
 @ stdcall -import ReadConsoleOutputA(long ptr long long ptr)
 @ stdcall -import ReadConsoleOutputAttribute(long ptr long long ptr)
 @ stdcall -import ReadConsoleOutputCharacterA(long ptr long long ptr)
@@ -1272,8 +1270,8 @@
 @ stdcall ReleaseSemaphoreWhenCallbackReturns(ptr long long) ntdll.TpCallbackReleaseSemaphoreOnCompletion
 @ stdcall ReleaseSRWLockExclusive(ptr) ntdll.RtlReleaseSRWLockExclusive
 @ stdcall ReleaseSRWLockShared(ptr) ntdll.RtlReleaseSRWLockShared
-@ stdcall -import RemoveDirectoryA(str)
-@ stdcall -import RemoveDirectoryW(wstr)
+@ stdcall RemoveDirectoryA(str)
+@ stdcall RemoveDirectoryW(wstr)
 # @ stub RemoveLocalAlternateComputerNameA
 # @ stub RemoveLocalAlternateComputerNameW
 @ stdcall RemoveVectoredContinueHandler(ptr) ntdll.RtlRemoveVectoredContinueHandler
@@ -1688,3 +1686,6 @@
 # Unix files
 @ cdecl wine_get_unix_file_name(wstr)
 @ cdecl wine_get_dos_file_name(str)
+
+# Init code
+@ cdecl -norelay -private __wine_start_process()

@@ -22,13 +22,20 @@
 #define __WINE_CONSOLE_PRIVATE_H
 
 /* console.c */
+extern LONG CALLBACK CONSOLE_HandleCtrlC( EXCEPTION_POINTERS *eptr ) DECLSPEC_HIDDEN;
 extern int      CONSOLE_GetHistory(int idx, WCHAR* buf, int buf_len) DECLSPEC_HIDDEN;
 extern BOOL     CONSOLE_AppendHistory(const WCHAR *p) DECLSPEC_HIDDEN;
-extern unsigned CONSOLE_GetNumHistoryEntries(HANDLE) DECLSPEC_HIDDEN;
+extern unsigned CONSOLE_GetNumHistoryEntries(void) DECLSPEC_HIDDEN;
 extern void     CONSOLE_FillLineUniform(HANDLE hConsoleOutput, int i, int j, int len, LPCHAR_INFO lpFill) DECLSPEC_HIDDEN;
 extern BOOL     CONSOLE_GetEditionMode(HANDLE, int*) DECLSPEC_HIDDEN;
 
 /* editline.c */
 extern WCHAR*   CONSOLE_Readline(HANDLE, BOOL) DECLSPEC_HIDDEN;
+
+/* term.c */
+extern BOOL     TERM_Init(void) DECLSPEC_HIDDEN;
+extern BOOL     TERM_Exit(void) DECLSPEC_HIDDEN;
+extern unsigned TERM_FillSimpleChar(WCHAR real_inchar, INPUT_RECORD* ir) DECLSPEC_HIDDEN;
+extern int      TERM_FillInputRecord(const char* in, size_t len, INPUT_RECORD* ir) DECLSPEC_HIDDEN;
 
 #endif  /* __WINE_CONSOLE_PRIVATE_H */

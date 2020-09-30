@@ -752,6 +752,8 @@ TOP_INSTALL_DEV
 TOP_INSTALL_LIB
 LDEXECFLAGS
 LDDLLFLAGS
+LDRPATH_LOCAL
+LDRPATH_INSTALL
 DLLFLAGS
 CPP
 OPENGL_LIBS
@@ -847,6 +849,7 @@ with_capi
 with_cms
 with_coreaudio
 with_cups
+with_curses
 with_dbus
 with_faudio
 with_float_abi
@@ -2579,6 +2582,7 @@ Optional Packages:
   --without-cms           do not use CMS (color management support)
   --without-coreaudio     do not use the CoreAudio sound support
   --without-cups          do not use CUPS
+  --without-curses        do not use (n)curses
   --without-dbus          do not use DBus (dynamic device support)
   --without-faudio        do not use FAudio (XAudio2 support)
   --with-float-abi=abi    specify the ABI (soft|softfp|hard) for ARM platforms
@@ -3931,6 +3935,12 @@ fi
 # Check whether --with-cups was given.
 if test "${with_cups+set}" = set; then :
   withval=$with_cups;
+fi
+
+
+# Check whether --with-curses was given.
+if test "${with_curses+set}" = set; then :
+  withval=$with_curses; if test "x$withval" = "xno"; then ac_cv_header_ncurses_h=no; ac_cv_header_curses_h=no; fi
 fi
 
 
@@ -5838,12 +5848,16 @@ fi
 $as_echo "$wine_cv_toolsdir" >&6; }
 if test -z "$wine_cv_toolsdir"; then
     wine_makedep=tools/makedep
-    TOOLSDIR="."
+    TOOLSDIR="\$(top_builddir)"
 
 elif test -d "$wine_cv_toolsdir/tools/winebuild"; then
     wine_makedep=$wine_cv_toolsdir/tools/makedep
-    TOOLSDIR=$wine_cv_toolsdir
-
+    case "$wine_cv_toolsdir" in
+       /*) TOOLSDIR=$wine_cv_toolsdir
+ ;;
+       *)  TOOLSDIR="\$(top_builddir)/$wine_cv_toolsdir"
+ ;;
+    esac
     enable_tools=${enable_tools:-no}
     test -f "$wine_makedep" || as_fn_error $? "the Wine tools have not yet been built in $wine_cv_toolsdir" "$LINENO" 5
 else
@@ -7407,6 +7421,7 @@ for ac_header in \
 	arpa/nameser.h \
 	asm/types.h \
 	asm/user.h \
+	curses.h \
 	dirent.h \
 	dlfcn.h \
 	elf.h \
@@ -7443,6 +7458,7 @@ for ac_header in \
 	machine/cpu.h \
 	machine/sysarch.h \
 	mntent.h \
+	ncurses.h \
 	netdb.h \
 	netinet/in.h \
 	netinet/in_systm.h \
@@ -7480,7 +7496,6 @@ for ac_header in \
 	sys/protosw.h \
 	sys/ptrace.h \
 	sys/queue.h \
-	sys/random.h \
 	sys/resource.h \
 	sys/scsiio.h \
 	sys/shm.h \
@@ -7874,6 +7889,10 @@ done
 
 
 DLLFLAGS="-D_REENTRANT"
+
+LDRPATH_INSTALL=""
+
+LDRPATH_LOCAL=""
 
 LDDLLFLAGS=""
 
@@ -8704,6 +8723,8 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
     LIBEXT="dylib"
     DLLFLAGS="$DLLFLAGS -fPIC"
     LDDLLFLAGS="-fPIC"
+    LDRPATH_INSTALL="-Wl,-rpath,@loader_path/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+    LDRPATH_LOCAL="-Wl,-rpath,@loader_path/\$(top_builddir)/libs/wine"
         COREFOUNDATION_LIBS="-framework CoreFoundation"
 
     IOKIT_LIBS="-framework IOKit -framework CoreFoundation"
@@ -8719,10 +8740,10 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
     SYSTEMCONFIGURATION_LIBS="-framework SystemConfiguration"
 
 
-    WINELOADER_LDFLAGS="-Wl,-pie,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist"
+    WINELOADER_LDFLAGS="-Wl,-pie,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,wine_info.plist"
 
     wine_can_build_preloader=yes
-    WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs -e _start -ldylib1.o -Wl,-image_base,0x7d400000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,loader/wine_info.plist"
+    WINEPRELOADER_LDFLAGS="-nostartfiles -nodefaultlibs -e _start -ldylib1.o -Wl,-image_base,0x7d400000,-pagezero_size,0x1000,-sectcreate,__TEXT,__info_plist,wine_info.plist"
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,-no_new_main -e _main" >&5
 $as_echo_n "checking whether the compiler supports -Wl,-no_new_main -e _main... " >&6; }
 if ${ac_cv_cflags__Wl__no_new_main__e__main+:} false; then :
@@ -9161,6 +9182,88 @@ if test "x$ac_cv_cflags__fPIC__Wl___export_dynamic" = xyes; then :
   WINELOADER_LDFLAGS="-Wl,--export-dynamic"
 fi
     WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7d400000"
+    as_ac_var=`$as_echo "ac_cv_cflags_-fPIC -Wl,--rpath,\\$ORIGIN/../lib" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -fPIC -Wl,--rpath,\$ORIGIN/../lib" >&5
+$as_echo_n "checking whether the compiler supports -fPIC -Wl,--rpath,\$ORIGIN/../lib... " >&6; }
+if eval \${$as_ac_var+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -fPIC -Wl,--rpath,\$ORIGIN/../lib"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  eval "$as_ac_var=yes"
+else
+  eval "$as_ac_var=no"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+eval ac_res=\$$as_ac_var
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+                     LDRPATH_LOCAL="-Wl,--rpath,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
+else
+  as_ac_var=`$as_echo "ac_cv_cflags_-fPIC -Wl,-R,\\$ORIGIN/../lib" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -fPIC -Wl,-R,\$ORIGIN/../lib" >&5
+$as_echo_n "checking whether the compiler supports -fPIC -Wl,-R,\$ORIGIN/../lib... " >&6; }
+if eval \${$as_ac_var+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -fPIC -Wl,-R,\$ORIGIN/../lib"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  eval "$as_ac_var=yes"
+else
+  eval "$as_ac_var=no"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+eval ac_res=\$$as_ac_var
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  LDRPATH_INSTALL="-Wl,-R,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+                          LDRPATH_LOCAL="-Wl,-R,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
+fi
+fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,--enable-new-dtags" >&5
+$as_echo_n "checking whether the compiler supports -Wl,--enable-new-dtags... " >&6; }
+if ${ac_cv_cflags__Wl___enable_new_dtags+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -Wl,--enable-new-dtags"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_cflags__Wl___enable_new_dtags=yes
+else
+  ac_cv_cflags__Wl___enable_new_dtags=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_cflags__Wl___enable_new_dtags" >&5
+$as_echo "$ac_cv_cflags__Wl___enable_new_dtags" >&6; }
+if test "x$ac_cv_cflags__Wl___enable_new_dtags" = xyes; then :
+  LDRPATH_INSTALL="$LDRPATH_INSTALL -Wl,--enable-new-dtags"
+fi
 
     LIBWINE_SHAREDLIB="libwine.so"
 
@@ -9435,6 +9538,90 @@ if test "x$ac_cv_cflags__Wl___export_dynamic" = xyes; then :
   WINELOADER_LDFLAGS="-Wl,--export-dynamic"
 fi
       WINEPRELOADER_LDFLAGS="-static -nostartfiles -nodefaultlibs -Wl,-Ttext=0x7d400000"
+
+      as_ac_var=`$as_echo "ac_cv_cflags_-Wl,--rpath,\\$ORIGIN/../lib" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,--rpath,\$ORIGIN/../lib" >&5
+$as_echo_n "checking whether the compiler supports -Wl,--rpath,\$ORIGIN/../lib... " >&6; }
+if eval \${$as_ac_var+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -Wl,--rpath,\$ORIGIN/../lib"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  eval "$as_ac_var=yes"
+else
+  eval "$as_ac_var=no"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+eval ac_res=\$$as_ac_var
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  LDRPATH_INSTALL="-Wl,--rpath,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+                       LDRPATH_LOCAL="-Wl,--rpath,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
+else
+  as_ac_var=`$as_echo "ac_cv_cflags_-Wl,-R,\\$ORIGIN/../lib" | $as_tr_sh`
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,-R,\$ORIGIN/../lib" >&5
+$as_echo_n "checking whether the compiler supports -Wl,-R,\$ORIGIN/../lib... " >&6; }
+if eval \${$as_ac_var+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -Wl,-R,\$ORIGIN/../lib"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  eval "$as_ac_var=yes"
+else
+  eval "$as_ac_var=no"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+eval ac_res=\$$as_ac_var
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  LDRPATH_INSTALL="-Wl,-R,\\\$\$ORIGIN/\`\$(MAKEDEP) -R \${bindir} \${libdir}\`"
+                            LDRPATH_LOCAL="-Wl,-R,\\\$\$ORIGIN/\$(top_builddir)/libs/wine"
+fi
+fi
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether the compiler supports -Wl,--enable-new-dtags" >&5
+$as_echo_n "checking whether the compiler supports -Wl,--enable-new-dtags... " >&6; }
+if ${ac_cv_cflags__Wl___enable_new_dtags+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_wine_try_cflags_saved=$CFLAGS
+CFLAGS="$CFLAGS -Wl,--enable-new-dtags"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+int main(int argc, char **argv) { return 0; }
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_cflags__Wl___enable_new_dtags=yes
+else
+  ac_cv_cflags__Wl___enable_new_dtags=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+CFLAGS=$ac_wine_try_cflags_saved
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_cflags__Wl___enable_new_dtags" >&5
+$as_echo "$ac_cv_cflags__Wl___enable_new_dtags" >&6; }
+if test "x$ac_cv_cflags__Wl___enable_new_dtags" = xyes; then :
+  LDRPATH_INSTALL="$LDRPATH_INSTALL -Wl,--enable-new-dtags"
+fi
 
       case $host_cpu in
         *i[3456789]86* | x86_64 | *aarch64*)
@@ -13146,6 +13333,8 @@ fi
             XML2_LIBS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$XML2_CFLAGS" || XML2_CFLAGS=`echo " $XML2_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$XML2_LIBS" || XML2_LIBS=`echo " $XML2_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "$ac_cv_lib_xml2_xmlParseMemory" != "yes"; then :
@@ -13254,6 +13443,8 @@ fi
             XSLT_CFLAGS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$XSLT_CFLAGS" || XSLT_CFLAGS=`echo " $XSLT_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$XSLT_LIBS" || XSLT_LIBS=`echo " $XSLT_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_xslt" = "x"; then :
@@ -13340,6 +13531,8 @@ else
 fi
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$INOTIFY_CFLAGS" || INOTIFY_CFLAGS=`echo " $INOTIFY_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$INOTIFY_LIBS" || INOTIFY_LIBS=`echo " $INOTIFY_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "$ac_cv_header_sys_inotify_h" != "yes"; then :
@@ -13434,6 +13627,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$DBUS_CFLAGS" || DBUS_CFLAGS=`echo " $DBUS_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$DBUS_LIBS" || DBUS_LIBS=`echo " $DBUS_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_dbus_1" = "x" -a \
@@ -13529,6 +13724,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$HAL_CFLAGS" || HAL_CFLAGS=`echo " $HAL_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$HAL_LIBS" || HAL_LIBS=`echo " $HAL_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
     if test "x$ac_cv_lib_soname_hal" = "x" -a \
                                "x$ac_cv_header_DiskArbitration_DiskArbitration_h" != "xyes"; then :
@@ -13655,6 +13852,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GNUTLS_CFLAGS" || GNUTLS_CFLAGS=`echo " $GNUTLS_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$GNUTLS_LIBS" || GNUTLS_LIBS=`echo " $GNUTLS_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_gnutls" = "x"; then :
@@ -13663,6 +13862,146 @@ if test "x$ac_cv_lib_soname_gnutls" = "x"; then :
   xno) ;;
   *)   as_fn_error $? "libgnutls ${notice_platform}development files not found, no schannel support.
 This is an error since --with-gnutls was requested." "$LINENO" 5 ;;
+esac
+
+fi
+
+CURSES_LIBS=""
+if test "$ac_cv_header_ncurses_h" = "yes"
+then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lncurses" >&5
+$as_echo_n "checking for -lncurses... " >&6; }
+if ${ac_cv_lib_soname_ncurses+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lncurses  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char waddch ();
+int
+main ()
+{
+return waddch ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_ncurses=`$ac_cv_path_LDD conftest.exe | grep "ncurses" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_ncurses=`$OTOOL -L conftest$ac_exeext | grep "libncursesw\\{0,1\\}\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libncursesw\\{0,1\\}\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_ncurses=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libncursesw\\{0,1\\}\\.$LIBEXT" | sed -e "s/^.*\\[\\(libncursesw\\{0,1\\}\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_ncurses:+false} :; then :
+  ac_cv_lib_soname_ncurses=`$LDD conftest$ac_exeext | grep "libncursesw\\{0,1\\}\\.$LIBEXT" | sed -e "s/^.*\(libncursesw\\{0,1\\}\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+else
+  ac_cv_lib_soname_ncurses=
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_ncurses:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_ncurses" >&5
+$as_echo "$ac_cv_lib_soname_ncurses" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBNCURSES "$ac_cv_lib_soname_ncurses"
+_ACEOF
+
+       CURSES_LIBS="-lncurses"
+fi
+elif test "$ac_cv_header_curses_h" = "yes"
+then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for -lcurses" >&5
+$as_echo_n "checking for -lcurses... " >&6; }
+if ${ac_cv_lib_soname_curses+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_soname_save_LIBS=$LIBS
+LIBS="-lcurses  $LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char waddch ();
+int
+main ()
+{
+return waddch ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  case "$LIBEXT" in
+    dll) ac_cv_lib_soname_curses=`$ac_cv_path_LDD conftest.exe | grep "curses" | sed -e "s/dll.*/dll/"';2,$d'` ;;
+    dylib) ac_cv_lib_soname_curses=`$OTOOL -L conftest$ac_exeext | grep "libcurses\\.[0-9A-Za-z.]*dylib" | sed -e "s/^.*\/\(libcurses\.[0-9A-Za-z.]*dylib\).*$/\1/"';2,$d'` ;;
+    *) ac_cv_lib_soname_curses=`$READELF -d conftest$ac_exeext | grep "NEEDED.*libcurses\\.$LIBEXT" | sed -e "s/^.*\\[\\(libcurses\\.$LIBEXT[^	 ]*\\)\\].*$/\1/"';2,$d'`
+       if ${ac_cv_lib_soname_curses:+false} :; then :
+  ac_cv_lib_soname_curses=`$LDD conftest$ac_exeext | grep "libcurses\\.$LIBEXT" | sed -e "s/^.*\(libcurses\.$LIBEXT[^	 ]*\).*$/\1/"';2,$d'`
+fi ;;
+  esac
+else
+  ac_cv_lib_soname_curses=
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  LIBS=$ac_check_soname_save_LIBS
+fi
+if ${ac_cv_lib_soname_curses:+false} :; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_soname_curses" >&5
+$as_echo "$ac_cv_lib_soname_curses" >&6; }
+
+cat >>confdefs.h <<_ACEOF
+#define SONAME_LIBCURSES "$ac_cv_lib_soname_curses"
+_ACEOF
+
+       CURSES_LIBS="-lcurses"
+fi
+fi
+ac_save_LIBS="$LIBS"
+LIBS="$LIBS $CURSES_LIBS"
+for ac_func in mousemask
+do :
+  ac_fn_c_check_func "$LINENO" "mousemask" "ac_cv_func_mousemask"
+if test "x$ac_cv_func_mousemask" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_MOUSEMASK 1
+_ACEOF
+
+fi
+done
+
+LIBS="$ac_save_LIBS"
+if test "x$ac_cv_lib_soname_curses$ac_cv_lib_soname_ncurses" = "x"; then :
+  case "x$with_curses" in
+  x)   as_fn_append wine_notices "|lib(n)curses ${notice_platform}development files not found, curses won't be supported." ;;
+  xno) ;;
+  *)   as_fn_error $? "lib(n)curses ${notice_platform}development files not found, curses won't be supported.
+This is an error since --with-curses was requested." "$LINENO" 5 ;;
 esac
 
 fi
@@ -13749,6 +14088,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$SANE_CFLAGS" || SANE_CFLAGS=`echo " $SANE_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$SANE_LIBS" || SANE_LIBS=`echo " $SANE_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_sane" = "x"; then :
@@ -13830,6 +14171,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$USB_CFLAGS" || USB_CFLAGS=`echo " $USB_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$USB_LIBS" || USB_LIBS=`echo " $USB_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "$ac_cv_lib_usb_1_0_libusb_interrupt_event_handler" != "yes"; then :
@@ -13981,6 +14324,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GPHOTO2_CFLAGS" || GPHOTO2_CFLAGS=`echo " $GPHOTO2_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$GPHOTO2_LIBS" || GPHOTO2_LIBS=`echo " $GPHOTO2_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
     if ${GPHOTO2_PORT_CFLAGS:+false} :; then :
   if ${PKG_CONFIG+:} false; then :
@@ -14051,6 +14396,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GPHOTO2_PORT_CFLAGS" || GPHOTO2_PORT_CFLAGS=`echo " $GPHOTO2_PORT_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$GPHOTO2_PORT_LIBS" || GPHOTO2_PORT_LIBS=`echo " $GPHOTO2_PORT_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "$ac_cv_lib_gphoto2_gp_camera_new" != "yes"; then :
@@ -14247,6 +14594,8 @@ fi
             LCMS2_LIBS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$LCMS2_CFLAGS" || LCMS2_CFLAGS=`echo " $LCMS2_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$LCMS2_LIBS" || LCMS2_LIBS=`echo " $LCMS2_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "$ac_cv_lib_lcms2_cmsOpenProfileFromFile" != "yes"; then :
@@ -14366,6 +14715,8 @@ fi
             FREETYPE_LIBS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$FREETYPE_CFLAGS" || FREETYPE_CFLAGS=`echo " $FREETYPE_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$FREETYPE_LIBS" || FREETYPE_LIBS=`echo " $FREETYPE_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_freetype" = x; then :
@@ -14538,6 +14889,8 @@ fi
 done
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$PULSE_CFLAGS" || PULSE_CFLAGS=`echo " $PULSE_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$PULSE_LIBS" || PULSE_LIBS=`echo " $PULSE_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test -z "$PULSE_LIBS"; then :
@@ -14647,6 +15000,8 @@ fi
 
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GSTREAMER_CFLAGS" || GSTREAMER_CFLAGS=`echo " $GSTREAMER_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$GSTREAMER_LIBS" || GSTREAMER_LIBS=`echo " $GSTREAMER_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_glib2_broken" != xyes -a "x$ac_cv_lib_gstreamer_1_0_gst_pad_new" != xyes -a "x$ac_cv_header_QuickTime_ImageCompression_h" != xyes ; then :
@@ -14877,6 +15232,8 @@ fi
 done
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$UDEV_CFLAGS" || UDEV_CFLAGS=`echo " $UDEV_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$UDEV_LIBS" || UDEV_LIBS=`echo " $UDEV_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$UDEV_LIBS" = "x"; then :
@@ -14976,6 +15333,8 @@ $as_echo "#define HAVE_LIBUNWIND 1" >>confdefs.h
 
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$UNWIND_CFLAGS" || UNWIND_CFLAGS=`echo " $UNWIND_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$UNWIND_LIBS" || UNWIND_LIBS=`echo " $UNWIND_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 case $host in
@@ -15077,6 +15436,8 @@ fi
 done
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$SDL2_CFLAGS" || SDL2_CFLAGS=`echo " $SDL2_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$SDL2_LIBS" || SDL2_LIBS=`echo " $SDL2_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_SDL2" = "x"; then :
@@ -15194,6 +15555,8 @@ done
 LIBS="$ac_wine_check_funcs_save_LIBS"
 
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$FAUDIO_CFLAGS" || FAUDIO_CFLAGS=`echo " $FAUDIO_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$FAUDIO_LIBS" || FAUDIO_LIBS=`echo " $FAUDIO_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_FAudio" = "x"; then :
@@ -15298,6 +15661,8 @@ _ACEOF
 fi
     fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$CAPI20_CFLAGS" || CAPI20_CFLAGS=`echo " $CAPI20_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$CAPI20_LIBS" || CAPI20_LIBS=`echo " $CAPI20_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_capi20" = "x"; then :
@@ -15404,6 +15769,8 @@ fi
                             CUPS_LIBS=""
                         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$CUPS_CFLAGS" || CUPS_CFLAGS=`echo " $CUPS_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$CUPS_LIBS" || CUPS_LIBS=`echo " $CUPS_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_cups" = "x"; then :
@@ -15508,6 +15875,8 @@ fi
             FONTCONFIG_CFLAGS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$FONTCONFIG_CFLAGS" || FONTCONFIG_CFLAGS=`echo " $FONTCONFIG_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$FONTCONFIG_LIBS" || FONTCONFIG_LIBS=`echo " $FONTCONFIG_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_fontconfig" = "x"; then :
@@ -15680,6 +16049,8 @@ fi
              KRB5_CFLAGS=""
          fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$KRB5_CFLAGS" || KRB5_CFLAGS=`echo " $KRB5_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$KRB5_LIBS" || KRB5_LIBS=`echo " $KRB5_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_krb5" = "x"; then :
@@ -15786,6 +16157,8 @@ fi
             GSSAPI_CFLAGS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$GSSAPI_CFLAGS" || GSSAPI_CFLAGS=`echo " $GSSAPI_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$GSSAPI_LIBS" || GSSAPI_LIBS=`echo " $GSSAPI_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_gssapi_krb5" = "x"; then :
@@ -15890,6 +16263,8 @@ fi
             JPEG_CFLAGS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$JPEG_CFLAGS" || JPEG_CFLAGS=`echo " $JPEG_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$JPEG_LIBS" || JPEG_LIBS=`echo " $JPEG_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_jpeg" = "x"; then :
@@ -15994,6 +16369,8 @@ fi
             PNG_CFLAGS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$PNG_CFLAGS" || PNG_CFLAGS=`echo " $PNG_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$PNG_LIBS" || PNG_LIBS=`echo " $PNG_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_png" = "x"; then :
@@ -16096,6 +16473,8 @@ _ACEOF
 fi
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$TIFF_CFLAGS" || TIFF_CFLAGS=`echo " $TIFF_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$TIFF_LIBS" || TIFF_LIBS=`echo " $TIFF_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_soname_tiff" = "x"; then :
@@ -16188,6 +16567,8 @@ fi
             MPG123_LIBS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$MPG123_CFLAGS" || MPG123_CFLAGS=`echo " $MPG123_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$MPG123_LIBS" || MPG123_LIBS=`echo " $MPG123_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$ac_cv_lib_mpg123_mpg123_feed" != xyes -a x"$ac_cv_header_CoreAudio_CoreAudio_h" != xyes; then :
@@ -16544,6 +16925,8 @@ _ACEOF
 
 fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$NETAPI_CFLAGS" || NETAPI_CFLAGS=`echo " $NETAPI_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$NETAPI_LIBS" || NETAPI_LIBS=`echo " $NETAPI_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 
@@ -16754,6 +17137,8 @@ _ACEOF
 
 fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$VKD3D_CFLAGS" || VKD3D_CFLAGS=`echo " $VKD3D_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$VKD3D_LIBS" || VKD3D_LIBS=`echo " $VKD3D_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
     if ${VKD3D_SHADER_CFLAGS:+false} :; then :
   if ${PKG_CONFIG+:} false; then :
@@ -17748,7 +18133,6 @@ for ac_func in \
 	getauxval \
 	getifaddrs \
 	getopt_long_only \
-	getrandom \
 	kqueue \
 	lstat \
 	mach_continuous_time \
@@ -18317,6 +18701,8 @@ LIBS="$ac_wine_check_funcs_save_LIBS"
             LDAP_LIBS=""
         fi
 CPPFLAGS=$ac_save_CPPFLAGS
+test -z "$LDAP_CFLAGS" || LDAP_CFLAGS=`echo " $LDAP_CFLAGS" | sed 's/ -I\([^/]\)/ -I\$(top_builddir)\/\1/g'`
+test -z "$LDAP_LIBS" || LDAP_LIBS=`echo " $LDAP_LIBS" | sed 's/ -L\([^/]\)/ -L\$(top_builddir)\/\1/g'`
 
 fi
 if test "x$LDAP_LIBS" = "x"; then :
@@ -19376,32 +19762,6 @@ _ACEOF
 fi
 
 
-ac_fn_c_check_member "$LINENO" "struct sysinfo" "totalram" "ac_cv_member_struct_sysinfo_totalram" "#ifdef HAVE_SYS_SYSINFO_H
-# include <sys/sysinfo.h>
-#endif
-"
-if test "x$ac_cv_member_struct_sysinfo_totalram" = xyes; then :
-
-cat >>confdefs.h <<_ACEOF
-#define HAVE_STRUCT_SYSINFO_TOTALRAM 1
-_ACEOF
-
-
-fi
-ac_fn_c_check_member "$LINENO" "struct sysinfo" "mem_unit" "ac_cv_member_struct_sysinfo_mem_unit" "#ifdef HAVE_SYS_SYSINFO_H
-# include <sys/sysinfo.h>
-#endif
-"
-if test "x$ac_cv_member_struct_sysinfo_mem_unit" = xyes; then :
-
-cat >>confdefs.h <<_ACEOF
-#define HAVE_STRUCT_SYSINFO_MEM_UNIT 1
-_ACEOF
-
-
-fi
-
-
 ac_save_LIBS="$LIBS"
 LIBS="$LIBS -lm"
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for isfinite" >&5
@@ -19997,10 +20357,8 @@ wine_fn_append_rule "
 all: Makefile
 Makefile: $srcdir/Makefile.in config.status \$(MAKEDEP)
 	@./config.status Make.tmp Makefile
-depend: \$(MAKEDEP)
-	\$(MAKEDEP)
-dummy:
-.PHONY: depend dummy"
+depend: \$(MAKEDEP) dummy
+	\$(MAKEDEP)"
 
 ac_config_links="$ac_config_links wine:tools/winewrapper"
 wine_fn_config_symlink wine
@@ -21152,7 +21510,6 @@ wine_fn_config_makefile programs/clock enable_clock
 wine_fn_config_makefile programs/cmd enable_cmd
 wine_fn_config_makefile programs/cmd/tests enable_tests
 wine_fn_config_makefile programs/conhost enable_conhost
-wine_fn_config_makefile programs/conhost/tests enable_tests
 wine_fn_config_makefile programs/control enable_control
 wine_fn_config_makefile programs/cscript enable_cscript
 wine_fn_config_makefile programs/dism enable_dism
@@ -21303,7 +21660,9 @@ if test "x$enable_tools" != xno
 then
     wine_fn_append_rule "tools/makedep$ac_exeext: $srcdir/tools/makedep.c include/config.h config.status
 	@./config.status tools/makedep
-Makefile: tools/makedep$ac_exeext"
+Makefile: tools/makedep$ac_exeext
+fonts: tools/sfnt2fon
+include: tools tools/widl"
 else
     wine_fn_append_rule "\$(MAKEDEP):
 	@echo \"You need to run make in $TOOLSDIR first\" && false"

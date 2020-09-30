@@ -14,5 +14,4 @@ C_SRCS = \
 	exe_wmain.c \
 	register.c \
 	setjmp.c \
-	stub.c \
-	unix_lib.c
+	stub.c

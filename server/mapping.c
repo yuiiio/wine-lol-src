@@ -74,7 +74,6 @@ static const struct object_ops ranges_ops =
     no_map_access,             /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
-    no_get_full_name,          /* get_full_name */
     no_lookup_name,            /* lookup_name */
     no_link_name,              /* link_name */
     NULL,                      /* unlink_name */
@@ -110,7 +109,6 @@ static const struct object_ops shared_map_ops =
     no_map_access,             /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
-    no_get_full_name,          /* get_full_name */
     no_lookup_name,            /* lookup_name */
     no_link_name,              /* link_name */
     NULL,                      /* unlink_name */
@@ -168,7 +166,6 @@ static const struct object_ops mapping_ops =
     mapping_map_access,          /* map_access */
     default_get_sd,              /* get_sd */
     default_set_sd,              /* set_sd */
-    default_get_full_name,       /* get_full_name */
     no_lookup_name,              /* lookup_name */
     directory_link_name,         /* link_name */
     default_unlink_name,         /* unlink_name */
@@ -785,10 +782,10 @@ static unsigned int get_mapping_flags( obj_handle_t handle, unsigned int flags )
 }
 
 
-static struct mapping *create_mapping( struct object *root, const struct unicode_str *name,
-                                       unsigned int attr, mem_size_t size, unsigned int flags,
-                                       obj_handle_t handle, unsigned int file_access,
-                                       const struct security_descriptor *sd )
+static struct object *create_mapping( struct object *root, const struct unicode_str *name,
+                                      unsigned int attr, mem_size_t size, unsigned int flags,
+                                      obj_handle_t handle, unsigned int file_access,
+                                      const struct security_descriptor *sd )
 {
     struct mapping *mapping;
     struct file *file;
@@ -801,7 +798,7 @@ static struct mapping *create_mapping( struct object *root, const struct unicode
     if (!(mapping = create_named_object( root, &mapping_ops, name, attr, sd )))
         return NULL;
     if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-        return mapping;  /* Nothing else to do */
+        return &mapping->obj;  /* Nothing else to do */
 
     mapping->size        = size;
     mapping->fd          = NULL;
@@ -840,7 +837,7 @@ static struct mapping *create_mapping( struct object *root, const struct unicode
         if (flags & SEC_IMAGE)
         {
             unsigned int err = get_image_params( mapping, st.st_size, unix_fd );
-            if (!err) return mapping;
+            if (!err) return &mapping->obj;
             set_error( err );
             goto error;
         }
@@ -876,14 +873,14 @@ static struct mapping *create_mapping( struct object *root, const struct unicode
                                                  FILE_SYNCHRONOUS_IO_NONALERT ))) goto error;
         allow_fd_caching( mapping->fd );
     }
-    return mapping;
+    return &mapping->obj;
 
  error:
     release_object( mapping );
     return NULL;
 }
 
-static struct mapping *get_mapping_obj( struct process *process, obj_handle_t handle, unsigned int access )
+struct mapping *get_mapping_obj( struct process *process, obj_handle_t handle, unsigned int access )
 {
     return (struct mapping *)get_handle_obj( process, handle, access, &mapping_ops );
 }
@@ -958,43 +955,36 @@ int get_page_size(void)
     return page_mask + 1;
 }
 
-struct object *create_user_data_mapping( struct object *root, const struct unicode_str *name,
-                                        unsigned int attr, const struct security_descriptor *sd )
+void init_kusd_mapping( struct mapping *mapping )
 {
     void *ptr;
-    struct mapping *mapping;
 
-    if (!(mapping = create_mapping( root, name, attr, sizeof(KSHARED_USER_DATA),
-                                    SEC_COMMIT, 0, FILE_READ_DATA | FILE_WRITE_DATA, sd ))) return NULL;
+    if (user_shared_data) return;
+    grab_object( mapping );
+    make_object_static( &mapping->obj );
     ptr = mmap( NULL, mapping->size, PROT_WRITE, MAP_SHARED, get_unix_fd( mapping->fd ), 0 );
-    if (ptr != MAP_FAILED)
-    {
-        user_shared_data = ptr;
-        user_shared_data->SystemCall = 1;
-    }
-    return &mapping->obj;
+    if (ptr != MAP_FAILED) user_shared_data = ptr;
 }
 
 /* create a file mapping */
 DECL_HANDLER(create_mapping)
 {
-    struct object *root;
-    struct mapping *mapping;
+    struct object *root, *obj;
     struct unicode_str name;
     const struct security_descriptor *sd;
     const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, &root );
 
     if (!objattr) return;
 
-    if ((mapping = create_mapping( root, &name, objattr->attributes, req->size, req->flags,
-                                   req->file_handle, req->file_access, sd )))
+    if ((obj = create_mapping( root, &name, objattr->attributes, req->size, req->flags,
+                               req->file_handle, req->file_access, sd )))
     {
         if (get_error() == STATUS_OBJECT_NAME_EXISTS)
-            reply->handle = alloc_handle( current->process, &mapping->obj, req->access, objattr->attributes );
+            reply->handle = alloc_handle( current->process, obj, req->access, objattr->attributes );
         else
-            reply->handle = alloc_handle_no_access_check( current->process, &mapping->obj,
+            reply->handle = alloc_handle_no_access_check( current->process, obj,
                                                           req->access, objattr->attributes );
-        release_object( mapping );
+        release_object( obj );
     }
 
     if (root) release_object( root );
@@ -1082,11 +1072,7 @@ DECL_HANDLER(map_view)
         view->fd        = !is_fd_removable( mapping->fd ) ? (struct fd *)grab_object( mapping->fd ) : NULL;
         view->committed = mapping->committed ? (struct ranges *)grab_object( mapping->committed ) : NULL;
         view->shared    = mapping->shared ? (struct shared_map *)grab_object( mapping->shared ) : NULL;
-        if (mapping->flags & SEC_IMAGE)
-        {
-            view->image = mapping->image;
-            if (view->base != mapping->image.base) set_error( STATUS_IMAGE_NOT_AT_BASE );
-        }
+        if (mapping->flags & SEC_IMAGE) view->image = mapping->image;
         list_add_tail( &current->process->views, &view->entry );
     }
 

@@ -71,7 +71,6 @@ static const struct object_ops timer_ops =
     timer_map_access,          /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
-    default_get_full_name,     /* get_full_name */
     no_lookup_name,            /* lookup_name */
     directory_link_name,       /* link_name */
     default_unlink_name,       /* unlink_name */
@@ -178,8 +177,7 @@ static int set_timer( struct timer *timer, timeout_t expire, unsigned int period
     timer->callback = callback;
     timer->arg      = arg;
     if (callback) timer->thread = (struct thread *)grab_object( current );
-    if (expire != TIMEOUT_INFINITE)
-        timer->timeout = add_timeout_user( expire, timer_callback, timer );
+    timer->timeout = add_timeout_user( expire, timer_callback, timer );
     return signaled;
 }
 

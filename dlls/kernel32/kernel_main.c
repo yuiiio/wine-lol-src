@@ -44,7 +44,6 @@ static STARTUPINFOA startup_infoA;
 /***********************************************************************
  *           set_entry_point
  */
-#ifdef __i386__
 static void set_entry_point( HMODULE module, const char *name, DWORD rva )
 {
     IMAGE_EXPORT_DIRECTORY *exports;
@@ -65,12 +64,9 @@ static void set_entry_point( HMODULE module, const char *name, DWORD rva )
             if (!(res = strcmp( ename, name )))
             {
                 WORD ordinal = ordinals[pos];
-                DWORD oldprot;
-
+                assert( ordinal < exports->NumberOfFunctions );
                 TRACE( "setting %s at %p to %08x\n", name, &functions[ordinal], rva );
-                VirtualProtect( functions + ordinal, sizeof(*functions), PAGE_READWRITE, &oldprot );
                 functions[ordinal] = rva;
-                VirtualProtect( functions + ordinal, sizeof(*functions), oldprot, NULL );
                 return;
             }
             if (res > 0) max = pos - 1;
@@ -78,7 +74,6 @@ static void set_entry_point( HMODULE module, const char *name, DWORD rva )
         }
     }
 }
-#endif
 
 
 /***********************************************************************
@@ -139,7 +134,6 @@ static BOOL process_attach( HMODULE module )
 
     copy_startup_info();
 
-#ifdef __i386__
     if (!(GetVersion() & 0x80000000))
     {
         /* Securom checks for this one when version is NT */
@@ -152,7 +146,22 @@ static BOOL process_attach( HMODULE module )
         if (LdrFindEntryForAddress( GetModuleHandleW( 0 ), &ldr ) || !(ldr->Flags & LDR_WINE_INTERNAL))
             LoadLibraryA( "krnl386.exe16" );
     }
-#endif
+
+    /* finish the process initialisation for console bits, if needed */
+    RtlAddVectoredExceptionHandler( FALSE, CONSOLE_HandleCtrlC );
+
+    if (params->ConsoleHandle == KERNEL32_CONSOLE_ALLOC)
+    {
+        HMODULE mod = GetModuleHandleA(0);
+        if (RtlImageNtHeader(mod)->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_CUI)
+            AllocConsole();
+    }
+    /* else TODO for DETACHED_PROCESS:
+     * 1/ inherit console + handles
+     * 2/ create std handles, if handles are not inherited
+     * TBD when not using wineserver handles for console handles
+     */
+
     return TRUE;
 }
 
@@ -168,6 +177,7 @@ BOOL WINAPI DllMain( HINSTANCE hinst, DWORD reason, LPVOID reserved )
         return process_attach( hinst );
     case DLL_PROCESS_DETACH:
         WritePrivateProfileSectionW( NULL, NULL, NULL );
+        CONSOLE_Exit();
         break;
     }
     return TRUE;

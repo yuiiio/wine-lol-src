@@ -29,6 +29,7 @@
 #include "controls.h"
 #include "user_private.h"
 #include "win.h"
+#include "wine/unicode.h"
 #include "wine/debug.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(graphics);
@@ -166,43 +167,52 @@ static void palette_init(void)
  */
 static const WCHAR *get_default_desktop(void)
 {
-    static WCHAR buffer[MAX_PATH + ARRAY_SIZE(L"\\Explorer")];
+    static const WCHAR defaultW[] = {'D','e','f','a','u','l','t',0};
+    static const WCHAR desktopW[] = {'D','e','s','k','t','o','p',0};
+    static const WCHAR explorerW[] = {'\\','E','x','p','l','o','r','e','r',0};
+    static const WCHAR app_defaultsW[] = {'S','o','f','t','w','a','r','e','\\',
+                                          'W','i','n','e','\\',
+                                          'A','p','p','D','e','f','a','u','l','t','s',0};
+    static WCHAR buffer[MAX_PATH + ARRAY_SIZE(explorerW)];
     WCHAR *p, *appname = buffer;
     const WCHAR *ret = NULL;
     DWORD len;
     HKEY tmpkey, appkey;
 
     len = (GetModuleFileNameW( 0, buffer, MAX_PATH ));
-    if (!len || len >= MAX_PATH) return L"Default";
-    if ((p = wcsrchr( appname, '/' ))) appname = p + 1;
-    if ((p = wcsrchr( appname, '\\' ))) appname = p + 1;
-    p = appname + lstrlenW(appname);
-    lstrcpyW( p, L"\\Explorer" );
+    if (!len || len >= MAX_PATH) return defaultW;
+    if ((p = strrchrW( appname, '/' ))) appname = p + 1;
+    if ((p = strrchrW( appname, '\\' ))) appname = p + 1;
+    p = appname + strlenW(appname);
+    strcpyW( p, explorerW );
 
     /* @@ Wine registry key: HKCU\Software\Wine\AppDefaults\app.exe\Explorer */
-    if (!RegOpenKeyW( HKEY_CURRENT_USER, L"Software\\Wine\\AppDefaults", &tmpkey ))
+    if (!RegOpenKeyW( HKEY_CURRENT_USER, app_defaultsW, &tmpkey ))
     {
         if (RegOpenKeyW( tmpkey, appname, &appkey )) appkey = 0;
         RegCloseKey( tmpkey );
         if (appkey)
         {
             len = sizeof(buffer);
-            if (!RegQueryValueExW( appkey, L"Desktop", 0, NULL, (LPBYTE)buffer, &len )) ret = buffer;
+            if (!RegQueryValueExW( appkey, desktopW, 0, NULL, (LPBYTE)buffer, &len )) ret = buffer;
             RegCloseKey( appkey );
             if (ret && *ret) return ret;
             ret = NULL;
         }
     }
 
+    memcpy( buffer, app_defaultsW, 13 * sizeof(WCHAR) );  /* copy only software\\wine */
+    strcpyW( buffer + 13, explorerW );
+
     /* @@ Wine registry key: HKCU\Software\Wine\Explorer */
-    if (!RegOpenKeyW( HKEY_CURRENT_USER, L"Software\\Wine\\Explorer", &appkey ))
+    if (!RegOpenKeyW( HKEY_CURRENT_USER, buffer, &appkey ))
     {
         len = sizeof(buffer);
-        if (!RegQueryValueExW( appkey, L"Desktop", 0, NULL, (LPBYTE)buffer, &len )) ret = buffer;
+        if (!RegQueryValueExW( appkey, desktopW, 0, NULL, (LPBYTE)buffer, &len )) ret = buffer;
         RegCloseKey( appkey );
         if (ret && *ret) return ret;
     }
-    return L"Default";
+    return defaultW;
 }
 
 
@@ -215,9 +225,13 @@ static void dpiaware_init(void)
 {
     WCHAR buffer[256];
     DWORD option;
+    static const WCHAR dpiAwareW[] = {'d','p','i','A','w','a','r','e',0};
+    static const WCHAR dpiAwarenessW[] = {'d','p','i','A','w','a','r','e','n','e','s','s',0};
+    static const WCHAR namespace2005W[] = {'h','t','t','p',':','/','/','s','c','h','e','m','a','s','.','m','i','c','r','o','s','o','f','t','.','c','o','m','/','S','M','I','/','2','0','0','5','/','W','i','n','d','o','w','s','S','e','t','t','i','n','g','s',0};
+    static const WCHAR namespace2016W[] = {'h','t','t','p',':','/','/','s','c','h','e','m','a','s','.','m','i','c','r','o','s','o','f','t','.','c','o','m','/','S','M','I','/','2','0','1','6','/','W','i','n','d','o','w','s','S','e','t','t','i','n','g','s',0};
 
     if (!LdrQueryImageFileExecutionOptions( &NtCurrentTeb()->Peb->ProcessParameters->ImagePathName,
-                                            L"dpiAwareness", REG_DWORD, &option, sizeof(option), NULL ))
+                                            dpiAwarenessW, REG_DWORD, &option, sizeof(option), NULL ))
     {
         TRACE( "got option %x\n", option );
         if (option <= 2)
@@ -227,35 +241,42 @@ static void dpiaware_init(void)
         }
     }
 
-    if (QueryActCtxSettingsW( 0, NULL, L"http://schemas.microsoft.com/SMI/2016/WindowsSettings",
-                              L"dpiAwareness", buffer, ARRAY_SIZE(buffer), NULL ))
+    if (QueryActCtxSettingsW( 0, NULL, namespace2016W, dpiAwarenessW, buffer, ARRAY_SIZE(buffer), NULL ))
     {
-        static const WCHAR * const types[] = { L"unaware", L"system", L"permonitor", L"permonitorv2" };
+        static const WCHAR unawareW[] = {'u','n','a','w','a','r','e',0};
+        static const WCHAR systemW[] = {'s','y','s','t','e','m',0};
+        static const WCHAR permonW[] = {'p','e','r','m','o','n','i','t','o','r',0};
+        static const WCHAR permonv2W[] = {'p','e','r','m','o','n','i','t','o','r','v','2',0};
+        static const WCHAR spacesW[] = {' ','\t','\r','\n',0};
+        static const WCHAR * const types[] = { unawareW, systemW, permonW, permonv2W };
         WCHAR *p, *start, *end;
         ULONG_PTR i;
 
         TRACE( "got dpiAwareness=%s\n", debugstr_w(buffer) );
         for (start = buffer; *start; start = end)
         {
-            start += wcsspn( start, L" \t\r\n" );
-            if (!(end = wcschr( start, ',' ))) end = start + lstrlenW(start);
+            start += strspnW( start, spacesW );
+            if (!(end = strchrW( start, ',' ))) end = start + strlenW(start);
             else *end++ = 0;
-            if ((p = wcspbrk( start, L" \t\r\n" ))) *p = 0;
+            if ((p = strpbrkW( start, spacesW ))) *p = 0;
             for (i = 0; i < ARRAY_SIZE(types); i++)
             {
-                if (wcsicmp( start, types[i] )) continue;
+                if (strcmpiW( start, types[i] )) continue;
                 SetProcessDpiAwarenessContext( (DPI_AWARENESS_CONTEXT)~i );
                 return;
             }
         }
     }
-    else if (QueryActCtxSettingsW( 0, NULL, L"http://schemas.microsoft.com/SMI/2005/WindowsSettings",
-                                   L"dpiAware", buffer, ARRAY_SIZE(buffer), NULL ))
+    else if (QueryActCtxSettingsW( 0, NULL, namespace2005W, dpiAwareW, buffer, ARRAY_SIZE(buffer), NULL ))
     {
+        static const WCHAR trueW[] = {'t','r','u','e',0};
+        static const WCHAR truepmW[] = {'t','r','u','e','/','p','m',0};
+        static const WCHAR permonW[] = {'p','e','r',' ','m','o','n','i','t','o','r',0};
+
         TRACE( "got dpiAware=%s\n", debugstr_w(buffer) );
-        if (!wcsicmp( buffer, L"true" ))
+        if (!strcmpiW( buffer, trueW ))
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_SYSTEM_AWARE );
-        else if (!wcsicmp( buffer, L"true/pm" ) || !wcsicmp( buffer, L"per monitor" ))
+        else if (!strcmpiW( buffer, truepmW ) || !strcmpiW( buffer, permonW ))
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE );
         else
             SetProcessDpiAwarenessContext( DPI_AWARENESS_CONTEXT_UNAWARE );
@@ -270,6 +291,8 @@ static void dpiaware_init(void)
  */
 static void winstation_init(void)
 {
+    static const WCHAR WinSta0[] = {'W','i','n','S','t','a','0',0};
+
     STARTUPINFOW info;
     WCHAR *winstation = NULL, *desktop = NULL, *buffer = NULL;
     HANDLE handle;
@@ -277,9 +300,9 @@ static void winstation_init(void)
     GetStartupInfoW( &info );
     if (info.lpDesktop && *info.lpDesktop)
     {
-        buffer = HeapAlloc( GetProcessHeap(), 0, (lstrlenW(info.lpDesktop) + 1) * sizeof(WCHAR) );
-        lstrcpyW( buffer, info.lpDesktop );
-        if ((desktop = wcschr( buffer, '\\' )))
+        buffer = HeapAlloc( GetProcessHeap(), 0, (strlenW(info.lpDesktop) + 1) * sizeof(WCHAR) );
+        strcpyW( buffer, info.lpDesktop );
+        if ((desktop = strchrW( buffer, '\\' )))
         {
             *desktop++ = 0;
             winstation = buffer;
@@ -290,12 +313,12 @@ static void winstation_init(void)
     /* set winstation if explicitly specified, or if we don't have one yet */
     if (buffer || !GetProcessWindowStation())
     {
-        handle = CreateWindowStationW( winstation ? winstation : L"WinSta0", 0, WINSTA_ALL_ACCESS, NULL );
+        handle = CreateWindowStationW( winstation ? winstation : WinSta0, 0, WINSTA_ALL_ACCESS, NULL );
         if (handle)
         {
             SetProcessWindowStation( handle );
             /* only WinSta0 is visible */
-            if (!winstation || !wcsicmp( winstation, L"WinSta0" ))
+            if (!winstation || !strcmpiW( winstation, WinSta0 ))
             {
                 USEROBJECTFLAGS flags;
                 flags.fInherit  = FALSE;
@@ -373,6 +396,7 @@ static void thread_detach(void)
  */
 BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
 {
+    static const WCHAR imm32_dllW[] = {'i','m','m','3','2','.','d','l','l',0};
     static HMODULE imm32_module;
     BOOL ret = TRUE;
 
@@ -382,7 +406,7 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
         user32_module = inst;
         ret = process_attach();
         if(ret)
-            imm32_module = LoadLibraryW(L"imm32.dll");
+            imm32_module = LoadLibraryW(imm32_dllW);
         break;
     case DLL_THREAD_DETACH:
         thread_detach();
@@ -402,23 +426,29 @@ BOOL WINAPI DllMain( HINSTANCE inst, DWORD reason, LPVOID reserved )
  */
 BOOL WINAPI ExitWindowsEx( UINT flags, DWORD reason )
 {
+    static const WCHAR winebootW[]    = { '\\','w','i','n','e','b','o','o','t','.','e','x','e',0 };
+    static const WCHAR killW[]        = { ' ','-','-','k','i','l','l',0 };
+    static const WCHAR end_sessionW[] = { ' ','-','-','e','n','d','-','s','e','s','s','i','o','n',0 };
+    static const WCHAR forceW[]       = { ' ','-','-','f','o','r','c','e',0 };
+    static const WCHAR shutdownW[]    = { ' ','-','-','s','h','u','t','d','o','w','n',0 };
+
     WCHAR app[MAX_PATH];
     WCHAR cmdline[MAX_PATH + 64];
     PROCESS_INFORMATION pi;
     STARTUPINFOW si;
     void *redir;
 
-    GetSystemDirectoryW( app, MAX_PATH - ARRAY_SIZE( L"\\wineboot.exe" ));
-    lstrcatW( app, L"\\wineboot.exe" );
-    lstrcpyW( cmdline, app );
+    GetSystemDirectoryW( app, MAX_PATH - ARRAY_SIZE( winebootW ));
+    strcatW( app, winebootW );
+    strcpyW( cmdline, app );
 
-    if (flags & EWX_FORCE) lstrcatW( cmdline, L" --kill" );
+    if (flags & EWX_FORCE) lstrcatW( cmdline, killW );
     else
     {
-        lstrcatW( cmdline, L" --end-session" );
-        if (flags & EWX_FORCEIFHUNG) lstrcatW( cmdline, L" --force" );
+        lstrcatW( cmdline, end_sessionW );
+        if (flags & EWX_FORCEIFHUNG) lstrcatW( cmdline, forceW );
     }
-    if (!(flags & EWX_REBOOT)) lstrcatW( cmdline, L" --shutdown" );
+    if (!(flags & EWX_REBOOT)) lstrcatW( cmdline, shutdownW );
 
     memset( &si, 0, sizeof si );
     si.cb = sizeof si;

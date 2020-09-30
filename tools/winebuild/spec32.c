@@ -96,13 +96,6 @@ static int has_relays( DLLSPEC *spec )
     return 0;
 }
 
-static int get_exports_count( DLLSPEC *spec )
-{
-    if (unix_lib) return 0;
-    if (spec->base > spec->limit) return 0;
-    return spec->limit - spec->base + 1;
-}
-
 static int cmp_func_args( const void *p1, const void *p2 )
 {
     const ORDDEF *odp1 = *(const ORDDEF **)p1;
@@ -339,8 +332,8 @@ static void output_relay_debug( DLLSPEC *spec )
             output( "\tstp x8, x9, [SP,#-16]!\n" );
             output( "\tmov w1, #%u\n", odp->u.func.args_str_offset << 16 );
             if (i - spec->base) output( "\tadd w1, w1, #%u\n", i - spec->base );
-            output( "\tadrp x0, %s\n", arm64_page(".L__wine_spec_relay_descr") );
-            output( "\tadd x0, x0, #%s\n", arm64_pageoff(".L__wine_spec_relay_descr") );
+            output( "\tadrp x0, .L__wine_spec_relay_descr\n");
+            output( "\tadd x0, x0, #:lo12:.L__wine_spec_relay_descr\n");
             output( "\tldr x3, [x0, #8]\n");
             output( "\tblr x3\n");
             output( "\tadd SP, SP, #16\n" );
@@ -391,7 +384,7 @@ void output_exports( DLLSPEC *spec )
     int i, fwd_size = 0;
     int needs_imports = 0;
     int needs_relay = has_relays( spec );
-    int nr_exports = get_exports_count( spec );
+    int nr_exports = spec->base <= spec->limit ? spec->limit - spec->base + 1 : 0;
     const char *func_ptr = (target_platform == PLATFORM_WINDOWS) ? ".rva" : get_asm_ptr_keyword();
     const char *name;
 
@@ -711,7 +704,7 @@ void output_module( DLLSPEC *spec )
     output( "\t.long 0\n" );              /* LoaderFlags */
     output( "\t.long 16\n" );             /* NumberOfRvaAndSizes */
 
-    if (get_exports_count( spec ))
+    if (spec->base <= spec->limit)
         data_dirs[0] = ".L__wine_spec_exports";   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT] */
     if (has_imports())
         data_dirs[1] = ".L__wine_spec_imports";   /* DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT] */
@@ -739,7 +732,6 @@ void output_spec32_file( DLLSPEC *spec )
     output_stubs( spec );
     output_exports( spec );
     output_imports( spec );
-    output_syscalls( spec );
     if (needs_get_pc_thunk) output_get_pc_thunk();
     output_resources( spec );
     output_gnu_stack_note();

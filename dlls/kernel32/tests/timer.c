@@ -26,26 +26,43 @@
 
 static void test_timer(void)
 {
+    HANDLE (WINAPI *pCreateWaitableTimerA)( SECURITY_ATTRIBUTES*, BOOL, LPSTR );
+    BOOL (WINAPI *pSetWaitableTimer)(HANDLE, LARGE_INTEGER*, LONG, PTIMERAPCROUTINE, LPVOID, BOOL);
+    HMODULE hker = GetModuleHandleA("kernel32.dll");
     HANDLE handle;
     BOOL r;
     LARGE_INTEGER due;
 
+    pCreateWaitableTimerA = (void*)GetProcAddress( hker, "CreateWaitableTimerA");
+    if( !pCreateWaitableTimerA )
+    {
+        win_skip("CreateWaitableTimerA is not available\n");
+        return;
+    }
+
+    pSetWaitableTimer = (void*)GetProcAddress( hker, "SetWaitableTimer");
+    if( !pSetWaitableTimer )
+    {
+        win_skip("SetWaitableTimer is not available\n");
+        return;
+    }
+       
     /* try once with a positive number */
-    handle = CreateWaitableTimerA( NULL, 0, NULL );
+    handle = pCreateWaitableTimerA( NULL, 0, NULL );
     ok( handle != NULL, "failed to create waitable timer with no name\n" );
 
     due.QuadPart = 10000;
-    r = SetWaitableTimer( handle, &due, 0x1f4, NULL, NULL, FALSE );
+    r = pSetWaitableTimer( handle, &due, 0x1f4, NULL, NULL, FALSE ); 
     ok( r, "failed to set timer\n");
 
     CloseHandle( handle );
 
     /* try once with a negative number */
-    handle = CreateWaitableTimerA( NULL, 0, NULL );
+    handle = pCreateWaitableTimerA( NULL, 0, NULL );
     ok( handle != NULL, "failed to create waitable timer with no name\n" );
 
     due.QuadPart = -10000;
-    r = SetWaitableTimer( handle, &due, 0x1f4, NULL, NULL, FALSE );
+    r = pSetWaitableTimer( handle, &due, 0x1f4, NULL, NULL, FALSE ); 
     ok( r, "failed to set timer\n");
 
     CloseHandle( handle );

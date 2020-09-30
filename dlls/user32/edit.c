@@ -28,6 +28,8 @@
  *
  */
 
+#include "config.h"
+
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
@@ -38,6 +40,7 @@
 #include "win.h"
 #include "imm.h"
 #include "usp10.h"
+#include "wine/unicode.h"
 #include "controls.h"
 #include "user_private.h"
 #include "wine/debug.h"
@@ -168,7 +171,7 @@ static LRESULT EDIT_EM_PosFromChar(EDITSTATE *es, INT index, BOOL after_wrap);
  */
 static inline BOOL EDIT_EM_CanUndo(const EDITSTATE *es)
 {
-	return (es->undo_insert_count || lstrlenW(es->undo_text));
+	return (es->undo_insert_count || strlenW(es->undo_text));
 }
 
 
@@ -240,7 +243,7 @@ static HBRUSH EDIT_NotifyCtlColor(EDITSTATE *es, HDC hdc)
 static inline UINT get_text_length(EDITSTATE *es)
 {
     if(es->text_length == (UINT)-1)
-        es->text_length = lstrlenW(es->text);
+        es->text_length = strlenW(es->text);
     return es->text_length;
 }
 
@@ -573,7 +576,7 @@ static void EDIT_BuildLineDefs_ML(EDITSTATE *es, INT istart, INT iend, INT delta
 		/* Mark type of line termination */
 		if (!(*cp)) {
 			current_line->ending = END_0;
-			current_line->net_length = lstrlenW(current_position);
+			current_line->net_length = strlenW(current_position);
 		} else if ((cp > current_position) && (*(cp - 1) == '\r')) {
 			current_line->ending = END_SOFT;
 			current_line->net_length = cp - current_position - 1;
@@ -2596,7 +2599,7 @@ static void EDIT_EM_ReplaceSel(EDITSTATE *es, BOOL can_undo, const WCHAR *lpsz_r
 		memcpy(buf, es->text + s, bufl * sizeof(WCHAR));
 		buf[bufl] = 0; /* ensure 0 termination */
 		/* now delete */
-		lstrcpyW(es->text + s, es->text + e);
+		strcpyW(es->text + s, es->text + e);
                 text_buffer_changed(es);
 	}
 	if (strl) {
@@ -2624,7 +2627,7 @@ static void EDIT_EM_ReplaceSel(EDITSTATE *es, BOOL can_undo, const WCHAR *lpsz_r
 		/* if text is too long undo all changes */
 		if (honor_limit && !(es->style & ES_AUTOVSCROLL) && (es->line_count > vlc)) {
 			if (strl)
-				lstrcpyW(es->text + e, es->text + e + strl);
+				strcpyW(es->text + e, es->text + e + strl);
 			if (e != s)
 				for (i = 0 , p = es->text ; i < e - s ; i++)
 					p[i + s] = buf[i];
@@ -2644,7 +2647,7 @@ static void EDIT_EM_ReplaceSel(EDITSTATE *es, BOOL can_undo, const WCHAR *lpsz_r
 		/* remove chars that don't fit */
 		if (honor_limit && !(es->style & ES_AUTOHSCROLL) && (es->text_width > fw)) {
 			while ((es->text_width > fw) && s + strl >= s) {
-				lstrcpyW(es->text + s + strl - 1, es->text + s + strl);
+				strcpyW(es->text + s + strl - 1, es->text + s + strl);
 				strl--;
 				es->text_length = -1;
 				EDIT_InvalidateUniscribeData(es);
@@ -2657,7 +2660,7 @@ static void EDIT_EM_ReplaceSel(EDITSTATE *es, BOOL can_undo, const WCHAR *lpsz_r
 	
 	if (e != s) {
 		if (can_undo) {
-			utl = lstrlenW(es->undo_text);
+			utl = strlenW(es->undo_text);
 			if (!es->undo_insert_count && (*es->undo_text && (s == es->undo_position))) {
 				/* undo-buffer is extended to the right */
 				EDIT_MakeUndoFit(es, utl + e - s);
@@ -3038,11 +3041,11 @@ static BOOL EDIT_EM_Undo(EDITSTATE *es)
 	if( es->style & ES_READONLY )
             return !(es->style & ES_MULTILINE);
 
-	ulength = lstrlenW(es->undo_text);
+	ulength = strlenW(es->undo_text);
 
 	utext = HeapAlloc(GetProcessHeap(), 0, (ulength + 1) * sizeof(WCHAR));
 
-	lstrcpyW(utext, es->undo_text);
+	strcpyW(utext, es->undo_text);
 
 	TRACE("before UNDO:insertion length = %d, deletion buffer = %s\n",
 		     es->undo_insert_count, debugstr_w(utext));
@@ -3093,9 +3096,9 @@ static void EDIT_WM_Paste(EDITSTATE *es)
 	OpenClipboard(es->hwndSelf);
 	if ((hsrc = GetClipboardData(CF_UNICODETEXT))) {
 		src = GlobalLock(hsrc);
-                len = lstrlenW(src);
+                len = strlenW(src);
 		/* Protect single-line edit against pasting new line character */
-		if (!(es->style & ES_MULTILINE) && ((ptr = wcschr(src, '\n')))) {
+		if (!(es->style & ES_MULTILINE) && ((ptr = strchrW(src, '\n')))) {
 			len = ptr - src;
 			if (len && src[len - 1] == '\r')
 				--len;
@@ -3193,16 +3196,18 @@ static LRESULT EDIT_WM_Char(EDITSTATE *es, WCHAR c)
 				EDIT_MoveHome(es, FALSE, FALSE);
 				EDIT_MoveDown_ML(es, FALSE);
 			} else {
-				EDIT_EM_ReplaceSel(es, TRUE, L"\r\n", 2, TRUE, TRUE);
+				static const WCHAR cr_lfW[] = {'\r','\n'};
+				EDIT_EM_ReplaceSel(es, TRUE, cr_lfW, 2, TRUE, TRUE);
 			}
 		}
 		break;
 	case '\t':
 		if ((es->style & ES_MULTILINE) && !(es->style & ES_READONLY))
 		{
+			static const WCHAR tabW[] = {'\t'};
                         if (EDIT_IsInsideDialog(es))
                             break;
-			EDIT_EM_ReplaceSel(es, TRUE, L"\t", 1, TRUE, TRUE);
+			EDIT_EM_ReplaceSel(es, TRUE, tabW, 1, TRUE, TRUE);
 		}
 		break;
 	case VK_BACK:
@@ -3353,7 +3358,7 @@ static INT EDIT_WM_GetText(const EDITSTATE *es, INT count, LPWSTR dst, BOOL unic
     if(unicode)
     {
 	lstrcpynW(dst, es->text, count);
-	return lstrlenW(dst);
+	return strlenW(dst);
     }
     else
     {
@@ -3925,7 +3930,7 @@ static void EDIT_WM_SetText(EDITSTATE *es, LPCWSTR text, BOOL unicode)
     if (text) 
     {
 	TRACE("%s\n", debugstr_w(text));
-	EDIT_EM_ReplaceSel(es, FALSE, text, lstrlenW(text), FALSE, FALSE);
+	EDIT_EM_ReplaceSel(es, FALSE, text, strlenW(text), FALSE, FALSE);
 	if(!unicode)
 	    HeapFree(GetProcessHeap(), 0, textW);
     } 
@@ -4606,7 +4611,7 @@ static LRESULT EDIT_WM_Create(EDITSTATE *es, LPCWSTR name)
         EDIT_SetRectNP(es, &clientRect);
 
        if (name && *name) {
-	   EDIT_EM_ReplaceSel(es, FALSE, name, lstrlenW(name), FALSE, FALSE);
+	   EDIT_EM_ReplaceSel(es, FALSE, name, strlenW(name), FALSE, FALSE);
 	   /* if we insert text to the editline, the text scrolls out
             * of the window, as the caret is placed after the insert
             * pos normally; thus we reset es->selection... to 0 and
@@ -4790,7 +4795,7 @@ LRESULT EditWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, B
                     MultiByteToWideChar(CP_ACP, 0, textA, -1, textW, countW);
 		}
 
-		EDIT_EM_ReplaceSel(es, (BOOL)wParam, textW, lstrlenW(textW), TRUE, TRUE);
+		EDIT_EM_ReplaceSel(es, (BOOL)wParam, textW, strlenW(textW), TRUE, TRUE);
 		result = 1;
 
 		if(!unicode)
@@ -5248,9 +5253,10 @@ LRESULT EditWndProc_common( HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, B
 /*********************************************************************
  * edit class descriptor
  */
+static const WCHAR editW[] = {'E','d','i','t',0};
 const struct builtin_class_descr EDIT_builtin_class =
 {
-    L"Edit",              /* name */
+    editW,                /* name */
     CS_DBLCLKS | CS_PARENTDC,   /* style */
     WINPROC_EDIT,         /* proc */
 #ifdef __i386__

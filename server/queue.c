@@ -177,7 +177,6 @@ static const struct object_ops msg_queue_ops =
     no_map_access,             /* map_access */
     default_get_sd,            /* get_sd */
     default_set_sd,            /* set_sd */
-    no_get_full_name,          /* get_full_name */
     no_lookup_name,            /* lookup_name */
     no_link_name,              /* link_name */
     NULL,                      /* unlink_name */
@@ -214,7 +213,6 @@ static const struct object_ops thread_input_ops =
     no_map_access,                /* map_access */
     default_get_sd,               /* get_sd */
     default_set_sd,               /* set_sd */
-    no_get_full_name,             /* get_full_name */
     no_lookup_name,               /* lookup_name */
     no_link_name,                 /* link_name */
     NULL,                         /* unlink_name */
@@ -1386,11 +1384,11 @@ static void update_desktop_mouse_state( struct desktop *desktop, unsigned int fl
 }
 
 /* release the hardware message currently being processed by the given thread */
-static void release_hardware_message( struct msg_queue *queue, unsigned int hw_id )
+static void release_hardware_message( struct msg_queue *queue, unsigned int hw_id,
+                                      int remove )
 {
     struct thread_input *input = queue->input;
-    struct message *msg, *other;
-    int clr_bit;
+    struct message *msg;
 
     LIST_FOR_EACH_ENTRY( msg, &input->msg_list, struct message, entry )
     {
@@ -1399,20 +1397,26 @@ static void release_hardware_message( struct msg_queue *queue, unsigned int hw_i
     if (&msg->entry == &input->msg_list) return;  /* not found */
 
     /* clear the queue bit for that message */
-    clr_bit = get_hardware_msg_bit( msg );
-    LIST_FOR_EACH_ENTRY( other, &input->msg_list, struct message, entry )
+    if (remove)
     {
-        if (other != msg && get_hardware_msg_bit( other ) == clr_bit)
-        {
-            clr_bit = 0;
-            break;
-        }
-    }
-    if (clr_bit) clear_queue_bits( queue, clr_bit );
+        struct message *other;
+        int clr_bit;
 
-    update_input_key_state( input->desktop, input->keystate, msg->msg, msg->wparam );
-    list_remove( &msg->entry );
-    free_message( msg );
+        clr_bit = get_hardware_msg_bit( msg );
+        LIST_FOR_EACH_ENTRY( other, &input->msg_list, struct message, entry )
+        {
+            if (other != msg && get_hardware_msg_bit( other ) == clr_bit)
+            {
+                clr_bit = 0;
+                break;
+            }
+        }
+        if (clr_bit) clear_queue_bits( queue, clr_bit );
+
+        update_input_key_state( input->desktop, input->keystate, msg->msg, msg->wparam );
+        list_remove( &msg->entry );
+        free_message( msg );
+    }
 }
 
 static int queue_hotkey_message( struct desktop *desktop, struct message *msg )
@@ -2076,7 +2080,7 @@ static int get_hardware_message( struct thread *thread, unsigned int hw_id, user
         data->hw_id = msg->unique_id;
         set_reply_data( msg->data, msg->data_size );
         if (msg->msg == WM_INPUT && (flags & PM_REMOVE))
-            release_hardware_message( current->queue, data->hw_id );
+            release_hardware_message( current->queue, data->hw_id, 1 );
         return 1;
     }
     /* nothing found, clear the hardware queue bits */
@@ -2602,7 +2606,7 @@ DECL_HANDLER(reply_message)
 DECL_HANDLER(accept_hardware_message)
 {
     if (current->queue)
-        release_hardware_message( current->queue, req->hw_id );
+        release_hardware_message( current->queue, req->hw_id, req->remove );
     else
         set_error( STATUS_ACCESS_DENIED );
 }
@@ -3222,46 +3226,6 @@ DECL_HANDLER(set_cursor)
     reply->last_change = input->desktop->cursor.last_change;
 }
 
-DECL_HANDLER(get_rawinput_buffer)
-{
-    struct thread_input *input = current->queue->input;
-    data_size_t size = 0, next_size = 0;
-    struct list *ptr;
-    char *buf, *cur;
-    int count = 0;
-
-    if (!req->buffer_size) buf = NULL;
-    else if (!(buf = mem_alloc( get_reply_max_size() )))
-        return;
-
-    cur = buf;
-    ptr = list_head( &input->msg_list );
-    while (ptr)
-    {
-        struct message *msg = LIST_ENTRY( ptr, struct message, entry );
-        struct hardware_msg_data *data = msg->data;
-
-        ptr = list_next( &input->msg_list, ptr );
-        if (msg->msg != WM_INPUT) continue;
-
-        next_size = req->rawinput_size;
-        if (size + next_size > req->buffer_size) break;
-        if (cur + sizeof(*data) > buf + get_reply_max_size()) break;
-
-        memcpy(cur, data, sizeof(*data));
-        list_remove( &msg->entry );
-        free_message( msg );
-
-        size += next_size;
-        cur += sizeof(*data);
-        count++;
-    }
-
-    reply->next_size = next_size;
-    reply->count = count;
-    set_reply_data_ptr( buf, cur - buf );
-}
-
 DECL_HANDLER(update_rawinput_devices)
 {
     const struct rawinput_device *devices = get_req_data();
@@ -3278,25 +3242,4 @@ DECL_HANDLER(update_rawinput_devices)
     current->process->rawinput_mouse = e ? &e->device : NULL;
     e = find_rawinput_device( 1, 6 );
     current->process->rawinput_kbd   = e ? &e->device : NULL;
-}
-
-DECL_HANDLER(get_rawinput_devices)
-{
-    struct rawinput_device_entry *e;
-    struct rawinput_device *devices;
-    unsigned int i = 0, device_count = list_count( &current->process->rawinput_devices );
-    unsigned int size = device_count * sizeof(*devices);
-
-    reply->device_count = device_count;
-
-    /* no buffer provided, nothing else to do */
-    if (!get_reply_max_size()) return;
-
-    if (size > get_reply_max_size())
-        set_error( STATUS_BUFFER_TOO_SMALL );
-    else if ((devices = set_reply_data_size( size )))
-    {
-        LIST_FOR_EACH_ENTRY( e, &current->process->rawinput_devices, struct rawinput_device_entry, entry )
-            devices[i++] = e->device;
-    }
 }

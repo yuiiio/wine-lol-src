@@ -29,7 +29,31 @@
 #ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
 #endif
+#ifdef HAVE_SYS_SYSCALL_H
+# include <sys/syscall.h>
+#endif
 #include <unistd.h>
+
+#if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
+
+/* __NR_memfd_create might not yet be available when buildservers use an old kernel */
+#ifndef __NR_memfd_create
+#ifdef __x86_64__
+#define __NR_memfd_create 319
+#else
+#define __NR_memfd_create 356
+#endif
+#endif
+
+/* the following declarations are only available in linux/fcntl.h, but not fcntl.h */
+#define F_LINUX_SPECIFIC_BASE   1024
+#define F_ADD_SEALS             (F_LINUX_SPECIFIC_BASE + 9)
+#define MFD_ALLOW_SEALING       0x0002U
+#define F_SEAL_SEAL             0x0001
+#define F_SEAL_SHRINK           0x0002
+#define F_SEAL_GROW             0x0004
+
+#endif
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -68,6 +92,7 @@ static const struct object_ops ranges_ops =
     no_add_queue,              /* add_queue */
     NULL,                      /* remove_queue */
     NULL,                      /* signaled */
+    NULL,                      /* get_esync_fd */
     NULL,                      /* satisfied */
     no_signal,                 /* signal */
     no_get_fd,                 /* get_fd */
@@ -103,6 +128,7 @@ static const struct object_ops shared_map_ops =
     no_add_queue,              /* add_queue */
     NULL,                      /* remove_queue */
     NULL,                      /* signaled */
+    NULL,                      /* get_esync_fd */
     NULL,                      /* satisfied */
     no_signal,                 /* signal */
     no_get_fd,                 /* get_fd */
@@ -160,6 +186,7 @@ static const struct object_ops mapping_ops =
     no_add_queue,                /* add_queue */
     NULL,                        /* remove_queue */
     NULL,                        /* signaled */
+    NULL,                        /* get_esync_fd */
     NULL,                        /* satisfied */
     no_signal,                   /* signal */
     mapping_get_fd,              /* get_fd */
@@ -191,6 +218,10 @@ static const struct fd_ops mapping_fd_ops =
 };
 
 static size_t page_mask;
+
+/* global shared memory */
+shmglobal_t *shmglobal;
+int          shmglobal_fd;
 
 #define ROUND_SIZE(size)  (((size) + page_mask) & ~page_mask)
 
@@ -261,6 +292,52 @@ static int check_current_dir_for_exec(void)
     close( fd );
     unlink( tmpfn );
     return (ret != MAP_FAILED);
+}
+
+/* allocates a block of shared memory */
+int allocate_shared_memory( int *fd, void **memory, size_t size )
+{
+#if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
+    void *shm_mem;
+    int shm_fd;
+
+    shm_fd = syscall( __NR_memfd_create, "wineserver_shm", MFD_ALLOW_SEALING );
+    if (shm_fd == -1) goto err;
+    if (grow_file( shm_fd, size ))
+    {
+        if (fcntl( shm_fd, F_ADD_SEALS, F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW ) >= 0)
+        {
+            shm_mem = mmap( 0, size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0 );
+            if (shm_mem != MAP_FAILED)
+            {
+                memset( shm_mem, 0, size );
+                *fd     = shm_fd;
+                *memory = shm_mem;
+                return 1;
+            }
+        }
+    }
+    close( shm_fd );
+err:
+#endif
+    *memory = NULL;
+    *fd = -1;
+    return 0;
+}
+
+/* releases a block of shared memory */
+void release_shared_memory( int fd, void *memory, size_t size )
+{
+#if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
+    if (memory) munmap( memory, size );
+    if (fd != -1) close( fd );
+#endif
+}
+
+/* intialize shared memory management */
+void init_shared_memory( void )
+{
+    allocate_shared_memory( &shmglobal_fd, (void **)&shmglobal, sizeof(*shmglobal) );
 }
 
 /* create a temp file for anonymous mappings */
@@ -915,8 +992,7 @@ static void mapping_dump( struct object *obj, int verbose )
 
 static struct object_type *mapping_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'S','e','c','t','i','o','n'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_Section, sizeof(type_Section) };
     return get_object_type( &str );
 }
 
@@ -963,7 +1039,11 @@ void init_kusd_mapping( struct mapping *mapping )
     grab_object( mapping );
     make_object_static( &mapping->obj );
     ptr = mmap( NULL, mapping->size, PROT_WRITE, MAP_SHARED, get_unix_fd( mapping->fd ), 0 );
-    if (ptr != MAP_FAILED) user_shared_data = ptr;
+    if (ptr != MAP_FAILED)
+    {
+        user_shared_data = ptr;
+        user_shared_data->SystemCallPad[0] = 1;
+    }
 }
 
 /* create a file mapping */
@@ -1086,6 +1166,35 @@ DECL_HANDLER(unmap_view)
     struct memory_view *view = find_mapped_view( current->process, req->base );
 
     if (view) free_memory_view( view );
+}
+
+/* get file handle from mapping by address */
+DECL_HANDLER(get_mapping_file)
+{
+    struct memory_view *view;
+    struct process *process;
+    struct file *file;
+
+    if (!(process = get_process_from_handle( req->process, 0 ))) return;
+
+    LIST_FOR_EACH_ENTRY( view, &process->views, struct memory_view, entry )
+        if (req->addr >= view->base && req->addr < view->base + view->size) break;
+
+    if (&view->entry == &process->views)
+    {
+        set_error( STATUS_NOT_MAPPED_VIEW );
+        release_object( process );
+        return;
+    }
+
+    if (view->fd && (file = create_file_for_fd_obj( view->fd, GENERIC_READ,
+                                                    FILE_SHARE_READ | FILE_SHARE_WRITE )))
+    {
+        reply->handle = alloc_handle( process, file, GENERIC_READ, 0 );
+        release_object( file );
+    }
+
+    release_object( process );
 }
 
 /* get a range of committed pages in a file mapping */

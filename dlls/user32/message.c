@@ -2410,7 +2410,7 @@ static BOOL process_mouse_message( MSG *msg, UINT hw_id, ULONG_PTR extra_info, H
     {
         HWND orig = msg->hwnd;
 
-        msg->hwnd = WINPOS_WindowFromPoint( msg->hwnd, msg->pt, &hittest );
+        msg->hwnd = WINPOS_WindowFromPoint( 0, msg->pt, &hittest );
         if (!msg->hwnd) /* As a heuristic, try the next window if it's the owner of orig */
         {
             HWND next = GetWindow( orig, GW_HWNDNEXT );
@@ -2658,6 +2658,18 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
     unsigned int hw_id = 0;  /* id of previous hardware message */
     void *buffer;
     size_t buffer_size = 256;
+    shmlocal_t *shm = wine_get_shmlocal();
+
+    /* From time to time we are forced to do a wineserver call in
+     * order to update last_msg_time stored for each server thread. */
+    if (shm && GetTickCount() - thread_info->last_get_msg < 500)
+    {
+        int filter = flags >> 16;
+        if (!filter) filter = QS_ALLINPUT;
+        filter |= QS_SENDMESSAGE;
+        if (filter & QS_INPUT) filter |= QS_INPUT;
+        if (!(shm->queue_bits & filter)) return FALSE;
+    }
 
     if (!(buffer = HeapAlloc( GetProcessHeap(), 0, buffer_size ))) return -1;
 
@@ -2671,6 +2683,8 @@ static int peek_message( MSG *msg, HWND hwnd, UINT first, UINT last, UINT flags,
         const message_data_t *msg_data = buffer;
 
         thread_info->msg_source = prev_source;
+
+        if (shm) thread_info->last_get_msg = GetTickCount();
 
         SERVER_START_REQ( get_message )
         {
@@ -3245,10 +3259,10 @@ NTSTATUS send_hardware_message( HWND hwnd, const INPUT *input, UINT flags )
     {
         req->win        = wine_server_user_handle( hwnd );
         req->flags      = flags;
-        req->input.type = input->type;
         switch (input->type)
         {
         case INPUT_MOUSE:
+            req->input.type        = HW_INPUT_MOUSE;
             req->input.mouse.x     = input->u.mi.dx;
             req->input.mouse.y     = input->u.mi.dy;
             req->input.mouse.data  = input->u.mi.mouseData;
@@ -3257,6 +3271,7 @@ NTSTATUS send_hardware_message( HWND hwnd, const INPUT *input, UINT flags )
             req->input.mouse.info  = input->u.mi.dwExtraInfo;
             break;
         case INPUT_KEYBOARD:
+            req->input.type      = HW_INPUT_KEYBOARD;
             req->input.kbd.vkey  = input->u.ki.wVk;
             req->input.kbd.scan  = input->u.ki.wScan;
             req->input.kbd.flags = input->u.ki.dwFlags;
@@ -3264,6 +3279,7 @@ NTSTATUS send_hardware_message( HWND hwnd, const INPUT *input, UINT flags )
             req->input.kbd.info  = input->u.ki.dwExtraInfo;
             break;
         case INPUT_HARDWARE:
+            req->input.type      = HW_INPUT_HARDWARE;
             req->input.hw.msg    = input->u.hi.uMsg;
             req->input.hw.lparam = MAKELONG( input->u.hi.wParamL, input->u.hi.wParamH );
             break;
@@ -4443,7 +4459,7 @@ UINT_PTR WINAPI SetSystemTimer( HWND hwnd, UINT_PTR id, UINT timeout, TIMERPROC 
 
     if (proc) winproc = WINPROC_AllocProc( (WNDPROC)proc, FALSE );
 
-    timeout = min( max( USER_TIMER_MINIMUM, timeout ), USER_TIMER_MAXIMUM );
+    timeout = min( max( 5, timeout ), USER_TIMER_MAXIMUM );
 
     SERVER_START_REQ( set_win_timer )
     {

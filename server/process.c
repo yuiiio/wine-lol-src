@@ -48,6 +48,7 @@
 #include "request.h"
 #include "user.h"
 #include "security.h"
+#include "esync.h"
 
 /* process structure */
 
@@ -67,6 +68,7 @@ static struct security_descriptor *process_get_sd( struct object *obj );
 static void process_poll_event( struct fd *fd, int event );
 static struct list *process_get_kernel_obj_list( struct object *obj );
 static void process_destroy( struct object *obj );
+static int process_get_esync_fd( struct object *obj, enum esync_type *type );
 static void terminate_process( struct process *process, struct thread *skip, int exit_code );
 
 static const struct object_ops process_ops =
@@ -77,6 +79,7 @@ static const struct object_ops process_ops =
     add_queue,                   /* add_queue */
     remove_queue,                /* remove_queue */
     process_signaled,            /* signaled */
+    process_get_esync_fd,        /* get_esync_fd */
     no_satisfied,                /* satisfied */
     no_signal,                   /* signal */
     no_get_fd,                   /* get_fd */
@@ -127,6 +130,7 @@ static const struct object_ops startup_info_ops =
     add_queue,                     /* add_queue */
     remove_queue,                  /* remove_queue */
     startup_info_signaled,         /* signaled */
+    NULL,                          /* get_esync_fd */
     no_satisfied,                  /* satisfied */
     no_signal,                     /* signal */
     no_get_fd,                     /* get_fd */
@@ -171,6 +175,7 @@ static const struct object_ops job_ops =
     add_queue,                     /* add_queue */
     remove_queue,                  /* remove_queue */
     job_signaled,                  /* signaled */
+    NULL,                          /* get_esync_fd */
     no_satisfied,                  /* satisfied */
     no_signal,                     /* signal */
     no_get_fd,                     /* get_fd */
@@ -215,8 +220,7 @@ static struct job *get_job_obj( struct process *process, obj_handle_t handle, un
 
 static struct object_type *job_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'J','o','b'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_Job, sizeof(type_Job) };
     return get_object_type( &str );
 };
 
@@ -496,7 +500,7 @@ static void start_sigkill_timer( struct process *process )
 /* create a new process */
 /* if the function fails the fd is closed */
 struct process *create_process( int fd, struct process *parent, int inherit_all,
-                                const struct security_descriptor *sd )
+                                const struct security_descriptor *sd, struct token *token )
 {
     struct process *process;
 
@@ -534,6 +538,7 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
     process->trace_data      = 0;
     process->rawinput_mouse  = NULL;
     process->rawinput_kbd    = NULL;
+    process->esync_fd        = -1;
     list_init( &process->kernel_object );
     list_init( &process->thread_list );
     list_init( &process->locks );
@@ -573,16 +578,13 @@ struct process *create_process( int fd, struct process *parent, int inherit_all,
                                        : alloc_handle_table( process, 0 );
         /* Note: for security reasons, starting a new process does not attempt
          * to use the current impersonation token for the new process */
-        process->token = token_duplicate( parent->token, TRUE, 0, NULL );
+        process->token = token_duplicate( token ? token : parent->token, TRUE, 0, NULL, NULL, 0, NULL, 0, NULL );
         process->affinity = parent->affinity;
     }
     if (!process->handles || !process->token) goto error;
 
-    /* Assign a high security label to the token. The default would be medium
-     * but Wine provides admin access to all applications right now so high
-     * makes more sense for the time being. */
-    if (!token_assign_label( process->token, security_high_label_sid ))
-        goto error;
+    if (do_esync())
+        process->esync_fd = esync_create_fd( 0, 0 );
 
     set_fd_events( process->msg_fd, POLLIN );  /* start listening to events */
     return process;
@@ -632,6 +634,9 @@ static void process_destroy( struct object *obj )
     if (process->id) free_ptid( process->id );
     if (process->token) release_object( process->token );
     free( process->dir_cache );
+
+    if (do_esync())
+        close( process->esync_fd );
 }
 
 /* dump a process on stdout for debugging purposes */
@@ -645,8 +650,7 @@ static void process_dump( struct object *obj, int verbose )
 
 static struct object_type *process_get_type( struct object *obj )
 {
-    static const WCHAR name[] = {'P','r','o','c','e','s','s'};
-    static const struct unicode_str str = { name, sizeof(name) };
+    static const struct unicode_str str = { type_Process, sizeof(type_Process) };
     return get_object_type( &str );
 }
 
@@ -654,6 +658,13 @@ static int process_signaled( struct object *obj, struct wait_queue_entry *entry 
 {
     struct process *process = (struct process *)obj;
     return !process->running_threads;
+}
+
+static int process_get_esync_fd( struct object *obj, enum esync_type *type )
+{
+    struct process *process = (struct process *)obj;
+    *type = ESYNC_MANUAL_SERVER;
+    return process->esync_fd;
 }
 
 static unsigned int process_map_access( struct object *obj, unsigned int access )
@@ -1112,6 +1123,14 @@ struct process_snapshot *process_snap( int *count )
     return snapshot;
 }
 
+/* replace the token of a process */
+void replace_process_token( struct process *process, struct token *new_token )
+{
+    release_object(current->process->token);
+    current->process->token = new_token;
+    grab_object(new_token);
+}
+
 /* create a new process */
 DECL_HANDLER(new_process)
 {
@@ -1121,6 +1140,7 @@ DECL_HANDLER(new_process)
     const struct security_descriptor *sd;
     const struct object_attributes *objattr = get_req_object_attributes( &sd, &name, NULL );
     struct process *process = NULL;
+    struct token *token = NULL;
     struct process *parent;
     struct thread *parent_thread = current;
     int socket_fd = thread_get_inflight_fd( current, req->socket_fd );
@@ -1174,10 +1194,39 @@ DECL_HANDLER(new_process)
         return;
     }
 
+    if (req->token)
+    {
+        token = get_token_from_handle( req->token, TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ASSIGN_PRIMARY );
+        if (!token)
+        {
+            close( socket_fd );
+            return;
+        }
+        if (!token_is_primary( token ))
+        {
+            set_error( STATUS_BAD_TOKEN_TYPE );
+            release_object( token );
+            close( socket_fd );
+            return;
+        }
+    }
+
+    if (!req->info_size)  /* create an orphaned process */
+    {
+        if ((process = create_process( socket_fd, NULL, 0, sd, token )))
+        {
+            create_thread( -1, process, NULL );
+            release_object( process );
+        }
+        if (token) release_object( token );
+        return;
+    }
+
     /* build the startup info for a new process */
     if (!(info = alloc_object( &startup_info_ops )))
     {
         close( socket_fd );
+        if (token) release_object( token );
         release_object( parent );
         return;
     }
@@ -1225,7 +1274,7 @@ DECL_HANDLER(new_process)
 #undef FIXUP_LEN
     }
 
-    if (!(process = create_process( socket_fd, parent, req->inherit_all, sd ))) goto done;
+    if (!(process = create_process( socket_fd, parent, req->inherit_all, sd, token ))) goto done;
 
     process->startup_info = (struct startup_info *)grab_object( info );
 
@@ -1286,6 +1335,7 @@ DECL_HANDLER(new_process)
     reply->handle = alloc_handle_no_access_check( current->process, process, req->access, objattr->attributes );
 
  done:
+    if (token) release_object( token );
     if (process) release_object( process );
     release_object( parent );
     release_object( info );
@@ -1319,7 +1369,7 @@ DECL_HANDLER(exec_process)
         close( socket_fd );
         return;
     }
-    if (!(process = create_process( socket_fd, NULL, 0, NULL ))) return;
+    if (!(process = create_process( socket_fd, NULL, 0, NULL, NULL ))) return;
     create_thread( -1, process, NULL );
     release_object( process );
 }
@@ -1810,5 +1860,23 @@ DECL_HANDLER(resume_process)
         }
 
         release_object( process );
+    }
+}
+
+/* Retrieve process, thread and handle count */
+DECL_HANDLER(get_system_info)
+{
+    struct process *process;
+
+    reply->processes = 0;
+    reply->threads = 0;
+    reply->handles = 0;
+
+    LIST_FOR_EACH_ENTRY( process, &process_list, struct process, entry )
+    {
+        if (!process->running_threads) continue;
+        reply->processes++;
+        reply->threads += process->running_threads;
+        reply->handles += get_handle_table_count( process );
     }
 }

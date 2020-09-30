@@ -96,6 +96,7 @@ static const struct object_ops master_socket_ops =
     no_add_queue,                  /* add_queue */
     NULL,                          /* remove_queue */
     NULL,                          /* signaled */
+    NULL,                          /* get_esync_fd */
     NULL,                          /* satisfied */
     no_signal,                     /* signal */
     no_get_fd,                     /* get_fd */
@@ -582,7 +583,7 @@ static void master_socket_poll_event( struct fd *fd, int event )
         int client = accept( get_unix_fd( master_socket->fd ), (struct sockaddr *) &dummy, &len );
         if (client == -1) return;
         fcntl( client, F_SETFL, O_NONBLOCK );
-        if ((process = create_process( client, NULL, 0, NULL )))
+        if ((process = create_process( client, NULL, 0, NULL, NULL )))
         {
             create_thread( -1, process, NULL );
             release_object( process );

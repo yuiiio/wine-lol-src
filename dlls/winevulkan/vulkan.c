@@ -1285,7 +1285,7 @@ VkResult WINAPI wine_vkGetPhysicalDeviceImageFormatProperties2KHR(VkPhysicalDevi
 static inline VkTimeDomainEXT get_performance_counter_time_domain(void)
 {
 #if !defined(__APPLE__) && defined(HAVE_CLOCK_GETTIME)
-# ifdef CLOCK_MONOTONIC_RAW
+# if 0
     return VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT;
 # else
     return VK_TIME_DOMAIN_CLOCK_MONOTONIC_EXT;

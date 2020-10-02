@@ -78,6 +78,17 @@ void X11DRV_Settings_SetHandler(const struct x11drv_settings_handler *new_handle
     }
 }
 
+BOOL restore_display_mode(void)
+{
+    static int is_int = -1;
+    if(is_int < 0)
+    {
+        const char *e = getenv("WINE_RESTORE_DISPLAY_MODE");
+        is_int = e && strcmp(e, "0");
+    }
+    return is_int;
+}
+
 /***********************************************************************
  * Default handlers if resolution switching is not enabled
  *

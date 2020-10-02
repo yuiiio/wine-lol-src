@@ -1331,6 +1331,9 @@ static void xrandr14_free_modes( DEVMODEW *modes )
     heap_free( modes );
 }
 
+int default_width, default_height = 0;
+BOOL init_first = 0;
+
 static BOOL xrandr14_get_current_mode( ULONG_PTR id, DEVMODEW *mode )
 {
     XRRScreenResources *screen_resources;
@@ -1400,6 +1403,13 @@ static BOOL xrandr14_get_current_mode( ULONG_PTR id, DEVMODEW *mode )
     mode->u1.s2.dmPosition.x = crtc_info->x - primary.left;
     mode->u1.s2.dmPosition.y = crtc_info->y - primary.top;
     ret = TRUE;
+    if(init_first == 0){
+        TRACE( "atbjyk: set default mode. w: %i, h: %i\n", mode->dmPelsWidth, mode->dmPelsHeight);
+        default_width = mode->dmPelsWidth;
+        default_height = mode->dmPelsHeight;
+        init_first = 1;
+    }
+
 done:
     if (crtc_info)
         pXRRFreeCrtcInfo( crtc_info );
@@ -1408,6 +1418,14 @@ done:
     if (screen_resources)
         pXRRFreeScreenResources( screen_resources );
     return ret;
+}
+
+void get_default_mode(int width, int height)
+{
+    width = default_width;
+    height = default_height;
+    TRACE( "atbjyk: get default mode. w: %i, h: %i\n", default_width, default_height);
+
 }
 
 static LONG xrandr14_set_current_mode( ULONG_PTR id, DEVMODEW *mode )

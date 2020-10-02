@@ -610,6 +610,9 @@ extern void update_systray_balloon_position(void) DECLSPEC_HIDDEN;
 extern HWND create_foreign_window( Display *display, Window window ) DECLSPEC_HIDDEN;
 extern BOOL update_clipboard( HWND hwnd ) DECLSPEC_HIDDEN;
 
+extern BOOL restore_display_mode(void) DECLSPEC_HIDDEN;
+extern void get_default_mode(int width, int height) DECLSPEC_HIDDEN;
+
 static inline void mirror_rect( const RECT *window_rect, RECT *rect )
 {
     int width = window_rect->right - window_rect->left;

@@ -6431,6 +6431,11 @@ NTSTATUS WINAPI NtReadFile( HANDLE handle, HANDLE event, PIO_APC_ROUTINE apc, vo
         if (needs_close) close( unix_handle );
         return status;
     }
+    else if (type == FD_TYPE_SYMLINK)
+    {
+        status = STATUS_SUCCESS;
+        goto done;
+    }
 
     if (type == FD_TYPE_SERIAL && async_read && length)
     {

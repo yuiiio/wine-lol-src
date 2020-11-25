@@ -5468,7 +5468,20 @@ NTSTATUS WINAPI NtQueryInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
         {
             FILE_ATTRIBUTE_TAG_INFORMATION *info = ptr;
             info->FileAttributes = attr;
-            info->ReparseTag = 0; /* FIXME */
+            info->ReparseTag = 0;
+            if (attr & FILE_ATTRIBUTE_REPARSE_POINT)
+            {
+                REPARSE_DATA_BUFFER *buffer = NULL;
+                ULONG buffer_len = 0;
+
+                if (get_reparse_point( handle, NULL, &buffer_len ) == STATUS_BUFFER_TOO_SMALL)
+                {
+                    buffer = malloc( buffer_len );
+                    if (get_reparse_point( handle, buffer, &buffer_len ) == STATUS_SUCCESS)
+                        info->ReparseTag = buffer->ReparseTag;
+                    free( buffer );
+                }
+            }
             if ((options & FILE_OPEN_REPARSE_POINT) && fd_is_mount_point( fd, &st ))
                 info->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
         }

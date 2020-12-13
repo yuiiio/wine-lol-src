@@ -5891,11 +5891,11 @@ static void test_reparse_points(void)
     FILE_BASIC_INFORMATION old_attrib, new_attrib;
     static const WCHAR fooW[] = {'f','o','o',0};
     static WCHAR volW[] = {'c',':','\\',0};
+    WCHAR *dest, *long_path, *abs_target;
     REPARSE_GUID_DATA_BUFFER guid_buffer;
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags;
-    WCHAR *dest, *long_path;
     IO_STATUS_BLOCK iosb;
     UNICODE_STRING nameW;
     HANDLE handle;
@@ -5982,6 +5982,7 @@ static void test_reparse_points(void)
     /* use a sane (not obscenely long) target for the rest of testing */
     pRtlFreeUnicodeString(&nameW);
     pRtlDosPathNameToNtPathName_U(target_path, &nameW, NULL, NULL);
+    abs_target = nameW.Buffer;
 
     /* Create the junction point */
     handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
@@ -6035,6 +6036,31 @@ static void test_reparse_points(void)
     ok(old_attrib.LastAccessTime.QuadPart == new_attrib.LastAccessTime.QuadPart,
        "Junction point folder's access time does not match.\n");
     CloseHandle(handle);
+
+    /* Check deleting a junction point as if it were a directory */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    buffer_len = build_reparse_buffer(abs_target, &buffer);
+    bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create junction point! (0x%lx)\n", GetLastError());
+    CloseHandle(handle);
+    bret = RemoveDirectoryW(reparse_path);
+    ok(bret, "Failed to delete junction point as directory!\n");
+    dwret = GetFileAttributesW(reparse_path);
+    ok(dwret == (DWORD)~0, "Junction point still exists (attributes: 0x%lx)!\n", dwret);
+
+    /* Check deleting a junction point as if it were a file */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    bret = CreateDirectoryW(reparse_path, NULL);
+    ok(bret, "Failed to create junction point target directory.\n");
+    handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    buffer_len = build_reparse_buffer(abs_target, &buffer);
+    bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create junction point! (0x%lx)\n", GetLastError());
+    CloseHandle(handle);
+    /* TODO: use DeleteFile on reparse point */
 
 cleanup:
     /* Cleanup */

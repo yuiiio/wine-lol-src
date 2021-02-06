@@ -5429,8 +5429,10 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
         {
             FILE_RENAME_INFORMATION *info = ptr;
             unsigned int flags;
+            REPARSE_DATA_BUFFER *buffer = NULL;
             UNICODE_STRING name_str, redir;
             OBJECT_ATTRIBUTES attr;
+            ULONG buffer_len = 0;
             char *unix_name;
 
             if (class == FileRenameInformation)
@@ -5446,6 +5448,19 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
             name_str.MaximumLength = info->FileNameLength + sizeof(WCHAR);
             InitializeObjectAttributes( &attr, &name_str, OBJ_CASE_INSENSITIVE, info->RootDirectory, NULL );
             get_redirect( &attr, &redir );
+
+            /* obtain all the data from the reparse point (if applicable) */
+            status = get_reparse_point( handle, NULL, &buffer_len );
+            if (status == STATUS_BUFFER_TOO_SMALL)
+            {
+                buffer = malloc( buffer_len );
+                status = get_reparse_point( handle, buffer, &buffer_len );
+                if (status != STATUS_SUCCESS)
+                {
+                    free( buffer );
+                    break;
+                }
+            }
 
             status = nt_to_unix_file_name( &attr, &unix_name, FILE_OPEN_IF );
             if (status == STATUS_SUCCESS || status == STATUS_NO_SUCH_FILE)
@@ -5463,9 +5478,14 @@ NTSTATUS WINAPI NtSetInformationFile( HANDLE handle, IO_STATUS_BLOCK *io,
                 }
                 SERVER_END_REQ;
 
+                /* rebuild reparse point in new location (if applicable) */
+                if (buffer && status == STATUS_SUCCESS)
+                    status = create_reparse_point( handle, buffer );
+
                 free( unix_name );
             }
             free( redir.Buffer );
+            free( buffer );
         }
         else status = STATUS_INVALID_PARAMETER_3;
         break;

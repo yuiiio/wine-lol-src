@@ -5909,7 +5909,8 @@ static INT build_reparse_buffer(const WCHAR *filename, ULONG tag, ULONG flags,
 
 static void test_reparse_points(void)
 {
-    WCHAR path[MAX_PATH], reparse_path[MAX_PATH], target_path[MAX_PATH], volnameW[MAX_PATH];
+    WCHAR path[MAX_PATH], reparse_path[MAX_PATH], target_path[MAX_PATH], volnameW[MAX_PATH], new_path[MAX_PATH];
+    static const WCHAR new_reparseW[] = {'\\','n','e','w','_','r','e','p','a','r','s','e',0};
     static const WCHAR reparseW[] = {'\\','r','e','p','a','r','s','e',0};
     static const WCHAR targetW[] = {'\\','t','a','r','g','e','t',0};
     static const WCHAR parentW[] = {'\\','.','.','\\',0};
@@ -6279,6 +6280,15 @@ static void test_reparse_points(void)
     ok((memcmp(dest, rel_target, string_len) == 0), "Symlink destination does not match ('%s' != '%s')!\n",
                                                      wine_dbgstr_w(dest), wine_dbgstr_w(rel_target));
     CloseHandle(handle);
+
+    /* Check moving a reparse point to another location */
+    lstrcpyW(new_path, path);
+    lstrcatW(new_path, parentW);
+    lstrcatW(new_path, new_reparseW);
+    bret = MoveFileW(reparse_path, new_path);
+    ok(bret, "Failed to move and rename reparse point.\n");
+    bret = MoveFileW(new_path, reparse_path);
+    ok(bret, "Failed to move and rename reparse point.\n");
 
 cleanup:
     /* Cleanup */

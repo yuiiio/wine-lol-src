@@ -2711,7 +2711,7 @@ static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr, da
         goto failed;
     }
 
-    if (!stat( name, &st ))
+    if (!lstat( name, &st ))
     {
         if (!fstat( fd->unix_fd, &st2 ) && st.st_ino == st2.st_ino && st.st_dev == st2.st_dev)
         {
@@ -2727,7 +2727,7 @@ static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr, da
         }
 
         /* can't replace directories or special files */
-        if (!S_ISREG( st.st_mode ))
+        if (!S_ISREG( st.st_mode ) && !S_ISLNK( st.st_mode ))
         {
             set_error( STATUS_ACCESS_DENIED );
             goto failed;
@@ -2793,6 +2793,8 @@ static void set_fd_name( struct fd *fd, struct fd *root, const char *nameptr, da
     fd->nt_name = dup_nt_name( root, nt_name, &fd->nt_namelen );
     free( fd->unix_name );
     fd->closed->unix_name = fd->unix_name = realpath( name, NULL );
+    if (!fd->unix_name)
+        fd->closed->unix_name = fd->unix_name = dup_fd_name( root, name ); /* dangling symlink */
     free( name );
     if (!fd->unix_name)
         set_error( STATUS_NO_MEMORY );

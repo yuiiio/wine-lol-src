@@ -5895,7 +5895,7 @@ static void test_reparse_points(void)
     REPARSE_GUID_DATA_BUFFER guid_buffer;
     static const WCHAR dotW[] = {'.',0};
     REPARSE_DATA_BUFFER *buffer = NULL;
-    DWORD dwret, dwLen, dwFlags;
+    DWORD dwret, dwLen, dwFlags, err;
     IO_STATUS_BLOCK iosb;
     UNICODE_STRING nameW;
     HANDLE handle;
@@ -6060,7 +6060,14 @@ static void test_reparse_points(void)
     bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
     ok(bret, "Failed to create junction point! (0x%lx)\n", GetLastError());
     CloseHandle(handle);
-    /* TODO: use DeleteFile on reparse point */
+    bret = DeleteFileW(reparse_path);
+    ok(!bret, "Succeeded in deleting junction point as file!\n");
+    err = GetLastError();
+    ok(err == ERROR_ACCESS_DENIED, "Expected last error 0x%x for DeleteFile on junction point (actually 0x%lx)!\n",
+                                   ERROR_ACCESS_DENIED, err);
+    dwret = GetFileAttributesW(reparse_path);
+    ok(dwret != (DWORD)~0, "Junction point doesn't exist (attributes: 0x%lx)!\n", dwret);
+    ok(dwret & FILE_ATTRIBUTE_REPARSE_POINT, "File is not a junction point! (attributes: 0x%lx)\n", dwret);
 
 cleanup:
     /* Cleanup */

@@ -3953,7 +3953,14 @@ NTSTATUS get_reparse_point_unix(const char *unix_name, REPARSE_DATA_BUFFER *buff
     link_path[link_path_len] = 0;
     if (strncmp( link_path, ".REPARSE_POINT/", 15 ) != 0)
     {
-        status = STATUS_NOT_IMPLEMENTED;
+        /* treat regular Unix symlinks as WSL Linux/Unix symlinks */
+        *size = FIELD_OFFSET(typeof(*buffer), LinuxSymbolicLinkReparseBuffer.PathBuffer[link_path_len]);
+        if (*size > out_size) { status = STATUS_BUFFER_TOO_SMALL; goto cleanup; }
+        buffer->ReparseTag = IO_REPARSE_TAG_LX_SYMLINK;
+        buffer->LinuxSymbolicLinkReparseBuffer.Version = 2;
+        memcpy( &buffer->LinuxSymbolicLinkReparseBuffer.PathBuffer[0], link_path, link_path_len );
+        buffer->ReparseDataLength = *size - FIELD_OFFSET(typeof(*buffer), GenericReparseBuffer);
+        status = STATUS_SUCCESS;
         goto cleanup;
     }
     encoded_len = link_path_len;

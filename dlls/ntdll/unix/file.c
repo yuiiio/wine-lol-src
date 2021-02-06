@@ -3577,6 +3577,18 @@ static NTSTATUS get_reparse_target( UNICODE_STRING *nt_target, REPARSE_DATA_BUFF
 }
 
 
+int find_prefix_end( const char *path, int *offset )
+{
+    static int config_dir_len = 0;
+
+    if (!config_dir_len) config_dir_len = strlen(config_dir);
+    if (path[config_dir_len] != '/') return FALSE;
+    if (strncmp( config_dir, path, config_dir_len ) != 0) return FALSE;
+    *offset = config_dir_len;
+    return TRUE;
+}
+
+
 /* add a symlink to the unix target at the last point of the reparse point metadata */
 NTSTATUS create_reparse_target( int dirfd, const char *unix_src, int depth, const char *link_path,
                                 REPARSE_DATA_BUFFER *buffer )
@@ -3671,6 +3683,8 @@ NTSTATUS create_reparse_target( int dirfd, const char *unix_src, int depth, cons
     /* create the symlink to the target at the last metadata location */
     if (status == STATUS_SUCCESS || status == STATUS_NO_SUCH_FILE)
     {
+        const char prefix_string[] = "${WINEPREFIX}";
+        int append_prefix = FALSE;
         int relative_offset;
 
         target_path[0] = 0;
@@ -3680,8 +3694,21 @@ NTSTATUS create_reparse_target( int dirfd, const char *unix_src, int depth, cons
             relative_offset = 0;
             is_relative = FALSE;
         }
+        else if (find_prefix_end( unix_target, &relative_offset ))
+        {
+            char prefix_link[PATH_MAX];
+
+            append_prefix = TRUE;
+            is_relative = FALSE;
+            strcpy( prefix_link, link_path );
+            prefix_link[strlen(prefix_link)-1] = 0;
+            strcat( prefix_link, prefix_string );
+            symlinkat( config_dir, dirfd, prefix_link );
+        }
         for (;is_relative && depth > 0; depth--)
             strcat( target_path, "../" );
+        if (append_prefix)
+            strcat( target_path, prefix_string );
         strcat( target_path, &unix_target[relative_offset] );
         TRACE( "adding reparse point target: %s\n", target_path );
         symlinkat( target_path, dirfd, link_path );
@@ -3887,6 +3914,7 @@ cleanup:
 NTSTATUS get_reparse_point_unix(const char *unix_name, REPARSE_DATA_BUFFER *buffer, ULONG *size)
 {
     char link_dir[PATH_MAX], link_path[PATH_MAX], *d;
+    const char prefix_string[] = "${WINEPREFIX}";
     int link_path_len, buffer_len, encoded_len;
     REPARSE_DATA_BUFFER header;
     ULONG out_size = *size;
@@ -3983,6 +4011,17 @@ NTSTATUS get_reparse_point_unix(const char *unix_name, REPARSE_DATA_BUFFER *buff
         fd = openat( link_dir_fd, link_dir, O_RDONLY|O_DIRECTORY );
         close( link_dir_fd );
         link_dir_fd = fd;
+    }
+
+    /* if the prefix location has moved then update the Unix prefix passthrough link */
+    strcpy( link_dir, link_path );
+    link_dir[strlen(link_dir)-1] = 0;
+    link_path_len = readlinkat( link_dir_fd, prefix_string, link_path, sizeof(link_path) );
+    if (link_path_len > 0) link_path[link_path_len] = 0;
+    if (link_path_len > 0 && strcmp( config_dir, link_path) != 0)
+    {
+        unlinkat( link_dir_fd, prefix_string, 0 );
+        symlinkat( config_dir, link_dir_fd, prefix_string );
     }
 
     /* Decode the reparse buffer from the base64-encoded symlink data */

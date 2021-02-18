@@ -2370,14 +2370,16 @@ static void test_WSASocket(void)
         {
             WSAPROTOCOL_INFOA info;
 
-            ok(sock != INVALID_SOCKET, "Text %u: expected success\n", i);
+            todo_wine_if (i == 19) ok(sock != INVALID_SOCKET, "Text %u: expected success\n", i);
+            if (sock == INVALID_SOCKET) continue;
 
             size = sizeof(info);
             err = getsockopt( sock, SOL_SOCKET, SO_PROTOCOL_INFOA, (char *)&info, &size );
             ok(!err, "Test %u: getsockopt failed, error %u\n", i, WSAGetLastError());
             ok(info.iAddressFamily == tests[i].ret_family, "Test %u: got wrong family %d\n", i, info.iAddressFamily);
             ok(info.iSocketType == tests[i].ret_type, "Test %u: got wrong type %d\n", i, info.iSocketType);
-            ok(info.iProtocol == tests[i].ret_protocol, "Test %u: got wrong protocol %d\n", i, info.iProtocol);
+            todo_wine_if (i == 10 || i == 11 || i == 16)
+                ok(info.iProtocol == tests[i].ret_protocol, "Test %u: got wrong protocol %d\n", i, info.iProtocol);
 
             closesocket( sock );
         }

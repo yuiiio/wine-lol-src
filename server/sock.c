@@ -450,9 +450,8 @@ static inline int sock_error( struct fd *fd )
     return optval;
 }
 
-static void free_accept_req( void *private )
+static void free_accept_req( struct accept_req *req )
 {
-    struct accept_req *req = private;
     list_remove( &req->entry );
     if (req->acceptsock)
     {
@@ -584,7 +583,7 @@ static int sock_dispatch_asyncs( struct sock *sock, int event, int error )
 
         LIST_FOR_EACH_ENTRY( req, &sock->accept_list, struct accept_req, entry )
         {
-            if (req->iosb->status == STATUS_PENDING && !req->accepted)
+            if (!req->accepted)
             {
                 complete_async_accept( sock, req );
                 if (get_error() != STATUS_PENDING)
@@ -593,7 +592,7 @@ static int sock_dispatch_asyncs( struct sock *sock, int event, int error )
             }
         }
 
-        if (sock->accept_recv_req && sock->accept_recv_req->iosb->status == STATUS_PENDING)
+        if (sock->accept_recv_req)
         {
             complete_async_accept_recv( sock->accept_recv_req );
             if (get_error() != STATUS_PENDING)
@@ -628,12 +627,9 @@ static int sock_dispatch_asyncs( struct sock *sock, int event, int error )
             async_wake_up( &sock->write_q, status );
 
         LIST_FOR_EACH_ENTRY_SAFE( req, next, &sock->accept_list, struct accept_req, entry )
-        {
-            if (req->iosb->status == STATUS_PENDING)
-                async_terminate( req->async, status );
-        }
+            async_terminate( req->async, status );
 
-        if (sock->accept_recv_req && sock->accept_recv_req->iosb->status == STATUS_PENDING)
+        if (sock->accept_recv_req)
             async_terminate( sock->accept_recv_req->async, status );
     }
 
@@ -877,6 +873,13 @@ static void sock_queue_async( struct fd *fd, struct async *async, int type, int 
 static void sock_reselect_async( struct fd *fd, struct async_queue *queue )
 {
     struct sock *sock = get_fd_user( fd );
+    struct accept_req *req, *next;
+
+    LIST_FOR_EACH_ENTRY_SAFE( req, next, &sock->accept_list, struct accept_req, entry )
+    {
+        if (req->iosb->status != STATUS_PENDING)
+            free_accept_req( req );
+    }
 
     /* ignore reselect on ifchange queue */
     if (&sock->ifchange_q != queue)
@@ -1367,7 +1370,6 @@ static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
             if (!(req = alloc_accept_req( sock, NULL, async, NULL ))) return 0;
             list_add_tail( &sock->accept_list, &req->entry );
 
-            async_set_completion_callback( async, free_accept_req, req );
             queue_async( &sock->accept_q, async );
             sock_reselect( sock );
             set_error( STATUS_PENDING );
@@ -1424,7 +1426,6 @@ static int sock_ioctl( struct fd *fd, ioctl_code_t code, struct async *async )
         release_object( acceptsock );
 
         acceptsock->wparam = params->accept_handle;
-        async_set_completion_callback( async, free_accept_req, req );
         queue_async( &sock->accept_q, async );
         sock_reselect( sock );
         set_error( STATUS_PENDING );

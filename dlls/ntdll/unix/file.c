@@ -3783,20 +3783,33 @@ NTSTATUS create_reparse_point(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
      * *) Append the base64-url encoded reparse point buffer
      * *) Append the filename of the first continuing symlink (0) in case we need it
      */
-    strcpy( target_path, ".REPARSE_POINT/" );
-    strcat( target_path, filename );
-    strcat( target_path, "/" );
-    if (is_dir)
-        strcat( target_path, "." );
-    strcat( target_path, "/" );
-    i = 0;
-    for (depth=0; i<encoded_len && strlen(target_path)<SYM_MAX-2; i+=chunk_len, depth++)
+    if (buffer->ReparseTag != IO_REPARSE_TAG_LX_SYMLINK)
     {
-        chunk_len = min(NAME_MAX, SYM_MAX-2-strlen(target_path));
-        strncat( target_path, &encoded[i], chunk_len );
+        strcpy( target_path, ".REPARSE_POINT/" );
+        strcat( target_path, filename );
         strcat( target_path, "/" );
+        if (is_dir)
+            strcat( target_path, "." );
+        strcat( target_path, "/" );
+        for (depth=0; i<encoded_len && strlen(target_path)<SYM_MAX-2; i+=chunk_len, depth++)
+        {
+            chunk_len = min(NAME_MAX, SYM_MAX-2-strlen(target_path));
+            strncat( target_path, &encoded[i], chunk_len );
+            strcat( target_path, "/" );
+        }
+        strcat( target_path, itoa(j) );
     }
-    strcat( target_path, itoa(j) );
+    else
+    {
+        int unix_dest_len;
+        char *unix_dest;
+
+        unix_dest_len = buffer->ReparseDataLength - sizeof(ULONG);
+        unix_dest = (char *) &buffer->LinuxSymbolicLinkReparseBuffer.PathBuffer[0];
+        memcpy( target_path, unix_dest, unix_dest_len );
+        target_path[unix_dest_len] = 0;
+        i = encoded_len; /* no extended metadata to store */
+    }
 
     /* Produce the link in a temporary location in the same folder */
     strcpy( tmpdir, unix_src );
@@ -3861,7 +3874,8 @@ NTSTATUS create_reparse_point(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
     }
 
     /* create the very last link directory */
-    if (IsReparseTagNameSurrogate( buffer->ReparseTag ))
+    if (IsReparseTagNameSurrogate( buffer->ReparseTag )
+        && buffer->ReparseTag != IO_REPARSE_TAG_LX_SYMLINK)
     {
         strcpy( link_path, target_path );
         strcpy( link_dir, link_path );

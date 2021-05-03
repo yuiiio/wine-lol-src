@@ -5926,6 +5926,8 @@ static void test_reparse_points(void)
     REPARSE_DATA_BUFFER *buffer = NULL;
     DWORD dwret, dwLen, dwFlags, err;
     WIN32_FILE_ATTRIBUTE_DATA fad;
+    char unix_target[] = "target";
+    UCHAR *unix_dest;
     WCHAR buf[] = {0,0,0,0};
     HANDLE handle, token;
     IO_STATUS_BLOCK iosb;
@@ -6289,6 +6291,39 @@ static void test_reparse_points(void)
     ok(old_attrib.LastAccessTime.QuadPart == new_attrib.LastAccessTime.QuadPart,
        "Symlink folder's access time does not match.\n");
     CloseHandle(handle);
+
+    /* Create a Unix/Linux symlink */
+    HeapFree(GetProcessHeap(), 0, buffer);
+    RemoveDirectoryW(reparse_path);
+    bret = CreateDirectoryW(reparse_path, NULL);
+    handle = CreateFileW(reparse_path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+                         FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+    if (handle == INVALID_HANDLE_VALUE)
+    {
+        win_skip("Failed to open symlink directory handle (0x%lx).\n", GetLastError());
+        goto cleanup;
+    }
+    dwret = NtQueryInformationFile(handle, &iosb, &old_attrib, sizeof(old_attrib), FileBasicInformation);
+    ok(dwret == STATUS_SUCCESS, "Failed to get symlink folder's attributes (0x%lx).\n", dwret);
+    path_len = strlen(unix_target);
+    buffer_len = offsetof(REPARSE_DATA_BUFFER, LinuxSymbolicLinkReparseBuffer.PathBuffer[path_len]);
+    buffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, buffer_len);
+    buffer->ReparseTag = IO_REPARSE_TAG_LX_SYMLINK;
+    buffer->ReparseDataLength = sizeof(ULONG) + path_len;
+    memcpy(buffer->LinuxSymbolicLinkReparseBuffer.PathBuffer, unix_target, path_len);
+    bret = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, (LPVOID)buffer, buffer_len, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to create symlink! (0x%lx)\n", GetLastError());
+
+    /* Delete the symlink */
+    memset(&guid_buffer, 0x00, sizeof(guid_buffer));
+    guid_buffer.ReparseTag = IO_REPARSE_TAG_LX_SYMLINK;
+    bret = DeviceIoControl(handle, FSCTL_DELETE_REPARSE_POINT, (LPVOID)&guid_buffer,
+                           REPARSE_GUID_DATA_BUFFER_HEADER_SIZE, NULL, 0, &dwret, 0);
+    ok(bret, "Failed to delete symlink! (0x%lx)\n", GetLastError());
+    CloseHandle(handle);
+    RemoveDirectoryW(reparse_path);
+    DeleteFileW(reparse_path);
+    CreateDirectoryW(reparse_path, NULL);
 
     /* Create a relative directory symlink */
     HeapFree(GetProcessHeap(), 0, buffer);

@@ -464,7 +464,10 @@ static BOOL SHELL_TryAppPathW( LPCWSTR szName, LPWSTR lpResult, WCHAR **env)
 
     wcscat(buffer, szName);
     res = RegOpenKeyExW(HKEY_LOCAL_MACHINE, buffer, 0, KEY_READ, &hkApp);
-    if (res) goto end;
+    if (res)
+        res = RegOpenKeyExW(HKEY_LOCAL_MACHINE, lstrcatW(buffer, L".exe"), 0, KEY_READ, &hkApp);
+    if (res)
+        goto end;
 
     len = MAX_PATH*sizeof(WCHAR);
     res = RegQueryValueW(hkApp, NULL, lpResult, &len);

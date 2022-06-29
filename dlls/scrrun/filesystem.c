@@ -3803,6 +3803,20 @@ static HRESULT WINAPI filesys_MoveFile(IFileSystem3 *iface, BSTR source, BSTR de
     return MoveFileW(source, destination) ? S_OK : create_error(GetLastError());
 }
 
+static inline HRESULT create_movefolder_error(DWORD err)
+{
+    switch(err) {
+    case ERROR_FILE_NOT_FOUND:
+    case ERROR_PATH_NOT_FOUND: return CTL_E_PATHNOTFOUND;
+    case ERROR_ACCESS_DENIED: return CTL_E_PERMISSIONDENIED;
+    case ERROR_FILE_EXISTS: return CTL_E_FILEALREADYEXISTS;
+    case ERROR_ALREADY_EXISTS: return CTL_E_FILEALREADYEXISTS;
+    default:
+        FIXME("Unsupported error code: %ld\n", err);
+        return E_FAIL;
+    }
+}
+
 static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR destination)
 {
     TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
@@ -3810,7 +3824,7 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
     if(!source || !source[0] || !destination || !destination[0])
         return E_INVALIDARG;
 
-    return MoveFileW(source, destination) ? S_OK : create_error(GetLastError());
+    return MoveFileW(source, destination) ? S_OK : create_movefolder_error(GetLastError());
 }
 
 static inline HRESULT copy_file(const WCHAR *source, DWORD source_len,

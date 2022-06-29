@@ -2680,6 +2680,13 @@ static void test_MoveFolder(void)
     SysFreeString(dst);
     ok(RemoveDirectoryW(buffW1), "can't remove %s directory\n", wine_dbgstr_w(buffW1));
     ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(buffW2);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst); /* src nonexistant */
+    ok(hr == CTL_E_PATHNOTFOUND, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
 }
 
 static void test_DoOpenPipeStream(void)

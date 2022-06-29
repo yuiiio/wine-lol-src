@@ -3806,6 +3806,7 @@ static HRESULT WINAPI filesys_MoveFile(IFileSystem3 *iface, BSTR source, BSTR de
 static inline HRESULT create_movefolder_error(DWORD err)
 {
     switch(err) {
+    case ERROR_INVALID_NAME:
     case ERROR_FILE_NOT_FOUND:
     case ERROR_PATH_NOT_FOUND: return CTL_E_PATHNOTFOUND;
     case ERROR_ACCESS_DENIED: return CTL_E_PERMISSIONDENIED;
@@ -3819,12 +3820,19 @@ static inline HRESULT create_movefolder_error(DWORD err)
 
 static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR destination)
 {
+    int len;
+    WCHAR src_path[MAX_PATH];
+
     TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
 
     if(!source || !source[0] || !destination || !destination[0])
         return E_INVALIDARG;
 
-    return MoveFileW(source, destination) ? S_OK : create_movefolder_error(GetLastError());
+    len = SysStringLen(source);
+    lstrcpyW(src_path, source);
+    if (source[len-1] != '\\' && source[len-1] != '/') wcscat(src_path, L"\\");
+
+    return MoveFileW(src_path, destination) ? S_OK : create_movefolder_error(GetLastError());
 }
 
 static inline HRESULT copy_file(const WCHAR *source, DWORD source_len,

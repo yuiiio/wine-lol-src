@@ -2644,6 +2644,7 @@ static void test_MoveFolder(void)
     BSTR src, dst, str, empty;
     WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH];
     HRESULT hr;
+    HANDLE file;
 
     get_temp_path(L"foo", buffW1);
     get_temp_path(L"bar", buffW2);
@@ -2687,6 +2688,19 @@ static void test_MoveFolder(void)
     ok(hr == CTL_E_PATHNOTFOUND, "Unexpected hr %#lx.\n", hr);
     SysFreeString(src);
     SysFreeString(dst);
+
+    file = CreateFileW(buffW1, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                       FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed\n");
+    CloseHandle(file);
+
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(buffW2);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst); /* src is regular file */
+    ok(hr == CTL_E_PATHNOTFOUND, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    DeleteFileW(buffW1);
 }
 
 static void test_DoOpenPipeStream(void)

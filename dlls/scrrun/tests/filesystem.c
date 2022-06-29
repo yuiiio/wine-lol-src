@@ -2669,6 +2669,17 @@ static void test_MoveFolder(void)
     ok(hr == E_INVALIDARG, "Unexpected hr %#lx.\n", hr);
     SysFreeString(str);
     SysFreeString(empty);
+
+    ok(CreateDirectoryW(buffW1, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW1));
+    ok(CreateDirectoryW(buffW2, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW2));
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(buffW2);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst); /* dst already exists */
+    ok(hr == CTL_E_FILEALREADYEXISTS, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    ok(RemoveDirectoryW(buffW1), "can't remove %s directory\n", wine_dbgstr_w(buffW1));
+    ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
 }
 
 static void test_DoOpenPipeStream(void)

@@ -2641,7 +2641,7 @@ static void test_MoveFile(void)
 
 static void test_MoveFolder(void)
 {
-    BSTR src, dst;
+    BSTR src, dst, str, empty;
     WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH];
     HRESULT hr;
 
@@ -2656,6 +2656,19 @@ static void test_MoveFolder(void)
     SysFreeString(src);
     SysFreeString(dst);
     ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+
+    str = SysAllocString(L"null.dir");
+    empty = SysAllocString(L"");
+    hr = IFileSystem3_MoveFolder(fs3, str, NULL);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#lx.\n", hr);
+    hr = IFileSystem3_MoveFolder(fs3, NULL, str);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#lx.\n", hr);
+    hr = IFileSystem3_MoveFolder(fs3, str, empty);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#lx.\n", hr);
+    hr = IFileSystem3_MoveFolder(fs3, empty, str);
+    ok(hr == E_INVALIDARG, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(str);
+    SysFreeString(empty);
 }
 
 static void test_DoOpenPipeStream(void)

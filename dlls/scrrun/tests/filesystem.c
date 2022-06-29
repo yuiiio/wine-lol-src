@@ -2642,7 +2642,7 @@ static void test_MoveFile(void)
 static void test_MoveFolder(void)
 {
     BSTR src, dst, str, empty;
-    WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH],pathW[MAX_PATH];
+    WCHAR buffW1[MAX_PATH], buffW2[MAX_PATH], pathW[MAX_PATH], srcW[MAX_PATH];
     HRESULT hr;
     HANDLE file;
 
@@ -2737,6 +2737,31 @@ static void test_MoveFolder(void)
     lstrcatW(pathW,L"foo");
     ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
     ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+
+    GetTempPathW(MAX_PATH, buffW1);
+    lstrcatW(buffW1,L"foo1");
+    GetTempPathW(MAX_PATH, buffW2);
+    lstrcatW(buffW2,L"foo2");
+    GetTempPathW(MAX_PATH, srcW);
+    lstrcatW(srcW,L"foo?");
+    GetTempPathW(MAX_PATH, pathW);
+    lstrcatW(pathW,L"bar");
+    ok(CreateDirectoryW(buffW1, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW1));
+    ok(CreateDirectoryW(buffW2, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW2));
+    ok(CreateDirectoryW(pathW, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(pathW));
+    src = SysAllocString(srcW);
+    dst = SysAllocString(pathW);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    lstrcpyW(buffW1,pathW);
+    lstrcatW(buffW1,L"\\foo1");
+    lstrcpyW(buffW2,pathW);
+    lstrcatW(buffW2,L"\\foo2");
+    ok(RemoveDirectoryW(buffW1), "can't remove %s directory\n", wine_dbgstr_w(buffW1));
+    ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+    ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
 }
 
 static void test_DoOpenPipeStream(void)

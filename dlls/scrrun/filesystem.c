@@ -3820,9 +3820,12 @@ static inline HRESULT create_movefolder_error(DWORD err)
 
 static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR destination)
 {
-    int src_len, dst_len;
+    int src_len, dst_len, name_len;
     WCHAR src_path[MAX_PATH], dst_path[MAX_PATH];
     WCHAR *filename;
+    WIN32_FIND_DATAW ffd;
+    HANDLE f;
+    BOOL wildcard = FALSE, separator = FALSE;
 
     TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
 
@@ -3832,19 +3835,43 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
     if (!GetFullPathNameW(source, MAX_PATH, src_path, &filename))
         return E_FAIL;
 
-    src_len = SysStringLen(src_path);
-    if (src_path[src_len-1] != '\\' && src_path[src_len-1] != '/')
-        wcscat(src_path, L"\\");
+    if (wcspbrk(filename,L"*?"))
+        wildcard = TRUE;
 
     dst_len = lstrlenW(destination);
-    if (destination[dst_len-1] == '\\' || destination[dst_len-1] == '/') {
-        lstrcpyW(dst_path, destination);
-        lstrcatW(dst_path, filename);
-        TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(dst_path));
-        return MoveFileW(src_path, dst_path) ? S_OK : create_movefolder_error(GetLastError());
+    if (destination[dst_len-1] == '\\' || destination[dst_len-1] == '/')
+        separator = TRUE;
+
+    if (!wildcard && !separator) {
+        src_len = SysStringLen(src_path);
+        if (src_path[src_len-1] != '\\' && src_path[src_len-1] != '/')
+            wcscat(src_path, L"\\");
+        TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(destination));
+        return MoveFileW(src_path, destination) ? S_OK : create_movefolder_error(GetLastError());
     }
-    TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(destination));
-    return MoveFileW(src_path, destination) ? S_OK : create_movefolder_error(GetLastError());
+
+    memcpy(dst_path, destination, dst_len*sizeof(WCHAR));
+    if (!separator)
+        dst_path[dst_len++] = '\\';
+    src_len = filename - src_path;
+    f = FindFirstFileW(source, &ffd);
+    if(f == INVALID_HANDLE_VALUE)
+        return create_error(GetLastError());
+
+    do {
+        name_len = lstrlenW(ffd.cFileName);
+        if(src_len+name_len+1 >= MAX_PATH || dst_len+name_len+1 >= MAX_PATH) {
+            FindClose(f);
+            return E_FAIL;
+        }
+        memcpy(filename, ffd.cFileName, (name_len+1)*sizeof(WCHAR));
+        memcpy(dst_path + dst_len, ffd.cFileName, (name_len+1)*sizeof(WCHAR));
+        TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(dst_path));
+        if (!MoveFileW(src_path, dst_path)) return create_error(GetLastError());
+    } while(FindNextFileW(f, &ffd));
+    FindClose(f);
+
+    return S_OK;
 }
 
 static inline HRESULT copy_file(const WCHAR *source, DWORD source_len,

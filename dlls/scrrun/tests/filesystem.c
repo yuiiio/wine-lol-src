@@ -2642,7 +2642,7 @@ static void test_MoveFile(void)
 static void test_MoveFolder(void)
 {
     BSTR src, dst, str, empty;
-    WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH];
+    WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH],pathW[MAX_PATH];
     HRESULT hr;
     HANDLE file;
 
@@ -2701,6 +2701,42 @@ static void test_MoveFolder(void)
     SysFreeString(src);
     SysFreeString(dst);
     DeleteFileW(buffW1);
+
+    GetTempPathW(MAX_PATH, buffW1);
+    lstrcatW(buffW1,L"foo");
+    GetTempPathW(MAX_PATH, buffW2);
+    lstrcatW(buffW2,L"bar");
+    ok(CreateDirectoryW(buffW1, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW1));
+    ok(CreateDirectoryW(buffW2, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW2));
+    lstrcpyW(pathW,buffW2);
+    lstrcatW(pathW,L"\\");
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(pathW);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    lstrcatW(pathW,L"foo");
+    ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
+    ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+
+    GetTempPathW(MAX_PATH, buffW1);
+    lstrcatW(buffW1,L"foo");
+    GetTempPathW(MAX_PATH, buffW2);
+    lstrcatW(buffW2,L"bar");
+    ok(CreateDirectoryW(buffW1, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW1));
+    ok(CreateDirectoryW(buffW2, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW2));
+    lstrcpyW(pathW,buffW2);
+    lstrcatW(pathW,L"/");
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(pathW);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    lstrcatW(pathW,L"foo");
+    ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
+    ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
 }
 
 static void test_DoOpenPipeStream(void)

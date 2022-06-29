@@ -3820,18 +3820,30 @@ static inline HRESULT create_movefolder_error(DWORD err)
 
 static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR destination)
 {
-    int len;
-    WCHAR src_path[MAX_PATH];
+    int src_len, dst_len;
+    WCHAR src_path[MAX_PATH], dst_path[MAX_PATH];
+    WCHAR *filename;
 
     TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
 
     if(!source || !source[0] || !destination || !destination[0])
         return E_INVALIDARG;
 
-    len = SysStringLen(source);
-    lstrcpyW(src_path, source);
-    if (source[len-1] != '\\' && source[len-1] != '/') wcscat(src_path, L"\\");
+    if (!GetFullPathNameW(source, MAX_PATH, src_path, &filename))
+        return E_FAIL;
 
+    src_len = SysStringLen(src_path);
+    if (src_path[src_len-1] != '\\' && src_path[src_len-1] != '/')
+        wcscat(src_path, L"\\");
+
+    dst_len = lstrlenW(destination);
+    if (destination[dst_len-1] == '\\' || destination[dst_len-1] == '/') {
+        lstrcpyW(dst_path, destination);
+        lstrcatW(dst_path, filename);
+        TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(dst_path));
+        return MoveFileW(src_path, dst_path) ? S_OK : create_movefolder_error(GetLastError());
+    }
+    TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(destination));
     return MoveFileW(src_path, destination) ? S_OK : create_movefolder_error(GetLastError());
 }
 

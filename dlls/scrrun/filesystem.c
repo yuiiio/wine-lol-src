@@ -3803,12 +3803,11 @@ static HRESULT WINAPI filesys_MoveFile(IFileSystem3 *iface, BSTR source, BSTR de
     return MoveFileW(source, destination) ? S_OK : create_error(GetLastError());
 }
 
-static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface,BSTR Source,
-                                            BSTR Destination)
+static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR destination)
 {
-    FIXME("%p %s %s\n", iface, debugstr_w(Source), debugstr_w(Destination));
+    TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
 
-    return E_NOTIMPL;
+    return MoveFileW(source, destination) ? S_OK : create_error(GetLastError());
 }
 
 static inline HRESULT copy_file(const WCHAR *source, DWORD source_len,

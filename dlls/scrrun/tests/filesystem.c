@@ -2639,6 +2639,25 @@ static void test_MoveFile(void)
     SysFreeString(str);
 }
 
+static void test_MoveFolder(void)
+{
+    BSTR src, dst;
+    WCHAR buffW1[MAX_PATH],buffW2[MAX_PATH];
+    HRESULT hr;
+
+    get_temp_path(L"foo", buffW1);
+    get_temp_path(L"bar", buffW2);
+
+    ok(CreateDirectoryW(buffW1, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(buffW1));
+    src = SysAllocString(buffW1);
+    dst = SysAllocString(buffW2);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst);
+    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
+}
+
 static void test_DoOpenPipeStream(void)
 {
     static const char testdata[] = "test";
@@ -2772,6 +2791,7 @@ START_TEST(filesystem)
     test_GetExtensionName();
     test_GetSpecialFolder();
     test_MoveFile();
+    test_MoveFolder();
     test_DoOpenPipeStream();
 
     IFileSystem3_Release(fs3);

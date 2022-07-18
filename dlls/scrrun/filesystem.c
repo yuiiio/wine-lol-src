@@ -3860,14 +3860,18 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
 
     do {
         name_len = lstrlenW(ffd.cFileName);
-        if(src_len+name_len+1 >= MAX_PATH || dst_len+name_len+1 >= MAX_PATH) {
+        if(src_len+name_len+2 >= MAX_PATH || dst_len+name_len+1 >= MAX_PATH) {
             FindClose(f);
             return E_FAIL;
         }
         memcpy(filename, ffd.cFileName, (name_len+1)*sizeof(WCHAR));
+        wcscat(filename, L"\\");
         memcpy(dst_path + dst_len, ffd.cFileName, (name_len+1)*sizeof(WCHAR));
         TRACE("move %s to %s\n",  debugstr_w(src_path), debugstr_w(dst_path));
-        if (!MoveFileW(src_path, dst_path)) return create_error(GetLastError());
+        if (!MoveFileW(src_path, dst_path)) {
+            if (GetLastError() == ERROR_INVALID_NAME) continue;
+            return create_movefolder_error(GetLastError());
+        }
     } while(FindNextFileW(f, &ffd));
     FindClose(f);
 

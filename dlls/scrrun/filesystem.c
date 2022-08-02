@@ -3832,6 +3832,10 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
     if(!source || !source[0] || !destination || !destination[0])
         return E_INVALIDARG;
 
+    src_len = SysStringLen(source);
+    if (source[src_len-1] == '\\' || source[src_len-1] == '/')
+        return CTL_E_PATHNOTFOUND;
+
     if (!GetFullPathNameW(source, MAX_PATH, src_path, &filename))
         return E_FAIL;
 

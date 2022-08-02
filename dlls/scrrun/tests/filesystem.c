@@ -2787,6 +2787,34 @@ static void test_MoveFolder(void)
     ok(RemoveDirectoryW(buffW2), "can't remove %s directory\n", wine_dbgstr_w(buffW2));
     ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
     ok(DeleteFileW(buffW3), "can't remove %s\n", wine_dbgstr_w(buffW3));
+
+    GetTempPathW(MAX_PATH, buffW1);
+    lstrcatW(buffW1,L"foo1");
+    GetTempPathW(MAX_PATH, buffW2);
+    lstrcatW(buffW2,L"foo2");
+    GetTempPathW(MAX_PATH, srcW);
+    lstrcatW(srcW,L"foo*");
+    GetTempPathW(MAX_PATH, pathW);
+    lstrcatW(pathW,L"bar");
+    ok(CreateDirectoryW(pathW, NULL), "CreateDirectory(%s) failed\n", wine_dbgstr_w(pathW));
+    /* create two files, should not be moved by MoveFolder() */
+    file = CreateFileW(buffW1, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                       FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed\n");
+    CloseHandle(file);
+    file = CreateFileW(buffW2, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                       FILE_ATTRIBUTE_NORMAL, NULL);
+    ok(file != INVALID_HANDLE_VALUE, "CreateFile failed\n");
+    CloseHandle(file);
+    src = SysAllocString(srcW);
+    dst = SysAllocString(pathW);
+    hr = IFileSystem3_MoveFolder(fs3, src, dst);
+    ok(hr == CTL_E_PATHNOTFOUND, "Unexpected hr %#lx.\n", hr);
+    SysFreeString(src);
+    SysFreeString(dst);
+    ok(RemoveDirectoryW(pathW), "can't remove %s directory\n", wine_dbgstr_w(pathW));
+    ok(DeleteFileW(buffW1), "can't remove %s\n", wine_dbgstr_w(buffW1));
+    ok(DeleteFileW(buffW2), "can't remove %s\n", wine_dbgstr_w(buffW2));
 }
 
 static void test_DoOpenPipeStream(void)

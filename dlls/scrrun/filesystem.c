@@ -3825,7 +3825,7 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
     WCHAR *filename;
     WIN32_FIND_DATAW ffd;
     HANDLE f;
-    BOOL wildcard = FALSE, separator = FALSE;
+    BOOL wildcard = FALSE, separator = FALSE, success = FALSE;
 
     TRACE("%p %s %s\n", iface, debugstr_w(source), debugstr_w(destination));
 
@@ -3876,10 +3876,11 @@ static HRESULT WINAPI filesys_MoveFolder(IFileSystem3 *iface, BSTR source, BSTR 
             if (GetLastError() == ERROR_INVALID_NAME) continue;
             return create_movefolder_error(GetLastError());
         }
+        success = TRUE;
     } while(FindNextFileW(f, &ffd));
     FindClose(f);
 
-    return S_OK;
+    return success ? S_OK : CTL_E_PATHNOTFOUND;
 }
 
 static inline HRESULT copy_file(const WCHAR *source, DWORD source_len,

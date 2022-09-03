@@ -5909,7 +5909,7 @@ static INT build_reparse_buffer(const WCHAR *filename, ULONG tag, ULONG flags,
 
 static void test_reparse_points(void)
 {
-    WCHAR path[MAX_PATH], reparse_path[MAX_PATH], target_path[MAX_PATH], volnameW[MAX_PATH], new_path[MAX_PATH];
+    WCHAR path[MAX_PATH], reparse_path[MAX_PATH], target_path[MAX_PATH], volnameW[MAX_PATH], new_path[MAX_PATH], thru_path[MAX_PATH];
     static const WCHAR new_reparseW[] = {'\\','n','e','w','_','r','e','p','a','r','s','e',0};
     static const WCHAR reparseW[] = {'\\','r','e','p','a','r','s','e',0};
     static const WCHAR targetW[] = {'\\','t','a','r','g','e','t',0};
@@ -6296,11 +6296,20 @@ static void test_reparse_points(void)
     bret = CopyFileW(reparse_path, new_path, TRUE);
     ok(!bret, "Reparse points cannot be copied.\n");
 
+    /* Create a file on the other side of a reparse point */
+    lstrcpyW(thru_path, reparse_path);
+    lstrcatW(thru_path, new_reparseW);
+    handle = CreateFileW(thru_path, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_NEW, 0, 0);
+    ok( handle != INVALID_HANDLE_VALUE, "Failed to create file on other side of reparse point: %lx.\n", GetLastError() );
+    CloseHandle(handle);
+
 cleanup:
     /* Cleanup */
     pRtlFreeUnicodeString(&nameW);
     HeapFree(GetProcessHeap(), 0, long_path);
     HeapFree(GetProcessHeap(), 0, buffer);
+    bret = DeleteFileW(thru_path);
+    ok(bret, "Failed to delete file on other side of junction point!\n");
     bret = RemoveDirectoryW(reparse_path);
     ok(bret, "Failed to remove temporary reparse point directory!\n");
     bret = RemoveDirectoryW(target_path);

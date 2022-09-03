@@ -6290,6 +6290,12 @@ static void test_reparse_points(void)
     bret = MoveFileW(new_path, reparse_path);
     ok(bret, "Failed to move and rename reparse point.\n");
 
+    /* Check copying a reparse point to another location */
+    lstrcpyW(new_path, path);
+    lstrcatW(new_path, new_reparseW);
+    bret = CopyFileW(reparse_path, new_path, TRUE);
+    ok(!bret, "Reparse points cannot be copied.\n");
+
 cleanup:
     /* Cleanup */
     pRtlFreeUnicodeString(&nameW);

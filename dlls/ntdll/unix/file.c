@@ -3577,6 +3577,125 @@ static NTSTATUS get_reparse_target( UNICODE_STRING *nt_target, REPARSE_DATA_BUFF
 }
 
 
+/* add a symlink to the unix target at the last point of the reparse point metadata */
+NTSTATUS create_reparse_target( int dirfd, const char *unix_src, int depth, const char *link_path,
+                                REPARSE_DATA_BUFFER *buffer )
+{
+    ULONG nt_path_len = PATH_MAX, unix_path_len = PATH_MAX;
+    UNICODE_STRING nt_target, nt_full_target;
+    ULONG unix_target_len = PATH_MAX;
+    char *unix_path = NULL, *d;
+    char target_path[PATH_MAX];
+    OBJECT_ATTRIBUTES attr;
+    int nt_target_len;
+    char *unix_target;
+    int is_relative;
+    NTSTATUS status;
+    WCHAR *nt_path;
+
+    if ((status = get_reparse_target( &nt_target, buffer, &is_relative )) != STATUS_REPARSE)
+        return status;
+    /* if the target path is relative then turn the source path into an NT path */
+    if (is_relative)
+    {
+        UNICODE_STRING nt_path_tmp;
+
+        /* resolve the NT path of the source */
+        unix_path = malloc( strlen(unix_src) + 2 );
+        if (!unix_path) return STATUS_NO_MEMORY;
+        strcpy( unix_path, unix_src );
+        d = dirname( unix_path );
+        if (d != unix_path) strcpy( unix_path, d );
+        strcat( unix_path, "/");
+        for (;;)
+        {
+            nt_path = malloc( nt_path_len * sizeof(WCHAR) );
+            if (!nt_path)
+            {
+                free( unix_path );
+                return STATUS_NO_MEMORY;
+            }
+            status = wine_unix_to_nt_file_name( unix_path, nt_path, &nt_path_len );
+            if (status != STATUS_BUFFER_TOO_SMALL) break;
+            free( nt_path );
+        }
+        free( unix_path );
+        if (status != STATUS_SUCCESS)
+            return status;
+        /* re-resolve the unix path for the source */
+        nt_path_tmp.Buffer = nt_path;
+        nt_path_tmp.Length = wcslen(nt_path) * sizeof(WCHAR);
+        InitializeObjectAttributes( &attr, &nt_path_tmp, 0, 0, NULL );
+        for (;;)
+        {
+            unix_path = malloc( unix_path_len );
+            if (!unix_path) return STATUS_NO_MEMORY;
+            status = wine_nt_to_unix_file_name( &attr, unix_path, &unix_path_len, FILE_OPEN_IF );
+            if (status != STATUS_BUFFER_TOO_SMALL) break;
+            free( unix_path );
+        }
+    }
+    else
+    {
+        nt_path = malloc( sizeof(WCHAR) );
+        if (!nt_path) return STATUS_NO_MEMORY;
+        nt_path[0] = 0;
+    }
+    /* append the target path (if absolute, appends to empty string) */
+    nt_target_len = nt_target.Length + sizeof(WCHAR);
+    nt_full_target.MaximumLength = nt_target_len + wcslen(nt_path) * sizeof(WCHAR);
+    nt_full_target.Buffer = malloc( nt_full_target.MaximumLength + 2 );
+    if (!nt_full_target.Buffer)
+    {
+        status = STATUS_NO_MEMORY;
+        goto cleanup;
+    }
+    wcscpy( nt_full_target.Buffer, nt_path );
+    free( nt_path );
+    memcpy( &nt_full_target.Buffer[wcslen(nt_full_target.Buffer)], nt_target.Buffer, nt_target_len );
+    nt_full_target.Length = wcslen( nt_full_target.Buffer ) * sizeof(WCHAR);
+    /* find the unix path for the target */
+    InitializeObjectAttributes( &attr, &nt_full_target, 0, 0, NULL );
+    for (;;)
+    {
+        unix_target = malloc( unix_target_len );
+        if (!unix_target)
+        {
+            status = STATUS_NO_MEMORY;
+            goto cleanup;
+        }
+        status = wine_nt_to_unix_file_name( &attr, unix_target, &unix_target_len, FILE_OPEN_IF );
+        if (status != STATUS_BUFFER_TOO_SMALL) break;
+        free( unix_target );
+    }
+    /* create the symlink to the target at the last metadata location */
+    if (status == STATUS_SUCCESS || status == STATUS_NO_SUCH_FILE)
+    {
+        int relative_offset;
+
+        target_path[0] = 0;
+        relative_offset = unix_path ? strlen( unix_path ) : 0;
+        if (unix_path && strncmp( unix_path, unix_target, relative_offset ) != 0)
+        {
+            relative_offset = 0;
+            is_relative = FALSE;
+        }
+        for (;is_relative && depth > 0; depth--)
+            strcat( target_path, "../" );
+        strcat( target_path, &unix_target[relative_offset] );
+        TRACE( "adding reparse point target: %s\n", target_path );
+        symlinkat( target_path, dirfd, link_path );
+    }
+    free( unix_target );
+    status = STATUS_SUCCESS;
+
+cleanup:
+    free( unix_path );
+    free( nt_full_target.Buffer );
+    return status;
+}
+
+
 /*
  * Retrieve the unix name corresponding to a file handle, remove that directory, and then symlink
  * the requested directory to the location of the old directory.
@@ -3708,6 +3827,16 @@ NTSTATUS create_reparse_point(HANDLE handle, REPARSE_DATA_BUFFER *buffer)
         fd = openat( link_dir_fd, link_dir, O_RDONLY|O_DIRECTORY );
         close( link_dir_fd );
         link_dir_fd = fd;
+    }
+
+    /* create the very last link directory */
+    if (IsReparseTagNameSurrogate( buffer->ReparseTag ))
+    {
+        strcpy( link_path, target_path );
+        strcpy( link_dir, link_path );
+        link_dir[strlen(link_dir)-1] = 0;
+        if (mkdir_p( link_dir_fd, link_dir, 0777 ) == 0)
+            create_reparse_target( link_dir_fd, unix_src, depth + 2, link_path, buffer );
     }
 
     /* Atomically move the initial link into position */

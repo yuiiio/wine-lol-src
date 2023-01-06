@@ -705,6 +705,10 @@ extern BOOL xinerama_get_fullscreen_monitors( const RECT *rect, long *indices );
 extern void xinerama_init( unsigned int width, unsigned int height );
 extern void init_recursive_mutex( pthread_mutex_t *mutex );
 
+/* keyboard.c */
+
+extern WCHAR *x11drv_get_keyboard_layout_list( DWORD *size );
+
 #define DEPTH_COUNT 3
 extern const unsigned int *depths;
 

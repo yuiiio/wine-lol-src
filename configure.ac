@@ -1822,9 +1822,6 @@ then
                   AC_SUBST(PROCSTAT_LIBS,"-lprocstat")])
 fi
 
-dnl **** Check for libodbc ****
-WINE_CHECK_SONAME(odbc,SQLConnect,,[AC_DEFINE_UNQUOTED(SONAME_LIBODBC,["libodbc.$LIBEXT"])])
-
 dnl **** Check for libnetapi ****
 if test "x$with_netapi" != "xno"
 then

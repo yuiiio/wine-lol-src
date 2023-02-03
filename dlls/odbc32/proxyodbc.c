@@ -53,6 +53,8 @@ struct SQLHDBC_data
 {
     int type;
     struct SQLHENV_data *environment;
+
+    SQLUINTEGER login_timeout;
 };
 
 /*************************************************************************
@@ -74,6 +76,7 @@ SQLRETURN WINAPI SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *ConnectionH
 
     hdbc->type = SQL_HANDLE_DBC;
     hdbc->environment = EnvironmentHandle;
+    hdbc->login_timeout = 0;
 
     *ConnectionHandle = hdbc;
 
@@ -1548,12 +1551,31 @@ SQLRETURN WINAPI SQLGetStmtAttrW(SQLHSTMT StatementHandle, SQLINTEGER Attribute,
 SQLRETURN WINAPI SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                     SQLINTEGER StringLength)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHDBC_data *hdbc = ConnectionHandle;
 
-    FIXME("(ConnectionHandle %p, Attribute %d, Value %p, StringLength %d)\n", ConnectionHandle, Attribute, Value,
+    TRACE("(ConnectionHandle %p, Attribute %d, Value %p, StringLength %d)\n", ConnectionHandle, Attribute, Value,
           StringLength);
 
-    return ret;
+    if (hdbc->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", hdbc->type);
+        return SQL_ERROR;
+    }
+
+    switch(Attribute)
+    {
+        case SQL_ATTR_LOGIN_TIMEOUT:
+            if (Value)
+                hdbc->login_timeout = (intptr_t)Value;
+            else
+                hdbc->login_timeout = 0;
+            break;
+        default:
+            FIXME("Unhandle attribute %d\n", Attribute);
+            return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************

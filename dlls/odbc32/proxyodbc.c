@@ -49,17 +49,35 @@ struct SQLHENV_data
     SQLUINTEGER pooling;
 };
 
+struct SQLHDBC_data
+{
+    int type;
+    struct SQLHENV_data *environment;
+};
 
 /*************************************************************************
  *				SQLAllocConnect           [ODBC32.001]
  */
 SQLRETURN WINAPI SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *ConnectionHandle)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHDBC_data *hdbc;
 
-    FIXME("(EnvironmentHandle %p, ConnectionHandle %p)\n", EnvironmentHandle, ConnectionHandle);
+    TRACE("(EnvironmentHandle %p, ConnectionHandle %p)\n", EnvironmentHandle, ConnectionHandle);
+
+    if(!ConnectionHandle)
+        return SQL_ERROR;
     *ConnectionHandle = SQL_NULL_HDBC;
-    return ret;
+
+    hdbc = calloc(1, sizeof(*hdbc));
+    if (!hdbc)
+        return SQL_ERROR;
+
+    hdbc->type = SQL_HANDLE_DBC;
+    hdbc->environment = EnvironmentHandle;
+
+    *ConnectionHandle = hdbc;
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************
@@ -404,11 +422,22 @@ SQLRETURN WINAPI SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT FetchOrien
  */
 SQLRETURN WINAPI SQLFreeConnect(SQLHDBC ConnectionHandle)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHDBC_data *hdbc = ConnectionHandle;
 
-    FIXME("(ConnectionHandle %p)\n", ConnectionHandle);
+    TRACE("(ConnectionHandle %p)\n", ConnectionHandle);
 
-    return ret;
+    if (!hdbc)
+        return SQL_ERROR;
+
+    if (hdbc->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", hdbc->type);
+        return SQL_ERROR;
+    }
+
+    free(hdbc);
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************

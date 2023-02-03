@@ -43,6 +43,11 @@
 
 WINE_DEFAULT_DEBUG_CHANNEL(odbc);
 
+struct SQLHENV_data
+{
+    int type;
+};
+
 
 /*************************************************************************
  *				SQLAllocConnect           [ODBC32.001]
@@ -61,13 +66,23 @@ SQLRETURN WINAPI SQLAllocConnect(SQLHENV EnvironmentHandle, SQLHDBC *ConnectionH
  */
 SQLRETURN WINAPI SQLAllocEnv(SQLHENV *EnvironmentHandle)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHENV_data *henv;
 
-    FIXME("(EnvironmentHandle %p)\n", EnvironmentHandle);
+    TRACE("(EnvironmentHandle %p)\n", EnvironmentHandle);
+
+    if (!EnvironmentHandle)
+        return SQL_ERROR;
 
     *EnvironmentHandle = SQL_NULL_HENV;
+    henv = calloc(1, sizeof(*henv));
+    if (!henv)
+        return SQL_ERROR;
 
-    return ret;
+    henv->type = SQL_HANDLE_ENV;
+
+    *EnvironmentHandle = henv;
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************
@@ -399,11 +414,15 @@ SQLRETURN WINAPI SQLFreeConnect(SQLHDBC ConnectionHandle)
  */
 SQLRETURN WINAPI SQLFreeEnv(SQLHENV EnvironmentHandle)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHENV_data *data = EnvironmentHandle;
+    TRACE("(EnvironmentHandle %p)\n", EnvironmentHandle);
 
-    FIXME("(EnvironmentHandle %p)\n", EnvironmentHandle);
+    if (data && data->type != SQL_HANDLE_ENV)
+        WARN("EnvironmentHandle isn't of type SQL_HANDLE_ENV\n");
+    else
+        free(data);
 
-    return ret;
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************

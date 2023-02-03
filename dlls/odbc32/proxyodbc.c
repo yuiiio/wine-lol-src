@@ -658,12 +658,24 @@ SQLRETURN WINAPI SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT Function
 SQLRETURN WINAPI SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
                             SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
-    SQLRETURN ret = SQL_ERROR;
+    char *ptr = InfoValue;
 
-    FIXME("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
+    TRACE("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           InfoType, InfoValue, BufferLength, StringLength);
 
-    return ret;
+    switch(InfoType)
+    {
+        case SQL_ODBC_VER:
+            lstrcpynA(ptr, "03.80.0000", BufferLength);
+            if (StringLength)
+                *StringLength = strlen(ptr);
+            break;
+        default:
+            FIXME("Unsupported type %d\n", InfoType);
+            return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************
@@ -1597,12 +1609,24 @@ SQLRETURN WINAPI SQLGetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Opt
 SQLRETURN WINAPI SQLGetInfoW(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
                              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
-    SQLRETURN ret = SQL_ERROR;
+    WCHAR *ptr = InfoValue;
 
-    FIXME("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
+    TRACE("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           InfoType, InfoValue, BufferLength, StringLength);
 
-    return ret;
+    switch(InfoType)
+    {
+        case SQL_ODBC_VER:
+            lstrcpynW(ptr, L"03.80.0000", BufferLength);
+            if (StringLength)
+                *StringLength = wcslen(ptr);
+            break;
+        default:
+            FIXME("Unsupported type %d\n", InfoType);
+            return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************

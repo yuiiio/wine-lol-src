@@ -46,6 +46,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(odbc);
 struct SQLHENV_data
 {
     int type;
+    SQLUINTEGER pooling;
 };
 
 
@@ -79,6 +80,7 @@ SQLRETURN WINAPI SQLAllocEnv(SQLHENV *EnvironmentHandle)
         return SQL_ERROR;
 
     henv->type = SQL_HANDLE_ENV;
+    henv->pooling = SQL_CP_OFF;
 
     *EnvironmentHandle = henv;
 
@@ -571,12 +573,42 @@ SQLRETURN WINAPI SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMAL
 SQLRETURN WINAPI SQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHENV_data *data = EnvironmentHandle;
 
-    FIXME("(EnvironmentHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n",
+    TRACE("(EnvironmentHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n",
           EnvironmentHandle, Attribute, Value, BufferLength, StringLength);
 
-    return ret;
+    if (EnvironmentHandle == SQL_NULL_HENV)
+    {
+        if (StringLength)
+            *StringLength = 0;
+        if (Value)
+            *(SQLINTEGER*)Value = 0;
+        return SQL_SUCCESS;
+    }
+
+    if (data->type != SQL_HANDLE_ENV)
+    {
+        WARN("Wrong handle type %d\n", data->type);
+        return SQL_ERROR;
+    }
+
+    switch (Attribute)
+    {
+        case SQL_ATTR_CONNECTION_POOLING:
+            if (BufferLength != sizeof(data->pooling))
+            {
+                WARN("Invalid buffer size\n");
+                return SQL_ERROR;
+            }
+            *(SQLUINTEGER*)Value = data->pooling;
+            break;
+        default:
+            FIXME("Unhandle attribute %d\n", Attribute);
+            return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************
@@ -785,12 +817,31 @@ SQLRETURN WINAPI SQLSetDescRec(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber,
 SQLRETURN WINAPI SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                SQLINTEGER StringLength)
 {
-    SQLRETURN ret = SQL_ERROR;
+    struct SQLHENV_data *data = EnvironmentHandle;
 
-    FIXME("(EnvironmentHandle %p, Attribute %d, Value %p, StringLength %d)\n", EnvironmentHandle, Attribute, Value,
+    TRACE("(EnvironmentHandle %p, Attribute %d, Value %p, StringLength %d)\n", EnvironmentHandle, Attribute, Value,
           StringLength);
 
-    return ret;
+    if(!data || data->type != SQL_HANDLE_ENV)
+    {
+        WARN("Wrong handle type %d\n", data->type);
+        return SQL_ERROR;
+    }
+
+    switch(Attribute)
+    {
+        case SQL_ATTR_CONNECTION_POOLING:
+            if (Value)
+                data->pooling = (uintptr_t)Value;
+            else
+                data->pooling = SQL_CP_OFF;
+            break;
+        default:
+            FIXME("Unhandle attribute %d\n", Attribute);
+            return SQL_ERROR;
+    }
+
+    return SQL_SUCCESS;
 }
 
 /*************************************************************************

@@ -178,6 +178,13 @@ struct SQLHDBC_data
     SQLUINTEGER login_timeout;
 };
 
+struct SQLHSTMT_data
+{
+    int type;
+    struct SQLHDBC_data *connection;
+    SQLHSTMT driver_stmt;
+};
+
 static void connection_bind_sql_funcs(struct SQLHDBC_data *connection)
 {
 #define LOAD_FUNCPTR(f) if((connection->p##f = (void*)GetProcAddress(connection->module, #f)) == NULL) \
@@ -374,11 +381,41 @@ SQLRETURN WINAPI SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, S
  */
 SQLRETURN WINAPI SQLAllocStmt(SQLHDBC ConnectionHandle, SQLHSTMT *StatementHandle)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
+    struct SQLHSTMT_data *stmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p, StatementHandle %p)\n", ConnectionHandle, StatementHandle);
+    TRACE("(ConnectionHandle %p, StatementHandle %p)\n", ConnectionHandle, StatementHandle);
 
     *StatementHandle = SQL_NULL_HSTMT;
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    stmt = malloc(sizeof(*stmt));
+    if (!stmt)
+    {
+        return SQL_ERROR;
+    }
+
+    stmt->type = SQL_HANDLE_STMT;
+    stmt->connection = connection;
+
+    /* Default to ODBC v3 function */
+    if(connection->pSQLAllocHandle)
+    {
+        ret = connection->pSQLAllocHandle(SQL_HANDLE_STMT, connection->driver_hdbc, &stmt->driver_stmt);
+    }
+    else if (connection->pSQLAllocStmt)
+    {
+        ret = connection->pSQLAllocStmt(connection->driver_hdbc, &stmt->driver_stmt);
+    }
+
+    *StatementHandle = stmt;
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

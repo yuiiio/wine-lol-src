@@ -583,9 +583,23 @@ SQLRETURN WINAPI SQLDescribeCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNum
  */
 SQLRETURN WINAPI SQLDisconnect(SQLHDBC ConnectionHandle)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p)\n", ConnectionHandle);
+    TRACE("(ConnectionHandle %p)\n", ConnectionHandle);
+
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLDisconnect)
+    {
+        ret = connection->pSQLDisconnect(connection->driver_hdbc);
+    }
+
+    TRACE("ret %d\n", ret);
 
     return ret;
 }

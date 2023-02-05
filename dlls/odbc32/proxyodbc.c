@@ -898,9 +898,15 @@ SQLRETURN WINAPI SQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, 
  */
 SQLRETURN WINAPI SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT FunctionId, SQLUSMALLINT *Supported)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p, FunctionId %d, Supported %p)\n", ConnectionHandle, FunctionId, Supported);
+    TRACE("(ConnectionHandle %p, FunctionId %d, Supported %p)\n", ConnectionHandle, FunctionId, Supported);
+
+    if (connection->pSQLGetFunctions)
+    {
+        ret = connection->pSQLGetFunctions(connection->driver_hdbc, FunctionId, Supported);
+    }
 
     return ret;
 }

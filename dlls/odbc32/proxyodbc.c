@@ -911,7 +911,9 @@ SQLRETURN WINAPI SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT Function
 SQLRETURN WINAPI SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
                             SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     char *ptr = InfoValue;
+    SQLRETURN ret = SQL_SUCCESS;
 
     TRACE("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           InfoType, InfoValue, BufferLength, StringLength);
@@ -924,11 +926,19 @@ SQLRETURN WINAPI SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQL
                 *StringLength = strlen(ptr);
             break;
         default:
-            FIXME("Unsupported type %d\n", InfoType);
-            return SQL_ERROR;
+            if (connection->pSQLGetInfo)
+                ret = connection->pSQLGetInfo(connection->driver_hdbc, InfoType, InfoValue,
+                             BufferLength, StringLength);
+            else
+            {
+                FIXME("Unsupported type %d\n", InfoType);
+                ret = SQL_ERROR;
+            }
     }
 
-    return SQL_SUCCESS;
+    TRACE("ret %d\n", ret);
+
+    return ret;
 }
 
 /*************************************************************************
@@ -1973,7 +1983,9 @@ SQLRETURN WINAPI SQLGetConnectOptionW(SQLHDBC ConnectionHandle, SQLUSMALLINT Opt
 SQLRETURN WINAPI SQLGetInfoW(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValue,
                              SQLSMALLINT BufferLength, SQLSMALLINT *StringLength)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     WCHAR *ptr = InfoValue;
+    SQLRETURN ret = SQL_SUCCESS;
 
     TRACE("(ConnectionHandle, %p, InfoType %d, InfoValue %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           InfoType, InfoValue, BufferLength, StringLength);
@@ -1986,11 +1998,19 @@ SQLRETURN WINAPI SQLGetInfoW(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQ
                 *StringLength = wcslen(ptr);
             break;
         default:
-            FIXME("Unsupported type %d\n", InfoType);
-            return SQL_ERROR;
+            if (connection->pSQLGetInfoW)
+                ret = connection->pSQLGetInfoW(connection->driver_hdbc, InfoType, InfoValue,
+                             BufferLength, StringLength);
+            else
+            {
+                FIXME("Unsupported type %d\n", InfoType);
+                ret = SQL_ERROR;
+            }
     }
 
-    return SQL_SUCCESS;
+    TRACE("ret %d\n", ret);
+
+    return ret;
 }
 
 /*************************************************************************

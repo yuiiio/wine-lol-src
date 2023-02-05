@@ -1812,6 +1812,7 @@ SQLRETURN WINAPI SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribu
                                     SQLINTEGER StringLength)
 {
     struct SQLHDBC_data *hdbc = ConnectionHandle;
+    SQLRETURN ret = SQL_SUCCESS;
 
     TRACE("(ConnectionHandle %p, Attribute %d, Value %p, StringLength %d)\n", ConnectionHandle, Attribute, Value,
           StringLength);
@@ -1831,11 +1832,18 @@ SQLRETURN WINAPI SQLSetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribu
                 hdbc->login_timeout = 0;
             break;
         default:
-            FIXME("Unhandle attribute %d\n", Attribute);
-            return SQL_ERROR;
+            if (hdbc->pSQLSetConnectAttrW)
+                ret = hdbc->pSQLSetConnectAttrW(hdbc->driver_hdbc, Attribute, Value, StringLength);
+            else
+            {
+                FIXME("Unsupported Attribute %d\n", Attribute);
+                ret = SQL_ERROR;
+            }
     }
 
-    return SQL_SUCCESS;
+    TRACE("ret %d\n", ret);
+
+    return ret;
 }
 
 /*************************************************************************

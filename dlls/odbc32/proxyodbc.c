@@ -739,10 +739,25 @@ SQLRETURN WINAPI SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 SQLRETURN WINAPI SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                    SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
+    TRACE("(ConnectionHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           Attribute, Value, BufferLength, StringLength);
+
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLGetConnectAttr)
+    {
+        ret = connection->pSQLGetConnectAttr(connection->driver_hdbc, Attribute, Value,
+                                    BufferLength, StringLength);
+    }
+
+    TRACE("ret %d\n", ret);
 
     return ret;
 }
@@ -1721,10 +1736,25 @@ SQLRETURN WINAPI SQLColAttributeW(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnN
 SQLRETURN WINAPI SQLGetConnectAttrW(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                     SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
+    TRACE("(ConnectionHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", ConnectionHandle,
           Attribute, Value, BufferLength, StringLength);
+
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLGetConnectAttrW)
+    {
+        ret = connection->pSQLGetConnectAttrW(connection->driver_hdbc, Attribute, Value,
+                                    BufferLength, StringLength);
+    }
+
+    TRACE("ret %d\n", ret);
 
     return ret;
 }

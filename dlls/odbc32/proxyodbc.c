@@ -674,11 +674,25 @@ SQLRETURN WINAPI SQLError(SQLHENV EnvironmentHandle, SQLHDBC ConnectionHandle, S
  */
 SQLRETURN WINAPI SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
-          debugstr_an((const char *)StatementText, TextLength), TextLength);
+    TRACE("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
+          TextLength > 0 ? debugstr_an((char*)StatementText, TextLength) : debugstr_a((char*)StatementText),
+          TextLength);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLExecDirect)
+    {
+        ret = statement->connection->pSQLExecDirect(statement->driver_stmt, StatementText, TextLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -1742,11 +1756,25 @@ SQLRETURN WINAPI SQLErrorW(SQLHENV EnvironmentHandle, SQLHDBC ConnectionHandle, 
  */
 SQLRETURN WINAPI SQLExecDirectW(SQLHSTMT StatementHandle, WCHAR *StatementText, SQLINTEGER TextLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
-          debugstr_wn(StatementText, TextLength), TextLength);
+    TRACE("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
+          TextLength > 0 ? debugstr_wn(StatementText, TextLength) : debugstr_w(StatementText),
+          TextLength);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLExecDirectW)
+    {
+        ret = statement->connection->pSQLExecDirectW(statement->driver_stmt, StatementText, TextLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

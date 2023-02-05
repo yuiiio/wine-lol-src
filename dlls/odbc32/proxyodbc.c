@@ -1501,10 +1501,23 @@ SQLRETURN WINAPI SQLNumParams(SQLHSTMT hstmt, SQLSMALLINT *pcpar)
  */
 SQLRETURN WINAPI SQLParamOptions(SQLHSTMT hstmt, SQLULEN crow, SQLULEN *pirow)
 {
+    struct SQLHSTMT_data *statement = hstmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hstmt %p, crow %s, pirow %p)\n", hstmt, debugstr_sqlulen(crow), pirow);
+    TRACE("(hstmt %p, crow %s, pirow %p)\n", hstmt, debugstr_sqlulen(crow), pirow);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLParamOptions)
+    {
+        ret = statement->connection->pSQLParamOptions(statement->driver_stmt, crow, pirow);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

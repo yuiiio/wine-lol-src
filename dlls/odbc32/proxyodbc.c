@@ -1090,10 +1090,23 @@ SQLRETURN WINAPI SQLGetTypeInfo(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
  */
 SQLRETURN WINAPI SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *ColumnCount)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, ColumnCount %p)\n", StatementHandle, ColumnCount);
+    TRACE("(StatementHandle %p, ColumnCount %p)\n", StatementHandle, ColumnCount);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLNumResultCols)
+    {
+        ret = statement->connection->pSQLNumResultCols(statement->driver_stmt, ColumnCount);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

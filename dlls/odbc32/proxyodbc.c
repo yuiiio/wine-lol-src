@@ -744,10 +744,23 @@ SQLRETURN WINAPI SQLExecute(SQLHSTMT StatementHandle)
  */
 SQLRETURN WINAPI SQLFetch(SQLHSTMT StatementHandle)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p)\n", StatementHandle);
+    TRACE("(StatementHandle %p)\n", StatementHandle);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLFetch)
+    {
+        ret = statement->connection->pSQLFetch(statement->driver_stmt);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

@@ -1552,11 +1552,24 @@ SQLRETURN WINAPI SQLTables(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSM
  */
 SQLRETURN WINAPI SQLTransact(SQLHENV EnvironmentHandle, SQLHDBC ConnectionHandle, SQLUSMALLINT CompletionType)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(EnvironmentHandle %p, ConnectionHandle %p, CompletionType %d)\n", EnvironmentHandle, ConnectionHandle,
+    TRACE("(EnvironmentHandle %p, ConnectionHandle %p, CompletionType %d)\n", EnvironmentHandle, ConnectionHandle,
           CompletionType);
 
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong connection handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLTransact)
+    {
+        ret = connection->pSQLTransact(connection->driver_env, connection->driver_hdbc, CompletionType);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

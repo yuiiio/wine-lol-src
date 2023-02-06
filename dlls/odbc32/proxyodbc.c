@@ -964,8 +964,29 @@ SQLRETURN WINAPI SQLGetDiagField(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSM
 {
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(HandleType %d, Handle %p, RecNumber %d, DiagIdentifier %d, DiagInfo %p, BufferLength %d,"
+    TRACE("(HandleType %d, Handle %p, RecNumber %d, DiagIdentifier %d, DiagInfo %p, BufferLength %d,"
           " StringLength %p)\n", HandleType, Handle, RecNumber, DiagIdentifier, DiagInfo, BufferLength, StringLength);
+
+    if (HandleType == SQL_HANDLE_ENV)
+    {
+        FIXME("Unhandled SQL_HANDLE_ENV records\n");
+    }
+    else if (HandleType == SQL_HANDLE_DBC)
+    {
+        struct SQLHDBC_data *hdbc = Handle;
+
+        if (hdbc->pSQLGetDiagField)
+            ret = hdbc->pSQLGetDiagField(HandleType, hdbc->driver_hdbc, RecNumber, DiagIdentifier,
+                                     DiagInfo, BufferLength, StringLength);
+    }
+    else if (HandleType == SQL_HANDLE_STMT)
+    {
+        struct SQLHSTMT_data *statement = Handle;
+
+        if (statement->connection->pSQLGetDiagField)
+            ret = statement->connection->pSQLGetDiagField(HandleType, statement->driver_stmt, RecNumber,
+                                     DiagIdentifier, DiagInfo, BufferLength, StringLength);
+    }
 
     return ret;
 }
@@ -2135,8 +2156,29 @@ SQLRETURN WINAPI SQLGetDiagFieldW(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLS
 {
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(HandleType %d, Handle %p, RecNumber %d, DiagIdentifier %d, DiagInfo %p, BufferLength %d,"
+    TRACE("(HandleType %d, Handle %p, RecNumber %d, DiagIdentifier %d, DiagInfo %p, BufferLength %d,"
           " StringLength %p)\n", HandleType, Handle, RecNumber, DiagIdentifier, DiagInfo, BufferLength, StringLength);
+
+    if (HandleType == SQL_HANDLE_ENV)
+    {
+        FIXME("Unhandled SQL_HANDLE_ENV records\n");
+    }
+    else if (HandleType == SQL_HANDLE_DBC)
+    {
+        struct SQLHDBC_data *hdbc = Handle;
+
+        if (hdbc->pSQLGetDiagFieldW)
+            ret = hdbc->pSQLGetDiagFieldW(HandleType, hdbc->driver_hdbc, RecNumber, DiagIdentifier,
+                                     DiagInfo, BufferLength, StringLength);
+    }
+    else if (HandleType == SQL_HANDLE_STMT)
+    {
+        struct SQLHSTMT_data *statement = Handle;
+
+        if (statement->connection->pSQLGetDiagFieldW)
+            ret = statement->connection->pSQLGetDiagFieldW(HandleType, statement->driver_stmt, RecNumber,
+                                     DiagIdentifier, DiagInfo, BufferLength, StringLength);
+    }
 
     return ret;
 }

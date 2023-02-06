@@ -1450,10 +1450,25 @@ SQLRETURN WINAPI SQLColAttributes(SQLHSTMT hstmt, SQLUSMALLINT icol, SQLUSMALLIN
                                   SQLPOINTER rgbDesc, SQLSMALLINT cbDescMax, SQLSMALLINT *pcbDesc,
                                   SQLLEN *pfDesc)
 {
+    struct SQLHSTMT_data *statement = hstmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hstmt %p, icol %d, fDescType %d, rgbDesc %p, cbDescMax %d, pcbDesc %p, pfDesc %p)\n", hstmt, icol,
+    TRACE("(hstmt %p, icol %d, fDescType %d, rgbDesc %p, cbDescMax %d, pcbDesc %p, pfDesc %p)\n", hstmt, icol,
           fDescType, rgbDesc, cbDescMax, pcbDesc, pfDesc);
+
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLColAttributes)
+    {
+        ret = statement->connection->pSQLColAttributes(statement->driver_stmt, icol, fDescType,
+                                   rgbDesc, cbDescMax, pcbDesc, pfDesc);
+    }
+
+    TRACE("ret %d\n", ret);
 
     return ret;
 }
@@ -1755,6 +1770,21 @@ SQLRETURN WINAPI SQLSetScrollOptions(SQLHSTMT statement_handle, SQLUSMALLINT f_c
     return ret;
 }
 
+static SQLINTEGER map_odbc2_to_3(SQLINTEGER fieldid)
+{
+    switch( fieldid )
+    {
+        case SQL_COLUMN_COUNT:
+            return SQL_DESC_COUNT;
+        case SQL_COLUMN_NULLABLE:
+            return SQL_DESC_NULLABLE;
+        case SQL_COLUMN_NAME:
+            return SQL_DESC_NAME;
+        default:
+            return fieldid;
+    }
+}
+
 /*************************************************************************
  *				SQLColAttributesW          [ODBC32.106]
  */
@@ -1762,11 +1792,32 @@ SQLRETURN WINAPI SQLColAttributesW(SQLHSTMT hstmt, SQLUSMALLINT icol, SQLUSMALLI
                                    SQLPOINTER rgbDesc, SQLSMALLINT cbDescMax, SQLSMALLINT *pcbDesc,
                                    SQLLEN *pfDesc)
 {
+    struct SQLHSTMT_data *statement = hstmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hstmt %p, icol %d, fDescType %d, rgbDesc %p, cbDescMax %d, pcbDesc %p, pfDesc %p)\n", hstmt, icol,
+    TRACE("(hstmt %p, icol %d, fDescType %d, rgbDesc %p, cbDescMax %d, pcbDesc %p, pfDesc %p)\n", hstmt, icol,
           fDescType, rgbDesc, cbDescMax, pcbDesc, pfDesc);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    /* Default to ODBC 3.x */
+    if (statement->connection->pSQLColAttributeW)
+    {
+        fDescType = map_odbc2_to_3(fDescType);
+        ret = statement->connection->pSQLColAttributeW(statement->driver_stmt, icol, fDescType,
+                                   rgbDesc, cbDescMax, pcbDesc, pfDesc);
+    }
+    else if (statement->connection->pSQLColAttributesW)
+    {
+        ret = statement->connection->pSQLColAttributesW(statement->driver_stmt, icol, fDescType,
+                                   rgbDesc, cbDescMax, pcbDesc, pfDesc);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

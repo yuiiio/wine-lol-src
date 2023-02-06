@@ -1517,10 +1517,23 @@ SQLRETURN WINAPI SQLForeignKeys(SQLHSTMT hstmt, SQLCHAR *szPkCatalogName, SQLSMA
  */
 SQLRETURN WINAPI SQLMoreResults(SQLHSTMT StatementHandle)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(%p)\n", StatementHandle);
+    TRACE("(%p)\n", StatementHandle);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLMoreResults)
+    {
+        ret = statement->connection->pSQLMoreResults(statement->driver_stmt);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

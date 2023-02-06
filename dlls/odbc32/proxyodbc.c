@@ -606,12 +606,29 @@ SQLRETURN WINAPI SQLDescribeCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNum
                                 SQLSMALLINT BufferLength, SQLSMALLINT *NameLength, SQLSMALLINT *DataType,
                                 SQLULEN *ColumnSize, SQLSMALLINT *DecimalDigits, SQLSMALLINT *Nullable)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
+    SQLSMALLINT dummy;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, ColumnNumber %d, ColumnName %p, BufferLength %d, NameLength %p, DataType %p,"
+    TRACE("(StatementHandle %p, ColumnNumber %d, ColumnName %p, BufferLength %d, NameLength %p, DataType %p,"
           " ColumnSize %p, DecimalDigits %p, Nullable %p)\n", StatementHandle, ColumnNumber, ColumnName,
           BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable);
 
+    if (!NameLength) NameLength = &dummy; /* workaround for drivers that don't accept NULL NameLength */
+
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLDescribeCol)
+    {
+        ret = statement->connection->pSQLDescribeCol(statement->driver_stmt, ColumnNumber, ColumnName,
+                                 BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -1776,15 +1793,29 @@ SQLRETURN WINAPI SQLDescribeColW(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNu
                                  SQLSMALLINT BufferLength, SQLSMALLINT *NameLength, SQLSMALLINT *DataType,
                                  SQLULEN *ColumnSize, SQLSMALLINT *DecimalDigits, SQLSMALLINT *Nullable)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLSMALLINT dummy;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, ColumnNumber %d, ColumnName %p, BufferLength %d, NameLength %p, DataType %p,"
+    TRACE("(StatementHandle %p, ColumnNumber %d, ColumnName %p, BufferLength %d, NameLength %p, DataType %p,"
           " ColumnSize %p, DecimalDigits %p, Nullable %p)\n", StatementHandle, ColumnNumber, ColumnName,
           BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable);
 
     if (!NameLength) NameLength = &dummy; /* workaround for drivers that don't accept NULL NameLength */
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLDescribeColW)
+    {
+        ret = statement->connection->pSQLDescribeColW(statement->driver_stmt, ColumnNumber, ColumnName,
+                                 BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

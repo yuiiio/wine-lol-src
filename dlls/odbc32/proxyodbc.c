@@ -1213,10 +1213,23 @@ SQLRETURN WINAPI SQLGetStmtOption(SQLHSTMT StatementHandle, SQLUSMALLINT Option,
  */
 SQLRETURN WINAPI SQLGetTypeInfo(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, DataType %d)\n", StatementHandle, DataType);
+    TRACE("(StatementHandle %p, DataType %d)\n", StatementHandle, DataType);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLGetTypeInfo)
+    {
+        ret = statement->connection->pSQLGetTypeInfo(statement->driver_stmt, DataType);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -2544,10 +2557,23 @@ SQLRETURN WINAPI SQLGetInfoW(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQ
  */
 SQLRETURN WINAPI SQLGetTypeInfoW(SQLHSTMT StatementHandle, SQLSMALLINT DataType)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, DataType %d)\n", StatementHandle, DataType);
+    TRACE("(StatementHandle %p, DataType %d)\n", StatementHandle, DataType);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLGetTypeInfoW)
+    {
+        ret = statement->connection->pSQLGetTypeInfoW(statement->driver_stmt, DataType);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

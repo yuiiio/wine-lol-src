@@ -178,11 +178,22 @@ struct SQLHDBC_data
     SQLUINTEGER login_timeout;
 };
 
+struct SQLHDESC_data
+{
+    struct SQLHSTMT_data *parent;
+    SQLHDESC driver_hdesc;
+};
+
 struct SQLHSTMT_data
 {
     int type;
     struct SQLHDBC_data *connection;
     SQLHSTMT driver_stmt;
+
+    struct SQLHDESC_data app_row_desc;
+    struct SQLHDESC_data imp_row_desc;
+    struct SQLHDESC_data app_param_desc;
+    struct SQLHDESC_data imp_param_desc;
 };
 
 static void connection_bind_sql_funcs(struct SQLHDBC_data *connection)
@@ -1131,8 +1142,40 @@ SQLRETURN WINAPI SQLGetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, 
 
     if (statement->connection->pSQLGetStmtAttr)
     {
-        ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute, Value,
+        switch(Attribute)
+        {
+            case SQL_ATTR_APP_ROW_DESC:
+                statement->app_row_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute,
+                                                             &statement->app_row_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->app_row_desc;
+                break;
+            case SQL_ATTR_IMP_ROW_DESC:
+                statement->imp_row_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute,
+                                                             &statement->imp_row_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->imp_row_desc;
+                break;
+            case SQL_ATTR_APP_PARAM_DESC:
+                statement->app_param_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute,
+                                                             &statement->app_param_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->app_param_desc;
+                break;
+            case SQL_ATTR_IMP_PARAM_DESC:
+                statement->imp_param_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute,
+                                                             &statement->imp_param_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->imp_param_desc;
+                break;
+            default:
+                ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute, Value,
                                 BufferLength, StringLength);
+        }
     }
 
     TRACE("ret %d\n", ret);
@@ -2225,8 +2268,40 @@ SQLRETURN WINAPI SQLGetStmtAttrW(SQLHSTMT StatementHandle, SQLINTEGER Attribute,
 
     if (statement->connection->pSQLGetStmtAttrW)
     {
-        ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute, Value,
-                                 BufferLength, StringLength);
+        switch(Attribute)
+        {
+            case SQL_ATTR_APP_ROW_DESC:
+                statement->app_row_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute,
+                                                             &statement->app_row_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->app_row_desc;
+                break;
+            case SQL_ATTR_IMP_ROW_DESC:
+                statement->imp_row_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute,
+                                                             &statement->imp_row_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->imp_row_desc;
+                break;
+            case SQL_ATTR_APP_PARAM_DESC:
+                statement->app_param_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute,
+                                                             &statement->app_param_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->app_param_desc;
+                break;
+            case SQL_ATTR_IMP_PARAM_DESC:
+                statement->imp_param_desc.parent = statement;
+                ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute,
+                                                             &statement->imp_param_desc.driver_hdesc,
+                                                             BufferLength, StringLength);
+                *((SQLHDESC*)Value) = &statement->imp_param_desc;
+                break;
+            default:
+                ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute, Value,
+                                BufferLength, StringLength);
+        }
     }
 
     TRACE("ret %d\n", ret);

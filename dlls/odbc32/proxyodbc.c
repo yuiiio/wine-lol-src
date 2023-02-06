@@ -1903,12 +1903,26 @@ SQLRETURN WINAPI SQLBindParameter(SQLHSTMT hstmt, SQLUSMALLINT ipar, SQLSMALLINT
                                   SQLSMALLINT ibScale, SQLPOINTER rgbValue, SQLLEN cbValueMax,
                                   SQLLEN *pcbValue)
 {
+    struct SQLHSTMT_data *statement = hstmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hstmt %p, ipar %d, fParamType %d, fCType %d, fSqlType %d, cbColDef %s, ibScale %d, rgbValue %p,"
+    TRACE("(hstmt %p, ipar %d, fParamType %d, fCType %d, fSqlType %d, cbColDef %s, ibScale %d, rgbValue %p,"
           " cbValueMax %s, pcbValue %p)\n", hstmt, ipar, fParamType, fCType, fSqlType, debugstr_sqlulen(cbColDef),
           ibScale, rgbValue, debugstr_sqllen(cbValueMax), pcbValue);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLBindParameter)
+    {
+        ret = statement->connection->pSQLBindParameter(statement->driver_stmt, ipar, fParamType,
+                                  fCType, fSqlType, cbColDef, ibScale, rgbValue, cbValueMax, pcbValue);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

@@ -1575,11 +1575,25 @@ SQLRETURN WINAPI SQLMoreResults(SQLHSTMT StatementHandle)
 SQLRETURN WINAPI SQLNativeSql(SQLHDBC hdbc, SQLCHAR *szSqlStrIn, SQLINTEGER cbSqlStrIn, SQLCHAR *szSqlStr,
                               SQLINTEGER cbSqlStrMax, SQLINTEGER *pcbSqlStr)
 {
+    struct SQLHDBC_data *connection = hdbc;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hdbc %p, szSqlStrIn %s, cbSqlStrIn %d, szSqlStr %p, cbSqlStrMax %d, pcbSqlStr %p)\n", hdbc,
+    TRACE("(hdbc %p, szSqlStrIn %s, cbSqlStrIn %d, szSqlStr %p, cbSqlStrMax %d, pcbSqlStr %p)\n", hdbc,
           debugstr_an((const char *)szSqlStrIn, cbSqlStrIn), cbSqlStrIn, szSqlStr, cbSqlStrMax, pcbSqlStr);
 
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLNativeSql)
+    {
+        ret = connection->pSQLNativeSql(connection->driver_hdbc, szSqlStrIn, cbSqlStrIn,
+                               szSqlStr, cbSqlStrMax, pcbSqlStr);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -2467,11 +2481,25 @@ SQLRETURN WINAPI SQLForeignKeysW(SQLHSTMT hstmt, SQLWCHAR *szPkCatalogName, SQLS
 SQLRETURN WINAPI SQLNativeSqlW(SQLHDBC hdbc, SQLWCHAR *szSqlStrIn, SQLINTEGER cbSqlStrIn, SQLWCHAR *szSqlStr,
                                SQLINTEGER cbSqlStrMax, SQLINTEGER *pcbSqlStr)
 {
+    struct SQLHDBC_data *connection = hdbc;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hdbc %p, szSqlStrIn %s, cbSqlStrIn %d, szSqlStr %p, cbSqlStrMax %d, pcbSqlStr %p)\n", hdbc,
+    TRACE("(hdbc %p, szSqlStrIn %s, cbSqlStrIn %d, szSqlStr %p, cbSqlStrMax %d, pcbSqlStr %p)\n", hdbc,
           debugstr_wn(szSqlStrIn, cbSqlStrIn), cbSqlStrIn, szSqlStr, cbSqlStrMax, pcbSqlStr);
 
+    if (connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection->type);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLNativeSqlW)
+    {
+        ret = connection->pSQLNativeSqlW(connection->driver_hdbc, szSqlStrIn, cbSqlStrIn,
+                               szSqlStr, cbSqlStrMax, pcbSqlStr);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

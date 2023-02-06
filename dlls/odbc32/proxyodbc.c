@@ -1033,10 +1033,17 @@ SQLRETURN WINAPI SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQL
 SQLRETURN WINAPI SQLGetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                 SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", StatementHandle,
+    TRACE("(StatementHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", StatementHandle,
           Attribute, Value, BufferLength, StringLength);
+
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
 
     if (!Value)
     {
@@ -1044,6 +1051,13 @@ SQLRETURN WINAPI SQLGetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, 
         return SQL_ERROR;
     }
 
+    if (statement->connection->pSQLGetStmtAttr)
+    {
+        ret = statement->connection->pSQLGetStmtAttr(statement->driver_stmt, Attribute, Value,
+                                BufferLength, StringLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -1932,10 +1946,17 @@ SQLRETURN WINAPI SQLGetDiagRecW(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMA
 SQLRETURN WINAPI SQLGetStmtAttrW(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOINTER Value,
                                  SQLINTEGER BufferLength, SQLINTEGER *StringLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", StatementHandle,
+    TRACE("(StatementHandle %p, Attribute %d, Value %p, BufferLength %d, StringLength %p)\n", StatementHandle,
           Attribute, Value, BufferLength, StringLength);
+
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
 
     if (!Value)
     {
@@ -1943,6 +1964,13 @@ SQLRETURN WINAPI SQLGetStmtAttrW(SQLHSTMT StatementHandle, SQLINTEGER Attribute,
         return SQL_ERROR;
     }
 
+    if (statement->connection->pSQLGetStmtAttrW)
+    {
+        ret = statement->connection->pSQLGetStmtAttrW(statement->driver_stmt, Attribute, Value,
+                                 BufferLength, StringLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

@@ -808,10 +808,23 @@ SQLRETURN WINAPI SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle)
  */
 SQLRETURN WINAPI SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, Option %d)\n", StatementHandle, Option);
+    TRACE("(StatementHandle %p, Option %d)\n", StatementHandle, Option);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLFreeStmt)
+    {
+        ret = statement->connection->pSQLFreeStmt(statement->driver_stmt, Option);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

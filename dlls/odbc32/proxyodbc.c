@@ -1139,10 +1139,23 @@ SQLRETURN WINAPI SQLPutData(SQLHSTMT StatementHandle, SQLPOINTER Data, SQLLEN St
  */
 SQLRETURN WINAPI SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCount)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, RowCount %p)\n", StatementHandle, RowCount);
+    TRACE("(StatementHandle %p, RowCount %p)\n", StatementHandle, RowCount);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLRowCount)
+    {
+        ret = statement->connection->pSQLRowCount(statement->driver_stmt, RowCount);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

@@ -1144,11 +1144,25 @@ SQLRETURN WINAPI SQLParamData(SQLHSTMT StatementHandle, SQLPOINTER *Value)
  */
 SQLRETURN WINAPI SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
     FIXME("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
-          debugstr_an((const char *)StatementText, TextLength), TextLength);
+          TextLength > 0 ? debugstr_an((const char *)StatementText, TextLength) : debugstr_a((const char *)StatementText),
+          TextLength);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLPrepare)
+    {
+        ret = statement->connection->pSQLPrepare(statement->driver_stmt, StatementText, TextLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 
@@ -1946,11 +1960,25 @@ SQLRETURN WINAPI SQLGetCursorNameW(SQLHSTMT StatementHandle, WCHAR *CursorName, 
  */
 SQLRETURN WINAPI SQLPrepareW(SQLHSTMT StatementHandle, WCHAR *StatementText, SQLINTEGER TextLength)
 {
+    struct SQLHSTMT_data *statement = StatementHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
-          debugstr_wn(StatementText, TextLength), TextLength);
+    TRACE("(StatementHandle %p, StatementText %s, TextLength %d)\n", StatementHandle,
+          TextLength > 0 ? debugstr_wn(StatementText, TextLength) : debugstr_w(StatementText),
+          TextLength);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLPrepareW)
+    {
+        ret = statement->connection->pSQLPrepareW(statement->driver_stmt, StatementText, TextLength);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

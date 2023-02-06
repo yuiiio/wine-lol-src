@@ -2222,6 +2222,7 @@ SQLRETURN WINAPI SQLGetDiagFieldW(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLS
             ret = statement->connection->pSQLGetDiagFieldW(HandleType, statement->driver_stmt, RecNumber,
                                      DiagIdentifier, DiagInfo, BufferLength, StringLength);
     }
+    TRACE("ret %d\n", ret);
 
     return ret;
 }
@@ -2794,10 +2795,16 @@ SQLRETURN WINAPI SQLDriversW(SQLHENV EnvironmentHandle, SQLUSMALLINT fDirection,
 SQLRETURN WINAPI SQLSetDescFieldW(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
                                   SQLPOINTER Value, SQLINTEGER BufferLength)
 {
+    struct SQLHDESC_data *hdesc = DescriptorHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(DescriptorHandle %p, RecNumber %d, FieldIdentifier %d, Value %p, BufferLength %d)\n", DescriptorHandle,
+    TRACE("(DescriptorHandle %p, RecNumber %d, FieldIdentifier %d, Value %p, BufferLength %d)\n", DescriptorHandle,
           RecNumber, FieldIdentifier, Value, BufferLength);
+
+    if (hdesc->parent->connection->pSQLSetDescFieldW)
+        ret = hdesc->parent->connection->pSQLSetDescFieldW(hdesc->driver_hdesc, RecNumber, FieldIdentifier,
+                                  Value, BufferLength);
+    TRACE("ret %d\n", ret);
 
     return ret;
 }

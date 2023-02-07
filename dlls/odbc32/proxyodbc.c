@@ -2556,6 +2556,11 @@ SQLRETURN WINAPI SQLDriverConnectW(SQLHDBC ConnectionHandle, SQLHWND WindowHandl
     if (connection->pSQLAllocHandle)
     {
         connection->pSQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &connection->driver_env);
+
+        if (connection->pSQLSetEnvAttr)
+            connection->pSQLSetEnvAttr(connection->driver_env, SQL_ATTR_ODBC_VERSION,
+                                        (SQLPOINTER)connection->environment->version, 0);
+
         connection->pSQLAllocHandle(SQL_HANDLE_DBC, connection->driver_env, &connection->driver_hdbc);
     }
 

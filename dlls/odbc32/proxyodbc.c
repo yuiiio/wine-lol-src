@@ -2290,9 +2290,35 @@ SQLRETURN WINAPI SQLGetDiagRecW(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMA
 {
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(HandleType %d, Handle %p, RecNumber %d, Sqlstate %p, NativeError %p, MessageText %p, BufferLength %d,"
+    TRACE("(HandleType %d, Handle %p, RecNumber %d, Sqlstate %p, NativeError %p, MessageText %p, BufferLength %d,"
           " TextLength %p)\n", HandleType, Handle, RecNumber, Sqlstate, NativeError, MessageText, BufferLength,
           TextLength);
+
+    if (HandleType == SQL_HANDLE_ENV)
+    {
+        FIXME("Unhandled SQL_HANDLE_ENV records\n");
+    }
+    else if (HandleType == SQL_HANDLE_DBC)
+    {
+        struct SQLHDBC_data *hdbc = Handle;
+
+        if (hdbc->pSQLGetDiagRecW)
+            ret = hdbc->pSQLGetDiagRecW(HandleType, hdbc->driver_hdbc, RecNumber, Sqlstate,
+                                NativeError, MessageText, BufferLength, TextLength);
+    }
+    else if (HandleType == SQL_HANDLE_STMT)
+    {
+        struct SQLHSTMT_data *statement = Handle;
+
+        if (statement->connection->pSQLGetDiagRecW)
+            ret = statement->connection->pSQLGetDiagRecW(HandleType, statement->driver_stmt, RecNumber,
+                                Sqlstate, NativeError, MessageText, BufferLength, TextLength);
+    }
+
+    if (ret != SQL_ERROR)
+    {
+        TRACE("%d: %s %s\n", RecNumber, debugstr_w(Sqlstate), debugstr_w(MessageText));
+    }
 
     return ret;
 }

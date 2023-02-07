@@ -47,6 +47,7 @@ struct SQLHENV_data
 {
     int type;
     SQLUINTEGER pooling;
+    SQLUINTEGER version;
 };
 
 struct SQLHDBC_data
@@ -368,6 +369,7 @@ SQLRETURN WINAPI SQLAllocEnv(SQLHENV *EnvironmentHandle)
 
     henv->type = SQL_HANDLE_ENV;
     henv->pooling = SQL_CP_OFF;
+    henv->version = SQL_OV_ODBC2;
 
     *EnvironmentHandle = henv;
 
@@ -1068,6 +1070,14 @@ SQLRETURN WINAPI SQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, 
             }
             *(SQLUINTEGER*)Value = data->pooling;
             break;
+        case SQL_ATTR_ODBC_VERSION:
+            if (BufferLength != sizeof(data->version))
+            {
+                WARN("Invalid buffer size\n");
+                return SQL_ERROR;
+            }
+            *(SQLUINTEGER*)Value = data->version;
+            break;
         default:
             FIXME("Unhandle attribute %d\n", Attribute);
             return SQL_ERROR;
@@ -1427,6 +1437,12 @@ SQLRETURN WINAPI SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, 
                 data->pooling = (uintptr_t)Value;
             else
                 data->pooling = SQL_CP_OFF;
+            break;
+        case SQL_ATTR_ODBC_VERSION:
+            if (Value)
+                data->version = (uintptr_t)Value;
+            else
+                data->version = SQL_OV_ODBC2;
             break;
         default:
             FIXME("Unhandle attribute %d\n", Attribute);

@@ -474,6 +474,20 @@ SQLRETURN WINAPI SQLBindCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber,
 
     if (statement->connection->pSQLBindCol)
     {
+        /*
+         * Map ODBC3 Datatype back to ODBC2 types when the application has asked for SQL_OV_ODBC2.
+         * Some drivers rely on this (PostgreSQL odbc driver).
+         */
+        if (statement->connection->environment->version == SQL_OV_ODBC2)
+        {
+            if(TargetType == SQL_C_TYPE_TIME)
+                TargetType = SQL_C_TIME;
+            else if(TargetType == SQL_C_TYPE_DATE)
+                TargetType = SQL_C_DATE;
+            else if(TargetType == SQL_C_TYPE_TIMESTAMP)
+                TargetType = SQL_C_TIMESTAMP;
+        }
+
         ret = statement->connection->pSQLBindCol(statement->driver_stmt, ColumnNumber, TargetType,
                             TargetValue, BufferLength, StrLen_or_Ind);
     }

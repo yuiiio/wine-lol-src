@@ -383,9 +383,22 @@ SQLRETURN WINAPI SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, S
 {
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(HandleType %d, InputHandle %p, OutputHandle %p)\n", HandleType, InputHandle, OutputHandle);
+    TRACE("(HandleType %d, InputHandle %p, OutputHandle %p)\n", HandleType, InputHandle, OutputHandle);
 
     *OutputHandle = 0;
+    if (HandleType == SQL_HANDLE_ENV)
+    {
+        ret = SQLAllocEnv(OutputHandle);
+    }
+    else if (HandleType == SQL_HANDLE_DBC)
+    {
+        ret = SQLAllocConnect(InputHandle, OutputHandle);
+    }
+    else if (HandleType == SQL_HANDLE_STMT)
+    {
+        ret = SQLAllocStmt(InputHandle, OutputHandle);
+    }
+
     return ret;
 }
 

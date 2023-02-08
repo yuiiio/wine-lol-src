@@ -2071,12 +2071,28 @@ SQLRETURN WINAPI SQLConnectW(SQLHDBC ConnectionHandle, WCHAR *ServerName, SQLSMA
                              WCHAR *UserName, SQLSMALLINT NameLength2, WCHAR *Authentication,
                              SQLSMALLINT NameLength3)
 {
+    struct SQLHDBC_data *connection = ConnectionHandle;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(ConnectionHandle %p, ServerName %s, NameLength1 %d, UserName %s, NameLength2 %d, Authentication %s,"
-          " NameLength3 %d)\n", ConnectionHandle, debugstr_wn(ServerName, NameLength1), NameLength1,
-          debugstr_wn(UserName, NameLength2), NameLength2, debugstr_wn(Authentication, NameLength3), NameLength3);
+    TRACE("(ConnectionHandle %p, ServerName %s, NameLength1 %d, UserName %s, NameLength2 %d, Authentication %s,"
+          " NameLength3 %d)\n", ConnectionHandle,
+          NameLength1 > 0 ? debugstr_wn(ServerName, NameLength1) : debugstr_w(ServerName), NameLength1,
+          NameLength2 > 0 ? debugstr_wn(UserName, NameLength2) : debugstr_w(UserName), NameLength2,
+          NameLength3 > 0 ? debugstr_wn(Authentication, NameLength3) : debugstr_w(Authentication), NameLength3);
 
+    if (!connection || connection->type != SQL_HANDLE_DBC)
+    {
+        WARN("Wrong handle type %d\n", connection ? connection->type : 0);
+        return SQL_ERROR;
+    }
+
+    if (connection->pSQLConnectW)
+    {
+        ret = connection->pSQLConnectW(connection->driver_hdbc, ServerName, NameLength1,
+                             UserName, NameLength2, Authentication, NameLength3);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

@@ -2488,9 +2488,12 @@ NTSTATUS WINAPI NtSetInformationThread( HANDLE handle, THREADINFOCLASS class,
         WARN("Unimplemented class ThreadPriorityBoost.\n");
         return STATUS_SUCCESS;
 
+    case ThreadPriority:
+        WARN("Unimplemented ThreadPriority\n");
+        return STATUS_SUCCESS;
+
     case ThreadBasicInformation:
     case ThreadTimes:
-    case ThreadPriority:
     case ThreadDescriptorTableEntry:
     case ThreadEventPair_Reusable:
     case ThreadPerformanceCount:

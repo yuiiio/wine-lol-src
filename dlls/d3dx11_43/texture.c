@@ -295,6 +295,7 @@ static const GUID *dxgi_format_to_wic_guid(DXGI_FORMAT format)
 HRESULT WINAPI D3DX11GetImageInfoFromMemory(const void *src_data, SIZE_T src_data_size, ID3DX11ThreadPump *pump,
         D3DX11_IMAGE_INFO *img_info, HRESULT *hresult)
 {
+    IWICBitmapFrameDecode *frame = NULL;
     IWICImagingFactory *factory = NULL;
     IWICDdsDecoder *dds_decoder = NULL;
     IWICBitmapDecoder *decoder = NULL;
@@ -358,9 +359,18 @@ HRESULT WINAPI D3DX11GetImageInfoFromMemory(const void *src_data, SIZE_T src_dat
     }
     else
     {
-        FIXME("Unsupported image format %d\n", img_info->ImageFileFormat);
-        img_info->Width = 1;
-        img_info->Height = 1;
+        unsigned int frame_count;
+
+        hr = IWICBitmapDecoder_GetFrameCount(decoder, &frame_count);
+        if (FAILED(hr) || !frame_count)
+            goto end;
+        hr = IWICBitmapDecoder_GetFrame(decoder, 0, &frame);
+        if (FAILED(hr))
+            goto end;
+        hr = IWICBitmapFrameDecode_GetSize(frame, &img_info->Width, &img_info->Height);
+        if (FAILED(hr))
+            goto end;
+
         img_info->ArraySize = 1;
         img_info->Depth = 1;
         img_info->MipLevels = 1;
@@ -372,6 +382,8 @@ HRESULT WINAPI D3DX11GetImageInfoFromMemory(const void *src_data, SIZE_T src_dat
 end:
     if (dds_decoder)
         IWICDdsDecoder_Release(dds_decoder);
+    if (frame)
+        IWICBitmapFrameDecode_Release(frame);
     if (decoder)
         IWICBitmapDecoder_Release(decoder);
     if (stream)

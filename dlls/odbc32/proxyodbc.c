@@ -2927,14 +2927,28 @@ SQLRETURN WINAPI SQLPrimaryKeysW(SQLHSTMT hstmt, SQLWCHAR *szCatalogName, SQLSMA
                                  SQLWCHAR *szSchemaName, SQLSMALLINT cbSchemaName, SQLWCHAR *szTableName,
                                  SQLSMALLINT cbTableName)
 {
+    struct SQLHSTMT_data *statement = hstmt;
     SQLRETURN ret = SQL_ERROR;
 
-    FIXME("(hstmt %p, szCatalogName %s, cbCatalogName %d, szSchemaName %s, cbSchemaName %d, szTableName %s,"
+    TRACE("(hstmt %p, szCatalogName %s, cbCatalogName %d, szSchemaName %s, cbSchemaName %d, szTableName %s,"
           " cbTableName %d)\n", hstmt,
           debugstr_wn(szCatalogName, cbCatalogName), cbCatalogName,
           debugstr_wn(szSchemaName, cbSchemaName), cbSchemaName,
           debugstr_wn(szTableName, cbTableName), cbTableName);
 
+    if (statement->type != SQL_HANDLE_STMT)
+    {
+        WARN("Wrong handle type %d\n", statement->type);
+        return SQL_ERROR;
+    }
+
+    if (statement->connection->pSQLPrimaryKeysW)
+    {
+        ret = statement->connection->pSQLPrimaryKeysW(statement->driver_stmt, szCatalogName,
+                    cbCatalogName, szSchemaName, cbSchemaName, szTableName, cbTableName);
+    }
+
+    TRACE("ret %d\n", ret);
     return ret;
 }
 

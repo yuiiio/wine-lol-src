@@ -950,8 +950,9 @@ NTSTATUS signal_set_full_context( CONTEXT *context )
 {
     NTSTATUS status = NtSetContextThread( GetCurrentThread(), context );
 
-    if (!status && (context->ContextFlags & CONTEXT_INTEGER) == CONTEXT_INTEGER)
-        amd64_thread_data()->syscall_frame->restore_flags |= CONTEXT_INTEGER;
+    unsigned int real_mask = CONTEXT_INTEGER & ~CONTEXT_AMD64;
+    if (!status && (context->ContextFlags & real_mask) == real_mask)
+        amd64_thread_data()->syscall_frame->restore_flags |= real_mask;
     return status;
 }
 
